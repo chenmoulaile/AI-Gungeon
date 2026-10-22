@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CharacterData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/character_data.gd" id="1_cd"]
+
+[resource]
+script = ExtResource("1_cd")
+id = "deepseek"
+display_name = "DeepSeek"
+title = "深蓝鲸歌"
+blurb = "冷静理性，靠一条推理链把伤害层层放大。"
+weapon_path = "res://scripts/weapons/weapon_reasoning_chain.gd"
+weapon_name = "推理链"
+weapon_desc = "主弹命中分裂为 2 枚小弹，最多 3 代，每代伤害 -30%"
+skill_name = "深度思考"
+skill_desc = "蓄力 1.5s（移速 -50%、无敌），释放贯穿全屏光束，伤害最高 3 倍"
+passive_name = "注意力聚焦"
+passive_desc = "连续命中同一敌人，每层 +5% 伤害，最高 10 层，换目标清零"
+skill_cd = 9.0
+accent = Color(0.373, 0.525, 0.941, 1)

@@ -1,0 +1,18 @@
+# Godot 4 缓存与导入产物
+.godot/
+*.translation
+
+# 构建输出
+build/
+*.exe
+*.pck
+*.zip
+
+# 开发自检产物（截图与调试图，可随时用 tools/tests 里的脚本重新生成）
+tests/_shot_*
+tools/_dbg_*
+tools/_preview_sprites.*
+
+# Python
+__pycache__/
+*.pyc

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="Upgrade" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/upgrade.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "extra_heart"
+title = "备用心脏"
+desc = "生命上限 +1 并立即回复 1 点"
+price = 30
+icon_path = "res://assets/icons/extra_heart.png"
+effects = {
+"max_hp_bonus": 1,
+}

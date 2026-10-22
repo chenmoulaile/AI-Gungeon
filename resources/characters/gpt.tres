@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CharacterData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/character_data.gd" id="1_cd"]
+
+[resource]
+script = ExtResource("1_cd")
+id = "gpt"
+display_name = "GPT"
+title = "白鳞龙娘"
+blurb = "全能多面手，三种武器模式随时切换。"
+weapon_path = "res://scripts/weapons/weapon_multimodal.gd"
+weapon_name = "多模态切换"
+weapon_desc = "R 键循环：文本（高射速直线）/ 图像（5 发扇形）/ 语音（锥形冲击波）"
+skill_name = "涌现"
+skill_desc = "随机获得伤害 +40% / 射速 +50% / 弹速 +60% 之一，持续 5s"
+passive_name = "上下文窗口"
+passive_desc = "每击杀 +1 token，满 20 后下一次涌现三种强化同时生效"
+skill_cd = 8.0
+accent = Color(0.690, 0.612, 0.941, 1)

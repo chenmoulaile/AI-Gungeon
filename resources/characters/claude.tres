@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="CharacterData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/character_data.gd" id="1_cd"]
+
+[resource]
+script = ExtResource("1_cd")
+id = "claude"
+display_name = "Claude"
+title = "橙羽书记"
+blurb = "细腻谨慎，用持续光束和护盾稳稳推进。"
+weapon_path = "res://scripts/weapons/weapon_long_context.gd"
+weapon_name = "长上下文光束"
+weapon_desc = "按住左键持续激光，宽度 1s 内由细变粗、伤害同步提升，松开冷却 1.2s"
+skill_name = "宪法规避"
+skill_desc = "展开吸收 6 发敌弹的护盾，持续 3s，每吸收 1 发回复 2 点生命"
+passive_name = "细致阅读"
+passive_desc = "自身 120 像素内的敌方子弹速度 -25%"
+skill_cd = 7.0
+accent = Color(0.941, 0.565, 0.290, 1)

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="Upgrade" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/upgrade.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "sharp_round"
+title = "锋利弹头"
+desc = "所有子弹伤害 +12%"
+price = 24
+icon_path = "res://assets/icons/sharp_round.png"
+effects = {
+"damage": 0.12,
+}
