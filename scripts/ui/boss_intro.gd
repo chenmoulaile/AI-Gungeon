@@ -19,6 +19,8 @@ var _done: bool = false
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	if ResourceLoader.exists("res://resources/ui/theme.tres"):
+		theme = load("res://resources/ui/theme.tres")
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	Sfx.play("boss")
 

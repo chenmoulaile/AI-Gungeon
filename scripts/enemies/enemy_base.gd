@@ -1,6 +1,6 @@
 extends Node2D
 class_name EnemyBase
-## 敌人基类：血量、受击闪白、接触伤害、死亡掉落
+## 敌人基类：血量、受击反馈（闪白/击退/硬直）、死亡爆散、掉落
 ## 具体行为由子类覆写 _setup() / _ai()
 
 const BulletScript = preload("res://scripts/weapons/bullet.gd")
@@ -20,8 +20,10 @@ var dead: bool = false
 
 var player = null
 var t: float = 0.0
-var flash: float = 0.0
 var contact_cd: float = 0.0
+var knock_vel: Vector2 = Vector2.ZERO
+var stun: float = 0.0
+var last_hit_tag: String = ""
 
 
 func _ready() -> void:
@@ -42,15 +44,21 @@ func _physics_process(delta: float) -> void:
 		return
 	t += delta
 	contact_cd = maxf(0.0, contact_cd - delta)
-	if flash > 0.0:
-		flash -= delta
-		modulate = Color(2.4, 2.4, 2.4)
-	else:
-		modulate = Color(1, 1, 1)
+	stun = maxf(0.0, stun - delta)
 
 	if player == null or not is_instance_valid(player):
 		player = GameState.player
-	_ai(delta)
+
+	# 受击硬直期间不行动，但仍会被击退
+	if stun <= 0.0:
+		_ai(delta)
+
+	if knock_vel.length() > 1.0:
+		position += knock_vel * delta
+		knock_vel = knock_vel.lerp(Vector2.ZERO, clampf(delta * 11.0, 0.0, 1.0))
+	else:
+		knock_vel = Vector2.ZERO
+
 	_clamp_in_room()
 	_touch_player()
 	queue_redraw()
@@ -80,11 +88,18 @@ func hp_ratio() -> float:
 	return clampf(hp / maxf(max_hp, 0.001), 0.0, 1.0)
 
 
-func take_damage(dmg: float) -> void:
+## dir / tier / crit 由子弹传入，决定反馈强度
+func take_damage(dmg: float, dir: Vector2 = Vector2.ZERO, tier: String = "medium",
+		crit: bool = false, tag: String = "") -> void:
 	if dead:
 		return
+	if tag != "":
+		last_hit_tag = tag
 	hp -= dmg
-	flash = 0.08
+	GameFeel.impact(tier, global_position + Vector2(0, -radius * 0.7), self, dir, dmg,
+		crit, Color(2.8, 2.8, 2.8), accent.lightened(0.45))
+	if tier != "small" and not is_boss:
+		stun = 0.055
 	if hp <= 0.0:
 		_die()
 
@@ -94,9 +109,12 @@ func _die() -> void:
 		return
 	dead = true
 	GameState.unregister_enemy(self)
-	GameState.on_enemy_killed()
+	GameState.on_enemy_killed(last_hit_tag)
 	if GameState.player != null and is_instance_valid(GameState.player):
 		GameState.player.on_kill()
+	# 死亡爆散：一次大粒子 + 轻微震屏
+	GameFeel.burst(global_position + Vector2(0, -radius * 0.5), accent, 14, 150.0, 0.42)
+	GameFeel.screen_shake(0.12)
 	_drop_coins()
 	died.emit(self)
 	queue_free()
@@ -117,18 +135,25 @@ func shoot_at(dir: Vector2, speed: float = 155.0, bullet_radius: float = 3.8,
 		homing: float = 0.0, homing_time: float = 0.0) -> void:
 	if GameState.bullets_root == null:
 		return
-	var b: Node = BulletScript.new()
+	var b: Node = GameFeel.get_bullet()
+	if b == null:
+		return
 	b.friendly = false
 	b.dir = dir.normalized()
 	b.speed = speed
 	b.damage = 1.0
 	b.radius = bullet_radius
-	b.color = Color("#ff6b8b")
+	b.color = Color("#ff5d7a")
 	b.life = 4.5
 	b.homing = homing
 	b.homing_time = homing_time
+	b.pierce = 0
+	b.gen = 0
+	b.trail = false
+	b.crit = false
+	b.tier = "medium"
 	b.global_position = global_position + dir.normalized() * (radius + 2.0)
-	GameState.bullets_root.add_child(b)
+	b.prepare()
 
 
 # ---------------- 绘制 ----------------

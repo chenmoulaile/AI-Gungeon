@@ -28,6 +28,7 @@ func show_select() -> void:
 
 
 func _on_character_chosen(id: String) -> void:
+	print("[pick] ", id)
 	GameState.start_run(id)
 	var g: Node = GameScene.instantiate()
 	g.run_over.connect(_on_run_over)

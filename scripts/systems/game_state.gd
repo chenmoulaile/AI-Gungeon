@@ -5,6 +5,7 @@ signal coins_changed(value: int)
 signal hp_changed(hp: int, max_hp: int)
 signal upgrades_changed()
 signal combo_activated(combo_name: String)
+signal synergy_activated(synergy_name: String)
 signal run_ended()
 
 const PLAYER_MAX_HP := 6
@@ -22,6 +23,8 @@ var run_time: float = 0.0
 
 var upgrades: Array = []      # 已持有藏品 id
 var combos: Array = []        # 已激活组合名
+var synergies: Array = []     # 已激活的跨角色协同
+var mods: Dictionary = {}     # 藏品/协同算出的运行时修正（钩子读取）
 var stats: Dictionary = {}
 
 # 场景内引用（由 game.gd / player.gd 维护）
@@ -46,6 +49,7 @@ func start_run(id: String) -> void:
 	run_time = 0.0
 	upgrades = []
 	combos = []
+	synergies = []
 	enemies = []
 	player = null
 	recalc_stats()
@@ -96,9 +100,57 @@ func recalc_stats() -> void:
 		if not c.is_empty():
 			_apply_effects(s, c["effects"])
 	stats = s
+	_recalc_mods()
 	max_hp = PLAYER_MAX_HP + int(s["max_hp_bonus"])
 	if hp > max_hp:
 		hp = max_hp
+
+
+## 藏品钩子：把"藏品 + 角色"的协同翻译成运行时修正，武器只查表，不写 if 链
+func _recalc_mods() -> void:
+	var m := {
+		"split_inherit_pierce": false,
+		"roll_shot_bonus": 0.0,
+		"low_hp_damage": 0.0,
+		"room_clear_heal": 0,
+		"voice_kill_cd": 0.0,
+		"shield_counter": false,
+	}
+	if char_id == "deepseek" and upgrades.has("split_prism"):
+		m["split_inherit_pierce"] = true
+	if char_id == "gpt" and upgrades.has("cool_module"):
+		m["voice_kill_cd"] = 1.5
+	if char_id == "claude" and upgrades.has("piercing_nail"):
+		m["shield_counter"] = true
+	if upgrades.has("roll_core"):
+		m["roll_shot_bonus"] = 0.6
+	if upgrades.has("extra_heart"):
+		m["low_hp_damage"] = 0.25
+	if upgrades.has("scholar_page"):
+		m["room_clear_heal"] = 1
+	mods = m
+
+	var found: Array = []
+	if m["split_inherit_pierce"]:
+		found.append("裂开的推理也会穿透")
+	if m["voice_kill_cd"] > 0.0:
+		found.append("说出口的话会自己找上下一句")
+	if m["shield_counter"]:
+		found.append("被挡住的东西会原路返回")
+	if m["roll_shot_bonus"] > 0.0:
+		found.append("翻滚之后的第一枪格外准")
+	if m["low_hp_damage"] > 0.0:
+		found.append("越接近极限越不肯放手")
+	if m["room_clear_heal"] > 0:
+		found.append("读完这一页就休息一下")
+	for name in found:
+		if not synergies.has(name):
+			synergies.append(name)
+			synergy_activated.emit(name)
+
+
+func mod_value(key: String, default_value = 0.0):
+	return mods.get(key, default_value)
 
 
 func _apply_effects(s: Dictionary, effects: Dictionary) -> void:
@@ -175,8 +227,13 @@ func unregister_enemy(e: Node) -> void:
 	enemies.erase(e)
 
 
-func on_enemy_killed() -> void:
+func on_enemy_killed(tag: String = "") -> void:
 	kills += 1
+	# GPT 协同：语音冲击波击杀缩短「涌现」冷却
+	if tag == "voice" and float(mods.get("voice_kill_cd", 0.0)) > 0.0:
+		if player != null and is_instance_valid(player) and player.weapon != null:
+			player.weapon.skill_cd_left = maxf(0.0,
+				float(player.weapon.skill_cd_left) - float(mods["voice_kill_cd"]))
 	var every := int(stat("lifesteal_every", 0))
 	if every > 0 and kills % every == 0:
 		heal(1)

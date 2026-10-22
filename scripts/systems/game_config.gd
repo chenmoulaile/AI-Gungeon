@@ -20,9 +20,9 @@ const PLAYER_RADIUS := 7.0
 
 # ---------------- 配色 ----------------
 const COL_BG := Color("#0b0d13")
-const COL_FLOOR_A := Color("#1c2231")
-const COL_FLOOR_B := Color("#212837")
-const COL_FLOOR_LINE := Color("#2c3547")
+const COL_FLOOR_A := Color("#202839")
+const COL_FLOOR_B := Color("#2c3549")
+const COL_FLOOR_LINE := Color("#39445c")
 const COL_WALL := Color("#2b3244")
 const COL_WALL_TOP := Color("#3a4359")
 const COL_DOOR := Color("#f2b53c")
@@ -86,6 +86,14 @@ func _add_mouse(action: String, button: int) -> void:
 
 # ---------------- 字体（优先系统 CJK 字体，避免中文变方块） ----------------
 func _load_font() -> void:
+	# 优先用工程内置字体（OFL 授权的 Noto Sans SC），Web/导出包也能正常显示中文
+	for bundled in ["res://assets/fonts/ui.otf", "res://assets/fonts/ui.ttf"]:
+		if ResourceLoader.exists(bundled):
+			var res = load(bundled)
+			if res is Font:
+				ui_font = res
+				return
+	# 兜底：桌面系统字体（不复制、不打包）
 	var candidates := [
 		"C:/Windows/Fonts/msyh.ttc",
 		"C:/Windows/Fonts/msyhbd.ttc",

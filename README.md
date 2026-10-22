@@ -34,7 +34,23 @@ E:\Projects\AiGungeon\build\AIGungeon.exe
 2. 打开工程：`E:\Projects\AiGungeon\project.godot`
 3. 按 **F5** 运行。
 
-### 方式三：命令行无头自测（不需要显示器）
+### 方式三：浏览器本地预览（不弹游戏窗口）
+
+```bat
+:: 1) 导出 Web 版
+set APPDATA=E://DevTools//cache//appdata
+E://DevTools//Godot//Godot_v4.4.1-stable_win64_console.exe --headless --path E://Projects//AiGungeon --export-release "Web" build/web/index.html
+
+:: 2) 起本地服务器（带 wasm MIME 与 COOP/COEP 头）
+E://DevTools//Python//python.exe E://Projects//AiGungeon//tools//serve_web.py 8765
+
+:: 3) 浏览器打开 http://127.0.0.1:8765/index.html
+```
+
+Web 版关闭了线程（`thread_support=false`），不需要特殊服务器配置也能跑；
+`tools/serve_web.py` 仍然带上 COOP/COEP 头，方便以后开线程时不用改服务器。
+
+### 方式四：命令行无头自测（不需要显示器）
 
 ```bat
 set APPDATA=E:\DevTools\cache\appdata
@@ -42,6 +58,72 @@ E:\DevTools\Godot\Godot_v4.4.1-stable_win64_console.exe --headless --path E:\Pro
 ```
 
 自测覆盖：三个角色开局 / 开火 / 技能 / 翻滚 / 清场开门 / 换房 / 商店购买 / Boss 三阶段 / 死亡结算。
+
+---
+
+## 手感与系统（v2）
+
+### 全局反馈层 `scripts/systems/game_feel.gd`（Autoload）
+
+所有反馈集中在一处，武器/敌人只调用预设，不在各自脚本里重复实现：
+
+| 通道 | 实现 |
+| --- | --- |
+| `hit_stop(duration, scale)` | 改 `Engine.time_scale`，用真实时间计时恢复，不阻塞输入（输入在恢复后立即生效） |
+| `screen_shake(trauma)` | trauma 衰减 + `trauma²` 映射，只改 `Camera2D.offset`，不影响碰撞体 |
+| `flash(node, color)` | Tween 缓动回白，受击闪白/闪红 |
+| `knockback(node, dir, strength)` | 写入节点 `knock_vel`，由节点逐帧衰减，不是瞬移 |
+| `damage_number(pos, amount, crit)` | 上浮（TRANS_BACK）→ 下坠（TRANS_QUAD）→ 淡出 |
+| `burst(pos, ...)` | 像素粒子爆散，单节点批量绘制，最多 16 粒 |
+| `afterimage(...)` | 翻滚残影，0.15s 淡出 |
+
+三档预设（`PRESETS`）：
+
+| 档位 | hit-stop | 震屏 | 粒子 | 使用场景 |
+| --- | --- | --- | --- | --- |
+| small | 0 | 0.05 | 3 | 分裂弹末代命中、护盾回击 |
+| medium | 0.028s | 0.16 | 6 | 普通子弹命中（默认） |
+| large | 0.11s | 0.55 | 14 | Boss 阶段转换、玩家死亡 |
+
+对象池：子弹、粒子、伤害数字全部复用，不在战斗中途 `instantiate/free`。
+
+### 翻滚反馈
+
+起手 1 帧挤压拉伸（1.28×0.76 回弹）、每 0.045s 生成一张残影、撞墙时扬尘 + 微震、
+结束时靠减速度自然滑出（不是硬停）。
+
+### 藏品钩子系统
+
+藏品不再只是数值加算，`GameState` 把「藏品 × 角色」翻译成运行时修正表 `mods`，
+武器只查表，不写 if 链：
+
+| 协同 | 条件 | 效果 | 藏品描述里的暗示 |
+| --- | --- | --- | --- |
+| 裂开的推理也会穿透 | DeepSeek + 分裂棱镜 | 分裂出的小弹继承穿透 | 见「分裂棱镜」 |
+| 说出口的话会自己找上下一句 | GPT + 冷却模块 | 语音冲击波击杀 -1.5s 技能冷却 | 见「冷却模块」 |
+| 被挡住的东西会原路返回 | Claude + 穿甲长钉 | 护盾吸弹时向最近敌人回击 | 见「穿甲长钉」 |
+| 翻滚之后的第一枪格外准 | 任意 + 翻滚核心 | 翻滚后首发 +60% 伤害 | 见「翻滚核心」 |
+| 越接近极限越不肯放手 | 任意 + 备用心脏 | 生命 ≤3 时伤害 +25% | 见「备用心脏」 |
+| 读完这一页就休息一下 | 任意 + 学者手记 | 每清空一个房间回复 1 点生命 | 见「学者手记」 |
+
+商店改为**加权抽取**：与已持有藏品能凑成组合的选项权重 ×3，并且第一格优先放一个"能凑组合"的，
+货架上会用 `★ 与已有藏品共鸣` 标出来。
+
+### 视觉层
+
+- `CanvasModulate` 把环境压成偏冷的深蓝灰（0.80/0.84/0.94），保留弹幕可读性；
+- 玩家与 Boss 各带一个 `PointLight2D`（径向渐变贴图 `assets/fx/light_radial.png`，程序化生成）；
+- 四面墙挂 `LightOccluder2D`，开启阴影，`SHADOW_FILTER_NONE` 保持像素硬边；
+- 角色 sprite 设 `light_mask = 0`，避免被自己的点光源打成白色；
+- 分层：地板棋盘 → 中央竞技圈/四角标记 → 墙内阴影 → 角色 → HUD 暗角，至少 4 层色阶；
+- 敌方子弹：危险色（品红/暖红）+ 外发光 + 深色描边，与玩家子弹（青/紫）在色相上明确区分。
+
+### UI
+
+- `resources/ui/theme.tres`：蓝白主色、浅蓝强调、统一 4px 圆角，所有界面根节点都套用；
+- HUD 全部贴边，中间 70% 留给弹幕；技能改成**环形冷却**（进度环 + 就绪脉冲）；
+- 藏品拾取时图标 1.15 倍弹跳；
+- Boss 血条标出 60% / 25% 阶段分界线，阶段转换时弹出「阶段转换！」横幅。
 
 ---
 
@@ -298,5 +380,7 @@ APPDATA  = E:\DevTools\cache\appdata      （把 Godot 编辑器配置/导出模
 5. **音效是合成的**：没有使用任何下载的音效，全部用 numpy 合成短促提示音，听感偏"电子"，属于占位级质量。
 6. **商店出现位置**：按"每 5 个房间进入一次商店"实现为「每层第 4 间房清空后进入商店，然后打第 5 间 Boss」。
 7. **敌人没有像素 sprite**：需求只要求三个角色的战斗资源，敌人/Boss 用 `_draw()` 几何绘制，保证零占位图。
-8. **像素 sprite 的细节损失**：从插画 5 倍降采样到 52px 高，裙摆花纹等细节不可逆丢失，
+8. **Web 版性能**：本地无头 Chrome（软件光栅）实测平均 49.9 FPS、最差 1% 帧 33.4ms，
+   桌面 GPU 下预期稳定 60；如果目标机器较弱，优先减少 `PointLight2D` 数量（当前 3 个）而不是降画质。
+9. **像素 sprite 的细节损失**：从插画 5 倍降采样到 52px 高，裙摆花纹等细节不可逆丢失，
    已通过对比度提升、暗部提亮、rim light、2px 描边尽量保住可读性。

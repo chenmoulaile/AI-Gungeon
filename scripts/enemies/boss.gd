@@ -8,6 +8,8 @@ var phase: int = 1
 var atk_cd: float = 1.6
 var summon_cd: float = 5.0
 var ring_angle: float = 0.0
+var telegraph: float = 0.0
+var pending_phase: int = 0
 
 
 func _setup() -> void:
@@ -20,13 +22,21 @@ func _setup() -> void:
 	accent = Color("#b45cff")
 	is_boss = true
 	add_to_group("boss")
+	var light := PointLight2D.new()
+	if ResourceLoader.exists("res://assets/fx/light_radial.png"):
+		light.texture = load("res://assets/fx/light_radial.png")
+	light.energy = 1.1
+	light.texture_scale = 2.4
+	light.color = Color(0.78, 0.45, 1.0)
+	light.shadow_enabled = true
+	light.shadow_filter = Light2D.SHADOW_FILTER_NONE
+	add_child(light)
 	atk_cd = 1.8
 
 
 func _ai(delta: float) -> void:
 	if player == null or not is_instance_valid(player):
 		return
-	_update_phase()
 	var to_player: Vector2 = player.global_position - global_position
 	var dist := to_player.length()
 	var dir := to_player.normalized()
@@ -34,6 +44,16 @@ func _ai(delta: float) -> void:
 		position += dir * speed * delta
 	else:
 		position += dir.orthogonal() * speed * 0.5 * delta
+
+	# 阶段转换预警：停止攻击、闪红、震屏，给玩家 0.75s 反应时间
+	if telegraph > 0.0:
+		telegraph -= delta
+		if telegraph <= 0.0 and pending_phase > 0:
+			phase = pending_phase
+			pending_phase = 0
+			atk_cd = 0.55
+			GameFeel.screen_shake(0.3)
+		return
 
 	atk_cd -= delta
 	if atk_cd <= 0.0:
@@ -55,6 +75,12 @@ func _ai(delta: float) -> void:
 			_summon()
 
 
+func _physics_process(delta: float) -> void:
+	super._physics_process(delta)
+	if not dead:
+		_update_phase()
+
+
 func _update_phase() -> void:
 	var ratio := hp_ratio()
 	var new_phase := 1
@@ -62,10 +88,14 @@ func _update_phase() -> void:
 		new_phase = 3
 	elif ratio <= 0.6:
 		new_phase = 2
-	if new_phase != phase:
-		phase = new_phase
-		atk_cd = 0.7
-		Sfx.play("boss", -4.0, 1.2 + 0.15 * phase)
+	if new_phase != phase and pending_phase == 0 and telegraph <= 0.0:
+		pending_phase = new_phase
+		telegraph = 0.75
+		atk_cd = 1.2
+		GameFeel.hit_stop(0.1, 0.05)
+		GameFeel.screen_shake(0.55)
+		GameFeel.burst(global_position, Color(1.0, 0.35, 0.45), 16, 190.0, 0.5)
+		Sfx.play("boss", -2.0, 1.1)
 
 
 # 阶段 1：环形弹
@@ -128,5 +158,10 @@ func _draw_body() -> void:
 	var outline := pts.duplicate()
 	outline.append(pts[0])
 	draw_polyline(outline, Color(0, 0, 0, 0.9), 2.0)
+	if telegraph > 0.0:
+		var k: float = 1.0 - telegraph / 0.75
+		var warn := Color(1.0, 0.35, 0.4, 0.55 * (1.0 - k * 0.6))
+		draw_arc(Vector2.ZERO, radius + 14.0 + k * 26.0, 0.0, TAU, 40, warn, 2.0, true)
+		draw_circle(Vector2.ZERO, radius * 0.5, Color(1.0, 0.3, 0.35, 0.25))
 	draw_circle(Vector2.ZERO, radius * 0.44, Color(1, 1, 1, 0.95))
 	draw_circle(Vector2.ZERO, radius * 0.24, Color(0.1, 0.02, 0.15, 1.0))

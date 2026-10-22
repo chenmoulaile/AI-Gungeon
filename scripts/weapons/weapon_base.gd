@@ -28,6 +28,11 @@ func damage_mult() -> float:
 	var m := stat("damage", 1.0)
 	if player != null and is_instance_valid(player):
 		m *= 1.0 + float(player.get_buff("damage", 0.0))
+		m *= 1.0 + float(player.roll_buff)
+		# 低血量协同：越接近极限越不肯放手
+		var low: float = float(GameState.mods.get("low_hp_damage", 0.0))
+		if low > 0.0 and player.hp <= 3:
+			m *= 1.0 + low
 	return m
 
 
@@ -70,10 +75,13 @@ func spawn_bullet(pos: Vector2, dir: Vector2, base_damage: float, speed: float,
 	var info := calc_damage(base_damage)
 	if bool(opts.get("raw", false)):
 		info = {"dmg": base_damage, "crit": false}
-	var b: Node = BulletScript.new()
+	var b: Node = GameFeel.get_bullet()
+	if b == null:
+		return null
 	b.dir = dir.normalized()
 	b.speed = speed * bullet_speed_mult()
 	b.damage = float(info["dmg"])
+	b.crit = bool(info["crit"])
 	b.radius = float(opts.get("radius", 3.0))
 	b.life = float(opts.get("life", 2.2))
 	b.color = color
@@ -82,8 +90,10 @@ func spawn_bullet(pos: Vector2, dir: Vector2, base_damage: float, speed: float,
 	b.gen = int(opts.get("gen", 0))
 	b.homing = float(opts.get("homing", 0.0))
 	b.homing_time = float(opts.get("homing_time", 0.0))
+	b.tier = String(opts.get("tier", "medium"))
+	b.trail = bool(opts.get("trail", true))
 	b.global_position = pos
-	_bullet_root().add_child(b)
+	b.prepare()
 	return b
 
 
@@ -101,6 +111,9 @@ func fire(_dir: Vector2) -> void:
 func try_fire(dir: Vector2) -> void:
 	if cooldown <= 0.0:
 		fire(dir)
+		# 翻滚后的首发射击消耗掉加成
+		if player != null and is_instance_valid(player) and player.roll_buff > 0.0:
+			player.roll_buff = 0.0
 
 
 func use_skill() -> bool:

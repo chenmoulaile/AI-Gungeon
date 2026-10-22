@@ -11,6 +11,8 @@ var _icon_cache: Dictionary = {}
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	if ResourceLoader.exists("res://resources/ui/theme.tres"):
+		theme = load("res://resources/ui/theme.tres")
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	var p := "res://assets/portraits/%s_full.png" % GameState.char_id
 	if ResourceLoader.exists(p):
@@ -95,11 +97,15 @@ func _draw() -> void:
 		draw_string(GameConfig.ui_font, Vector2(x, iy + 12), "（本局没有购买藏品）",
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, GameConfig.COL_DIM)
 
-	# 组合效果列表
+	# 组合效果 + 协同列表
 	var cy := iy + 34.0
 	for cname in GameState.combos:
-		draw_string(GameConfig.ui_font, Vector2(x, cy), "· " + str(cname),
+		draw_string(GameConfig.ui_font, Vector2(x, cy), "· 组合 " + str(cname),
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(1.0, 0.85, 0.4))
+		cy += 13.0
+	for sname in GameState.synergies:
+		draw_string(GameConfig.ui_font, Vector2(x, cy), "· 协同 " + str(sname),
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.7, 0.85, 1.0))
 		cy += 13.0
 
 	# 按钮

@@ -17,6 +17,8 @@ var _t: float = 0.0
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	if ResourceLoader.exists("res://resources/ui/theme.tres"):
+		theme = load("res://resources/ui/theme.tres")
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	for id in IDS:
 		_data.append(GameState.load_character(id))
@@ -94,7 +96,8 @@ func _draw_card(i: int, r: Rect2) -> void:
 	draw_rect(r, border, false, 2.0 if hovered else 1.0)
 
 	# 立绘区域
-	var pr := Rect2(r.position + Vector2(6, 6), Vector2(r.size.x - 12, 150))
+	var bob := sin(_t * 1.6 + float(i) * 1.1) * 2.0
+	var pr := Rect2(r.position + Vector2(6, 6 + bob), Vector2(r.size.x - 12, 150))
 	draw_rect(pr, Color(0.05, 0.06, 0.09))
 	if _tex[i] != null:
 		var tex: Texture2D = _tex[i]

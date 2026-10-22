@@ -65,6 +65,7 @@ func _fire_voice(dir: Vector2) -> void:
 	beam.width = 34.0
 	beam.dps = 11.0 * damage_mult()
 	beam.color = Color("#c9b6ff")
+	beam.tag = "voice"
 	beam.life = 0.14
 	_bullet_root().add_child(beam)
 	Sfx.play("skill", -12.0, 1.8)

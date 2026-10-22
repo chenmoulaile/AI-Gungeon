@@ -160,10 +160,10 @@ func _test_boss() -> void:
 	if boss != null:
 		var hp0: float = boss.hp
 		boss.take_damage(hp0 * 0.5)
-		await _frames(3)
+		await _wait(1.0)   # 阶段转换有 0.75s 预警
 		_check(boss.phase == 2, "Boss 半血进入第 2 阶段（phase=%d）" % boss.phase)
 		boss.take_damage(hp0 * 0.4)
-		await _frames(3)
+		await _wait(1.0)
 		_check(boss.phase == 3, "Boss 残血进入第 3 阶段（phase=%d）" % boss.phase)
 		boss.take_damage(hp0)
 		await _wait(0.5)

@@ -47,12 +47,17 @@ func _on_bullet_hit(enemy: Node, bullet: Node) -> void:
 	if bullet.gen >= MAX_GEN:
 		return
 	var base_dmg: float = bullet.damage * SPLIT_DMG
+	# 藏品协同：裂开的小弹继承穿透
+	var inherit_pierce: int = 0
+	if bool(GameState.mods.get("split_inherit_pierce", false)):
+		inherit_pierce = maxi(1, int(bullet.pierce) + 1)
 	for i in 2:
 		var ang := deg_to_rad(38.0) * (1.0 if i == 0 else -1.0)
 		var d: Vector2 = bullet.dir.rotated(ang)
 		var nb: Node = spawn_bullet(bullet.global_position, d, base_dmg, 300.0,
 			Color("#a9f0ff"),
-			{"radius": 2.6, "gen": int(bullet.gen) + 1, "life": 0.85, "raw": true})
+			{"radius": 2.6, "gen": int(bullet.gen) + 1, "life": 0.85, "raw": true,
+			"pierce": inherit_pierce, "tier": "small"})
 		nb.hit_enemy.connect(_on_bullet_hit)
 
 

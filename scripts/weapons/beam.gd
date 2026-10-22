@@ -10,6 +10,7 @@ var color: Color = Color("#8ee6ff")
 var instant: bool = false
 var life: float = 0.14
 var tick_interval: float = 0.08
+var tag: String = "beam"
 
 var _tick: float = 0.0
 var _fade: float = 1.0
@@ -52,7 +53,7 @@ func _apply_damage(dt: float) -> void:
 			continue
 		var d := _dist_to_segment(e.global_position)
 		if d <= width * 0.5 + float(e.radius):
-			e.take_damage(dmg)
+			e.take_damage(dmg, Vector2.ZERO, "medium", false, tag)
 
 
 func _dist_to_segment(p: Vector2) -> float:

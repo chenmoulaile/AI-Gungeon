@@ -188,7 +188,12 @@ func _on_room_cleared() -> void:
 	if room != null and is_instance_valid(room):
 		room.open_door()
 	GameState.add_coins(4)
-	hud.show_toast("房间清空 · 向右离开", 2.2)
+	var heal: int = int(GameState.mods.get("room_clear_heal", 0))
+	if heal > 0:
+		GameState.heal(heal)
+		hud.show_toast("房间清空 · 回复 %d 点生命 · 向右离开" % heal, 2.4)
+	else:
+		hud.show_toast("房间清空 · 向右离开", 2.2)
 
 
 func _on_boss_dead() -> void:

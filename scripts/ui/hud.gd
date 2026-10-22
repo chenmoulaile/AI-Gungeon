@@ -1,22 +1,31 @@
 extends Control
-## HUD：生命 / 金币 / 技能冷却 / GPT 模式 / 藏品侧栏 / Boss 血条 / 提示
+## HUD：生命 / 金币 / 技能环形冷却 / GPT 模式 / 藏品侧栏 / Boss 血条 / 暗角
+## 全部贴边绘制，中间 70% 区域留给弹幕
 
 var toast_text: String = ""
 var toast_time: float = 0.0
 var combo_text: String = ""
 var combo_time: float = 0.0
+
 var _icon_cache: Dictionary = {}
+var _pop: Dictionary = {}          # uid -> 剩余弹跳时间
 
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	if ResourceLoader.exists("res://resources/ui/theme.tres"):
+		theme = load("res://resources/ui/theme.tres")
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	GameState.combo_activated.connect(_on_combo_activated)
+	GameState.upgrades_changed.connect(_on_upgrades_changed)
+	GameState.synergy_activated.connect(_on_synergy)
 
 
 func _process(delta: float) -> void:
 	toast_time = maxf(0.0, toast_time - delta)
 	combo_time = maxf(0.0, combo_time - delta)
+	for k in _pop.keys():
+		_pop[k] = maxf(0.0, float(_pop[k]) - delta)
 	queue_redraw()
 
 
@@ -31,8 +40,22 @@ func _on_combo_activated(combo_name: String) -> void:
 	Sfx.play("skill", -4.0, 1.3)
 
 
+func _on_synergy(synergy_name: String) -> void:
+	combo_text = "协同激活：%s" % synergy_name
+	combo_time = 3.2
+	Sfx.play("skill", -2.0, 1.5)
+
+
+func _on_upgrades_changed() -> void:
+	if GameState.upgrades.is_empty():
+		return
+	var uid: String = GameState.upgrades[GameState.upgrades.size() - 1]
+	_pop[uid] = 0.45
+
+
 func _draw() -> void:
 	var p = GameState.player
+	_draw_vignette()
 	_draw_hearts()
 	_draw_coins()
 	_draw_room_info()
@@ -44,12 +67,27 @@ func _draw() -> void:
 	_draw_toasts()
 
 
+# ---------------- 前景暗角：让视线收束到房间中央 ----------------
+func _draw_vignette() -> void:
+	var w := GameConfig.BASE_W
+	var h := GameConfig.BASE_H
+	var steps := 7
+	for i in steps:
+		var t: float = float(i) / float(steps)
+		var a: float = 0.085 * (1.0 - t * 0.55)
+		var d: float = 10.0 + i * 5.0
+		draw_rect(Rect2(0, 0, w, d), Color(0, 0, 0, a))
+		draw_rect(Rect2(0, h - d, w, d), Color(0, 0, 0, a))
+		draw_rect(Rect2(0, 0, d, h), Color(0, 0, 0, a))
+		draw_rect(Rect2(w - d, 0, d, h), Color(0, 0, 0, a))
+
+
 # ---------------- 各区块 ----------------
 func _draw_hearts() -> void:
 	for i in GameState.max_hp:
 		var pos := Vector2(12 + i * 13, 12)
 		var filled := i < GameState.hp
-		_heart(pos, 5.0, GameConfig.COL_HP if filled else Color(0.25, 0.27, 0.33))
+		_heart(pos, 5.0, GameConfig.COL_HP if filled else Color(0.24, 0.26, 0.32))
 
 
 func _heart(center: Vector2, r: float, color: Color) -> void:
@@ -76,6 +114,7 @@ func _draw_room_info() -> void:
 		HORIZONTAL_ALIGNMENT_RIGHT)
 
 
+## 技能：环形冷却 + 名称，比纯数字更好读
 func _draw_skill(p) -> void:
 	var w = p.weapon
 	if w == null:
@@ -87,19 +126,25 @@ func _draw_skill(p) -> void:
 	var total: float = 8.0
 	if p.data != null:
 		total = maxf(0.5, p.data.skill_cd)
+	var ready: bool = cd <= 0.0
 	var ratio: float = clampf(1.0 - cd / total, 0.0, 1.0)
-	var base := Vector2(12, GameConfig.BASE_H - 26)
-	draw_rect(Rect2(base, Vector2(92, 7)), Color(0.1, 0.11, 0.16, 0.9))
-	var col := GameConfig.char_color(GameState.char_id)
-	draw_rect(Rect2(base, Vector2(92 * ratio, 7)), col if cd <= 0.0 else col.darkened(0.45))
-	draw_rect(Rect2(base, Vector2(92, 7)), Color(0, 0, 0, 0.5), false, 1.0)
-	var label := "%s [E]" % name
-	if cd > 0.0:
-		label += "  %.1fs" % cd
-	else:
-		label += "  就绪"
-	_text(Vector2(12, GameConfig.BASE_H - 30), label, 9,
-		GameConfig.COL_TEXT if cd <= 0.0 else GameConfig.COL_DIM)
+
+	var c := Vector2(28, GameConfig.BASE_H - 30)
+	var col: Color = GameConfig.char_color(GameState.char_id)
+	draw_circle(c, 16.0, Color(0.06, 0.07, 0.11, 0.85))
+	draw_arc(c, 15.0, 0.0, TAU, 32, Color(0.22, 0.25, 0.34, 0.9), 2.0, true)
+	if ratio > 0.0:
+		draw_arc(c, 15.0, -PI / 2.0, -PI / 2.0 + TAU * ratio, 32,
+			col if ready else col.darkened(0.35), 3.0, true)
+	if ready:
+		var pulse: float = 0.55 + 0.25 * sin(Time.get_ticks_msec() / 260.0)
+		draw_arc(c, 18.5, 0.0, TAU, 32, Color(col.r, col.g, col.b, pulse * 0.5), 1.0, true)
+	draw_circle(c, 2.6, Color(1, 1, 1, 0.85) if ready else Color(0.4, 0.43, 0.5))
+	_text(Vector2(50, GameConfig.BASE_H - 34), "%s [E]" % name, 9,
+		GameConfig.COL_TEXT if ready else GameConfig.COL_DIM)
+	_text(Vector2(50, GameConfig.BASE_H - 24),
+		"就绪" if ready else "%.1fs" % cd, 8,
+		col if ready else GameConfig.COL_DIM)
 
 
 func _draw_mode(p) -> void:
@@ -116,6 +161,7 @@ func _draw_mode(p) -> void:
 				Color("#ffd166"), HORIZONTAL_ALIGNMENT_CENTER)
 
 
+## 藏品侧栏：拾取时 1.15 倍弹跳
 func _draw_upgrades() -> void:
 	var x := GameConfig.BASE_W - 30.0
 	var y := 34.0
@@ -124,8 +170,17 @@ func _draw_upgrades() -> void:
 		if up == null:
 			continue
 		var tex := _icon(up.icon_path)
+		var pop: float = float(_pop.get(uid, 0.0))
+		var sc: float = 1.0
+		if pop > 0.0:
+			sc = 1.0 + 0.15 * sin(clampf(pop / 0.45, 0.0, 1.0) * PI)
+		var size := 22.0 * sc
+		var rect := Rect2(Vector2(x + (22.0 - size) * 0.5, y + (22.0 - size) * 0.5),
+			Vector2(size, size))
 		if tex != null:
-			draw_texture_rect(tex, Rect2(Vector2(x, y), Vector2(22, 22)), false)
+			draw_texture_rect(tex, rect, false)
+		if pop > 0.0:
+			draw_rect(rect.grow(1), Color(1.0, 0.85, 0.4, pop * 0.8), false, 1.0)
 		y += 24.0
 		if y > GameConfig.BASE_H - 60.0:
 			break
@@ -152,8 +207,20 @@ func _draw_boss() -> void:
 	var col := Color("#ff5b8b") if boss.phase < 3 else Color("#ff5b5b")
 	draw_rect(Rect2(Vector2(x, y), Vector2(w * boss.hp_ratio(), 8)), col)
 	draw_rect(Rect2(Vector2(x, y), Vector2(w, 8)), Color(0, 0, 0, 0.6), false, 1.0)
+	# 阶段分界刻度（60% / 25%）
+	for mark in [0.6, 0.25]:
+		var mx: float = x + w * float(mark)
+		draw_line(Vector2(mx, y - 2), Vector2(mx, y + 10), Color(1, 1, 1, 0.45), 1.0)
 	_text(Vector2(GameConfig.BASE_W * 0.5, y - 3), "回响聚合体 · 第 %d 阶段" % boss.phase,
 		9, GameConfig.COL_TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+	# 阶段转换预警横幅
+	if float(boss.telegraph) > 0.0:
+		var a: float = clampf(float(boss.telegraph) / 0.75, 0.0, 1.0)
+		var bw := 150.0
+		draw_rect(Rect2(Vector2((GameConfig.BASE_W - bw) * 0.5, y + 14), Vector2(bw, 14)),
+			Color(0.45, 0.06, 0.10, 0.75 * a))
+		_text(Vector2(GameConfig.BASE_W * 0.5, y + 24), "阶段转换！", 10,
+			Color(1.0, 0.55, 0.55, a), HORIZONTAL_ALIGNMENT_CENTER)
 
 
 func _draw_toasts() -> void:
@@ -173,7 +240,6 @@ func _text(pos: Vector2, s: String, size: int, color: Color,
 		return
 	var p := pos
 	if align != HORIZONTAL_ALIGNMENT_LEFT:
-		# draw_string 的 width=-1 时对齐无效，这里手动按文字宽度偏移
 		var w: float = GameConfig.ui_font.get_string_size(
 			s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 		p.x -= w * 0.5 if align == HORIZONTAL_ALIGNMENT_CENTER else w

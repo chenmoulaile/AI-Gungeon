@@ -1,8 +1,12 @@
 extends CharacterBody2D
 ## 玩家：移动 / 瞄准 / 射击 / 翻滚 / 主动技能 / 受击
-## 角色差异全部通过 weapon 脚本 + data 资源驱动
+## 角色差异全部通过 weapon 脚本 + data 资源驱动；反馈统一走 GameFeel
 
 signal died
+
+const ACCEL := 1500.0        # 起步加速度（px/s^2）
+const DECEL := 2100.0        # 松手减速度，制造轻微滑步
+const ROLL_GHOST_GAP := 0.045
 
 var char_id: String = "deepseek"
 var data: CharacterData = null
@@ -32,7 +36,12 @@ var shield_t: float = 0.0
 
 var fire_anim: float = 0.0
 var charge_ratio: float = 0.0
+
 var _blink: float = 0.0
+var _ghost_t: float = 0.0
+var _bump_cd: float = 0.0
+var roll_buff: float = 0.0
+var _muzzle_cd: float = 0.0
 
 
 func _ready() -> void:
@@ -58,8 +67,20 @@ func _build_nodes() -> void:
 	anim.sprite_frames = GameConfig.build_sprite_frames(char_id)
 	anim.offset = Vector2(0, -29)
 	anim.self_modulate = Color(1.2, 1.2, 1.3)
+	anim.light_mask = 0   # 角色不参与 2D 光照，避免被自己的点光源打爆成白色
 	anim.play("idle")
 	add_child(anim)
+
+	var light := PointLight2D.new()
+	if ResourceLoader.exists("res://assets/fx/light_radial.png"):
+		light.texture = load("res://assets/fx/light_radial.png")
+	light.energy = 1.15
+	light.texture_scale = 1.9
+	light.color = Color(1.0, 0.96, 0.9)
+	light.position = Vector2(0, -14)
+	light.shadow_enabled = true
+	light.shadow_filter = Light2D.SHADOW_FILTER_NONE
+	add_child(light)
 
 	cam = Camera2D.new()
 	cam.position_smoothing_enabled = true
@@ -71,6 +92,7 @@ func _build_nodes() -> void:
 	cam.limit_bottom = int(r.end.y)
 	add_child(cam)
 	cam.make_current()
+	GameFeel.register_camera(cam)
 
 
 func _build_weapon() -> void:
@@ -107,13 +129,17 @@ func _physics_process(delta: float) -> void:
 
 	if roll_t > 0.0:
 		velocity = roll_dir * GameConfig.ROLL_SPEED
+		_spawn_ghost(delta)
 	else:
 		var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 		var spd: float = GameConfig.PLAYER_SPEED * GameState.stat("move_speed", 1.0) * move_mult
-		velocity = input * spd
+		var target := input * spd
+		var rate := ACCEL if input.length() > 0.1 else DECEL
+		velocity = velocity.move_toward(target, rate * delta)
 		_update_anim(input)
 
 	move_and_slide()
+	_wall_bump()
 	_clamp_room()
 	_handle_actions()
 	queue_redraw()
@@ -125,6 +151,8 @@ func _tick_timers(delta: float) -> void:
 	roll_cd = maxf(0.0, roll_cd - delta)
 	fire_anim = maxf(0.0, fire_anim - delta)
 	shield_t = maxf(0.0, shield_t - delta)
+	_bump_cd = maxf(0.0, _bump_cd - delta)
+	_muzzle_cd = maxf(0.0, _muzzle_cd - delta)
 	if shield_t <= 0.0:
 		shield_hits = 0
 	if buff_timer > 0.0:
@@ -153,6 +181,20 @@ func _update_anim(input: Vector2) -> void:
 			anim.play("idle")
 
 
+## 撞墙反馈：轻微震屏 + 脚边尘土，带冷却避免连发
+func _wall_bump() -> void:
+	if _bump_cd > 0.0 or roll_t > 0.0:
+		return
+	if not is_on_wall():
+		return
+	if velocity.length() < GameConfig.PLAYER_SPEED * 0.6:
+		return
+	_bump_cd = 0.35
+	GameFeel.screen_shake(0.06)
+	GameFeel.burst(global_position + Vector2(-facing * 6, 0), Color(0.7, 0.75, 0.85),
+		3, 45.0, 0.2)
+
+
 func _clamp_room() -> void:
 	var r := GameConfig.room_rect()
 	var pad := GameConfig.WALL + 4.0
@@ -171,6 +213,15 @@ func _handle_actions() -> void:
 	if Input.is_action_pressed("shoot") and weapon != null and roll_t <= 0.0:
 		weapon.try_fire(aim)
 		fire_anim = 0.12
+		_muzzle_flash()
+
+
+func _muzzle_flash() -> void:
+	if _muzzle_cd > 0.0:
+		return
+	_muzzle_cd = 0.05
+	var muzzle := global_position + Vector2(0, -16) + aim * 12.0
+	GameFeel.burst(muzzle, Color(1.0, 0.95, 0.75), 2, 55.0, 0.1)
 
 
 # ---------------- 翻滚 ----------------
@@ -184,7 +235,26 @@ func _try_roll() -> void:
 	grant_invuln(GameConfig.ROLL_TIME + 0.02)
 	if anim.sprite_frames.has_animation("roll"):
 		anim.play("roll")
+	_ghost_t = 0.0
+	roll_buff = float(GameState.mods.get("roll_shot_bonus", 0.0))
 	Sfx.play("roll")
+	# 起手挤压：横向拉伸 + 纵向压缩，0.16s 回弹
+	anim.scale = Vector2(1.28, 0.76)
+	var tw := anim.create_tween()
+	tw.tween_property(anim, "scale", Vector2.ONE, 0.16)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func _spawn_ghost(delta: float) -> void:
+	_ghost_t -= delta
+	if _ghost_t > 0.0:
+		return
+	_ghost_t = ROLL_GHOST_GAP
+	if anim.sprite_frames == null:
+		return
+	var tex: Texture2D = anim.sprite_frames.get_frame_texture(anim.animation, anim.frame)
+	GameFeel.afterimage(tex, global_position, anim.flip_h,
+		Color(0.62, 0.78, 1.0, 0.5), 0.15)
 
 
 func _try_skill() -> void:
@@ -206,8 +276,46 @@ func try_absorb_bullet() -> bool:
 	shield_hits -= 1
 	GameState.heal(2)
 	hp = GameState.hp
+	# Claude 协同：护盾吸弹时向最近的敌人回击
+	if bool(GameState.mods.get("shield_counter", false)):
+		_counter_shot()
+	GameFeel.burst(global_position + Vector2(0, -14), Color(1.0, 0.85, 0.45), 5, 90.0, 0.25)
 	Sfx.play("coin", -8.0, 1.4)
 	return true
+
+
+## 护盾反伤：朝最近的敌人打一发小弹
+func _counter_shot() -> void:
+	var nearest = null
+	var best := 9999.0
+	for e in GameState.enemies:
+		if not is_instance_valid(e):
+			continue
+		var d: float = global_position.distance_to(e.global_position)
+		if d < best:
+			best = d
+			nearest = e
+	if nearest == null:
+		return
+	var b = GameFeel.get_bullet()
+	if b == null:
+		return
+	var dir: Vector2 = (nearest.global_position - global_position).normalized()
+	b.friendly = true
+	b.dir = dir
+	b.speed = 420.0
+	b.damage = 6.0
+	b.crit = false
+	b.radius = 3.2
+	b.life = 1.4
+	b.color = Color("#ffd166")
+	b.pierce = 0
+	b.gen = 0
+	b.tier = "small"
+	b.trail = true
+	b.tag = "counter"
+	b.global_position = global_position + Vector2(0, -14)
+	b.prepare()
 
 
 func take_damage(amount: int) -> void:
@@ -217,6 +325,12 @@ func take_damage(amount: int) -> void:
 	hp -= amount
 	GameState.hp = maxi(0, hp)
 	GameState.hp_changed.emit(GameState.hp, GameState.max_hp)
+
+	# 受击：红闪 + 强震 + 短 hit-stop + 碎屑
+	GameFeel.flash(anim, Color(2.6, 0.6, 0.7), 0.14)
+	GameFeel.screen_shake(0.45)
+	GameFeel.hit_stop(0.05, 0.06)
+	GameFeel.burst(global_position + Vector2(0, -14), Color(1.0, 0.35, 0.45), 8, 110.0, 0.3)
 	Sfx.play("hurt")
 	if hp <= 0:
 		_die()
@@ -227,6 +341,9 @@ func _die() -> void:
 	hp = 0
 	GameState.hp = 0
 	anim.modulate = Color(1, 1, 1, 0.4)
+	GameFeel.screen_shake(0.8)
+	GameFeel.hit_stop(0.16, 0.05)
+	GameFeel.burst(global_position + Vector2(0, -14), Color(1.0, 0.4, 0.5), 14, 160.0, 0.5)
 	Sfx.play("die")
 	died.emit()
 	GameState.run_ended.emit()

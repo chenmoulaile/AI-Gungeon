@@ -17,6 +17,8 @@ var _icon_cache: Dictionary = {}
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	if ResourceLoader.exists("res://resources/ui/theme.tres"):
+		theme = load("res://resources/ui/theme.tres")
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	offers = UpgradeDB.roll_offers(3, GameState.upgrades)
 	var total: float = offers.size() * CARD_W + maxf(0.0, offers.size() - 1) * 16.0
@@ -121,6 +123,19 @@ func _draw_card(i: int, r: Rect2, up: Upgrade) -> void:
 		GameConfig.COL_GOLD if affordable else Color(0.6, 0.35, 0.35))
 	draw_string(GameConfig.ui_font, Vector2(r.position.x, r.position.y - 4),
 		"[%d]" % (i + 1), HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 8, GameConfig.COL_DIM)
+	# 与已持有藏品能凑组合时给出暗示
+	if _forms_combo(up.id):
+		draw_string(GameConfig.ui_font, Vector2(r.position.x, r.end.y + 11),
+			"★ 与已有藏品共鸣", HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 8,
+			Color(1.0, 0.82, 0.35))
+
+
+func _forms_combo(uid: String) -> bool:
+	for c in UpgradeDB.COMBOS:
+		if (c["a"] == uid and GameState.upgrades.has(c["b"])) or \
+				(c["b"] == uid and GameState.upgrades.has(c["a"])):
+			return true
+	return false
 
 
 func _icon(path: String) -> Texture2D:

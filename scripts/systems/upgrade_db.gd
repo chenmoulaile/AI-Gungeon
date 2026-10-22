@@ -73,16 +73,43 @@ func get_combo(combo_name: String) -> Dictionary:
 	return {}
 
 
-## 随机抽取 n 个未持有的藏品作为商店货架
+## 加权抽取：与已持有藏品能凑成组合的权重 ×3，保证至少 1 个"有戏"的选项
 func roll_offers(n: int, owned: Array) -> Array:
-	var pool: Array = []
+	var weighted: Array = []
+	var hints: Array = []
 	for id in upgrades.keys():
-		if not owned.has(id):
-			pool.append(upgrades[id])
-	pool.shuffle()
+		if owned.has(id):
+			continue
+		var w := 1
+		var related := false
+		for c in COMBOS:
+			if (c["a"] == id and owned.has(c["b"])) or (c["b"] == id and owned.has(c["a"])):
+				w = 3
+				related = true
+		weighted.append({"id": id, "w": w})
+		if related:
+			hints.append(id)
 	var out: Array = []
-	for i in min(n, pool.size()):
-		out.append(pool[i])
+	# 先把至少一个"能凑组合"的塞进第一格
+	if hints.size() > 0:
+		var pick: String = hints[randi() % hints.size()]
+		out.append(upgrades[pick])
+		weighted = weighted.filter(func(e): return e["id"] != pick)
+	# 剩余按权重抽
+	while out.size() < n and weighted.size() > 0:
+		var total := 0
+		for e in weighted:
+			total += int(e["w"])
+		var roll := randi() % maxi(total, 1)
+		var acc := 0
+		var chosen := 0
+		for i in weighted.size():
+			acc += int(weighted[i]["w"])
+			if roll < acc:
+				chosen = i
+				break
+		out.append(upgrades[weighted[chosen]["id"]])
+		weighted.remove_at(chosen)
 	return out
 
 

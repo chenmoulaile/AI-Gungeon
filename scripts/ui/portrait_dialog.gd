@@ -15,13 +15,20 @@ var finished_flag: bool = false
 var _tex: Texture2D = null
 var _t: float = 0.0
 var _blink: float = 0.0
+var _slide: float = -1.0   # -1 完全在画面外，0 到位
 
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	if ResourceLoader.exists("res://resources/ui/theme.tres"):
+		theme = load("res://resources/ui/theme.tres")
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	if ResourceLoader.exists(portrait_path):
 		_tex = load(portrait_path)
+	# 立绘从左侧滑入
+	var tw := create_tween()
+	tw.tween_property(self, "_slide", 0.0, 0.3)\
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
 func setup(p_path: String, p_speaker: String, p_lines: Array) -> void:
@@ -70,10 +77,10 @@ func _advance() -> void:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(0, 0, GameConfig.BASE_W, GameConfig.BASE_H), Color(0, 0, 0, 0.62))
+	draw_rect(Rect2(0, 0, GameConfig.BASE_W, GameConfig.BASE_H), Color(0.01, 0.02, 0.04, 0.74))
 
-	# 立绘（只用于界面层，不进入战斗场景）
-	var pr := Rect2(28, 34, 208, 208)
+	# 立绘（只用于界面层，不进入战斗场景）：从左侧滑入
+	var pr := Rect2(28 + _slide * 240.0, 34, 208, 208)
 	draw_rect(pr.grow(3), Color(0, 0, 0, 0.5))
 	if _tex != null:
 		draw_texture_rect(_tex, pr, false)
