@@ -23,6 +23,11 @@ func on_switch_mode() -> void:
 		player.fire_anim = 0.16
 		var cols := [Color("#6fa8ff"), Color("#c9a6ff"), Color("#ffb066")]
 		GameFeel.flash(player.anim, cols[mode], 0.14)
+		# 切换瞬间向四周爆发一圈对应颜色的粒子
+		for i in 10:
+			var ang := TAU * float(i) / 10.0
+			GameFeel.burst(player.global_position + Vector2(0, -16) + Vector2(cos(ang), sin(ang)) * 6.0,
+				cols[mode], 1, 120.0, 0.26)
 	# 藏品：切换瞬间留下残影，0.25s 后替玩家打一次旧模式
 	if bool(GameState.mods.get("echo_clone", false)) and player.anim != null:
 		var tex: Texture2D = player.anim.sprite_frames.get_frame_texture(

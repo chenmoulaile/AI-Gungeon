@@ -77,5 +77,10 @@ func use_skill() -> bool:
 		return false
 	player.shield_hits = 6
 	player.shield_t = 3.0
+	# 护盾展开：六边形六个顶点各一个粒子
+	for i in 6:
+		var ang := TAU * float(i) / 6.0 - PI / 2.0
+		GameFeel.burst(player.global_position + Vector2(0, -14) + Vector2(cos(ang), sin(ang)) * 26.0,
+			Color(1.0, 0.88, 0.55), 2, 34.0, 0.28)
 	Sfx.play("skill")
 	return true

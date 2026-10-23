@@ -148,6 +148,9 @@ func _update_phase() -> void:
 		summon_lock = 0.75 + 0.5
 		GameFeel.hit_stop(0.12, 0.05)
 		GameFeel.screen_shake(0.55)
+		# 阶段转换：全屏闪白 0.15s + 2~3px 色差 0.15s
+		GameFeel.screen_flash(Color(1, 1, 1), 0.15, 0.5)
+		GameFeel.aberrate(3.0, 0.15)
 		# 闪白 1 帧后整体提饱和，暗示"变强了"
 		modulate = Color(3.0, 3.0, 3.0)
 		var tw := create_tween()

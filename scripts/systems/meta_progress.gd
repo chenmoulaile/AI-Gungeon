@@ -14,6 +14,9 @@ var char_best: Dictionary = {"deepseek": 0, "gpt": 0, "claude": 0}
 var relic_counts: Dictionary = {}
 var floor_by_difficulty: Array = [0, 0, 0]
 var challenges_done: int = 0
+## 新手引导状态（meta.cfg 的 tutorial 节）：moved / shot / rolled / sub / training_done
+## 以及 seen_select_tip / seen_shop_tip / seen_room_hint
+var tutorial: Dictionary = {}
 
 
 func _ready() -> void:
@@ -48,6 +51,9 @@ func load_meta() -> void:
 	if fd is Array and fd.size() >= 3:
 		floor_by_difficulty = [int(fd[0]), int(fd[1]), int(fd[2])]
 	challenges_done = int(cfg.get_value("stats", "challenges_done", 0))
+	var tut = cfg.get_value("tutorial", "flags", {})
+	if tut is Dictionary:
+		tutorial = tut
 
 
 func save_meta() -> void:
@@ -62,6 +68,7 @@ func save_meta() -> void:
 	cfg.set_value("stats", "char_best", char_best)
 	cfg.set_value("stats", "floor_by_difficulty", floor_by_difficulty)
 	cfg.set_value("stats", "challenges_done", challenges_done)
+	cfg.set_value("tutorial", "flags", tutorial)
 	cfg.save(PATH)
 
 
@@ -110,3 +117,28 @@ func top_relics(n: int = 3) -> Array:
 		arr.append({"id": k, "count": int(relic_counts[k])})
 	arr.sort_custom(func(a, b): return a["count"] > b["count"])
 	return arr.slice(0, n)
+
+
+# ---------------- 新手引导 ----------------
+func tutorial_flag(key: String) -> bool:
+	return bool(tutorial.get(key, false))
+
+
+func set_tutorial_flag(key: String, value: bool = true) -> void:
+	if tutorial_flag(key) == value:
+		return
+	tutorial[key] = value
+	save_meta()
+
+
+func training_done() -> bool:
+	return tutorial_flag("training_done")
+
+
+func mark_training_done() -> void:
+	tutorial["moved"] = true
+	tutorial["shot"] = true
+	tutorial["rolled"] = true
+	tutorial["sub"] = true
+	tutorial["training_done"] = true
+	save_meta()

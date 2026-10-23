@@ -58,6 +58,7 @@ func _setup_input() -> void:
 	_add_keys("move_down", [KEY_S, KEY_DOWN])
 	_add_keys("roll", [KEY_SPACE])
 	_add_keys("skill", [KEY_E])
+	_add_keys("sub_weapon", [KEY_Q])
 	_add_keys("switch_mode", [KEY_R])
 	_add_keys("restart", [KEY_F5])
 	_add_keys("pause", [KEY_ESCAPE])

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI Gungeon v0.4.0 · 视觉预览</title>
+<style>
+  :root{
+    --bg:#f5f7ff; --panel:#ffffff; --accent:#5a9ef2; --accent-2:#7ab8ff;
+    --text:#26364f; --dim:#7386a3; --line:#e3eaf7;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif;
+    background:linear-gradient(180deg,#eef3ff 0%,#f8faff 40%,#ffffff 100%);
+    color:var(--text); min-height:100vh;
+  }
+  header{
+    padding:28px 32px 18px; display:flex; align-items:flex-end; gap:16px; flex-wrap:wrap;
+    border-bottom:1px solid var(--line); background:rgba(255,255,255,.72); backdrop-filter:blur(8px);
+    position:sticky; top:0; z-index:10;
+  }
+  h1{font-size:26px; margin:0; letter-spacing:.5px; color:var(--accent)}
+  .ver{font-size:12px; color:var(--dim); background:#eef4ff; padding:3px 10px; border-radius:999px}
+  .note{margin-left:auto; font-size:12px; color:var(--dim); max-width:520px; line-height:1.6}
+  .note b{color:#c9762a}
+  nav{display:flex; gap:8px; padding:16px 32px 0; flex-wrap:wrap}
+  nav button{
+    border:1px solid var(--line); background:#fff; color:var(--text); font-size:13px;
+    padding:8px 16px; border-radius:10px; cursor:pointer; transition:transform .1s ease, background .12s ease;
+  }
+  nav button:hover{transform:translateY(-1px) scale(1.02); background:#f2f7ff}
+  nav button.on{background:var(--accent); color:#fff; border-color:var(--accent); box-shadow:0 6px 16px rgba(90,158,242,.28)}
+  main{padding:22px 32px 60px; display:grid; grid-template-columns:repeat(auto-fill,minmax(420px,1fr)); gap:22px}
+  figure{
+    margin:0; background:var(--panel); border-radius:14px; overflow:hidden;
+    border:1px solid var(--line); box-shadow:0 10px 26px rgba(45,80,140,.08);
+    transition:transform .14s ease, box-shadow .14s ease;
+  }
+  figure:hover{transform:translateY(-4px); box-shadow:0 16px 34px rgba(45,80,140,.14)}
+  figure img{width:100%; display:block; background:#0b0d13; cursor:zoom-in}
+  figcaption{padding:12px 14px 14px; font-size:13px; line-height:1.55}
+  figcaption b{display:block; font-size:14px; margin-bottom:3px}
+  figcaption span{color:var(--dim); font-size:12px}
+  .hidden{display:none}
+  #lightbox{
+    position:fixed; inset:0; background:rgba(10,16,28,.88); display:none; align-items:center;
+    justify-content:center; z-index:50; cursor:zoom-out; padding:24px;
+  }
+  #lightbox img{max-width:96vw; max-height:92vh; border-radius:10px; box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  footer{padding:0 32px 40px; font-size:12px; color:var(--dim)}
+</style>
+</head>
+<body>
+<header>
+  <h1>AI GUNGEON</h1>
+  <span class="ver">v0.4.0 · 视觉预览</span>
+  <div class="note">
+    可玩的 Web 构建需要 Godot 4.7.2 导出模板（1.2&nbsp;GB），正在后台下载中；
+    下面是本轮 M0–M4 改动的实机截图（1280×720，游戏内直接截取）。
+    <b>把 Godot_v4.7.2-stable_export_templates.tpz 放进 Downloads 可立即导出 Web 版。</b>
+  </div>
+</header>
+
+<nav id="tabs"></nav>
+<main id="grid"></main>
+
+<div id="lightbox"><img alt=""></div>
+<footer>非官方同人作品 · 完全免费 · 角色形象基于 B站 UP 主 ZipZipPipe 的二创（CC BY-NC-SA 4.0）</footer>
+
+<script>
+const SHOTS = [
+  {file:"_shot_splash.png", tag:"流程", title:"启动画面", desc:"logo + 标题淡入 0.8s，按任意键跳过，之后统一转场进入主菜单。"},
+  {file:"_shot_menu.png", tag:"流程", title:"主菜单", desc:"大标题 / 版本号 / 开始·继续·设置 三个主按钮，右下角图鉴·训练场·关于次级入口。"},
+  {file:"_shot_select.png", tag:"UI", title:"角色选择", desc:"正视图立绘裁切（面部居中、双眼可见、保留鲸鳍/龙角/向日葵），卡片悬停放大 1.04 + 上浮 6px，选中强调色描边并脉冲。"},
+  {file:"_shot_intro_dialog.png", tag:"流程", title:"开局对白", desc:"立绘 + 打字机文本，空格或点击推进。"},
+  {file:"_shot_battle.png", tag:"战斗", title:"战斗 HUD", desc:"左上 6 枚生命图标、左下金币（数字滚动）、右下 E/Q 双冷却环、顶部挑战小字，中间区域完全留给弹幕。"},
+  {file:"_shot_subweapon.png", tag:"战斗", title:"专属副武器", desc:"DeepSeek 深度检索：短按标记弹、长按穿透弹；GPT 思维链：链式闪电；Claude 对齐协议：书页浮游炮。"},
+  {file:"_shot_skill_beam.png", tag:"战斗", title:"技能演出", desc:"蓄力光环粒子收拢 → 全屏贯穿光束，配合震屏与色差。"},
+  {file:"_shot_boss_intro.png", tag:"战斗", title:"Boss 登场", desc:"圆形遮罩转场 + 登场演出。"},
+  {file:"_shot_boss_fight.png", tag:"战斗", title:"Boss 战", desc:"血条带阶段刻度与当前招式标记，阶段转换闪白 + 3px 色差。"},
+  {file:"_shot_shop.png", tag:"UI", title:"商店", desc:"三张商品卡，悬停上浮 + 描边高亮 + 图标微旋转；买不起整体降饱和、价格变红。"},
+  {file:"_shot_result.png", tag:"UI", title:"结算", desc:"半身立绘 + 结果标题 + 新纪录徽章 + 本局藏品 + 四列数据卡片。"},
+  {file:"_shot_collection.png", tag:"UI", title:"图鉴", desc:"5 列网格，未见过显示剪影，已见过悬停放大并显示右侧详情。"},
+  {file:"_shot_settings.png", tag:"UI", title:"设置", desc:"左侧五个标签页，右侧标签+控件横排；自定义音量滑块与按键重映射。"},
+  {file:"_shot_training.png", tag:"流程", title:"训练场引导", desc:"分步提示：移动 → 射击 → 翻滚 → 副武器，完成一步才显示下一步。"}
+];
+
+const TAGS = ["全部", ...new Set(SHOTS.map(s=>s.tag))];
+const tabs = document.getElementById("tabs");
+const grid = document.getElementById("grid");
+let active = "全部";
+
+TAGS.forEach(t=>{
+  const b=document.createElement("button");
+  b.textContent=t; b.className = t===active?"on":"";
+  b.onclick=()=>{active=t; [...tabs.children].forEach(c=>c.className=""); b.className="on"; render();};
+  tabs.appendChild(b);
+});
+
+function render(){
+  grid.innerHTML="";
+  SHOTS.filter(s=>active==="全部"||s.tag===active).forEach(s=>{
+    const f=document.createElement("figure");
+    f.innerHTML=`<img src="shots/${s.file}" alt="${s.title}" loading="lazy">
+      <figcaption><b>${s.title}</b><span>${s.desc}</span></figcaption>`;
+    f.querySelector("img").onclick=()=>{
+      const lb=document.getElementById("lightbox");
+      lb.querySelector("img").src=`shots/${s.file}`; lb.style.display="flex";
+    };
+    grid.appendChild(f);
+  });
+}
+render();
+
+document.getElementById("lightbox").onclick=e=>{e.currentTarget.style.display="none";};
+document.addEventListener("keydown",e=>{if(e.key==="Escape")document.getElementById("lightbox").style.display="none";});
+</script>
+</body>
+</html>

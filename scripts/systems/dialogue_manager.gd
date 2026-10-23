@@ -87,6 +87,14 @@ func say_text(char_id: String, text: String, hold: float = 2.2) -> void:
 	dlg.setup("res://assets/portraits/%s_full.png" % char_id, display_name(char_id), [text])
 
 
+## 清掉所有非阻塞台词条（切场景 / 打开商店时调用，避免盖住面板）
+func clear() -> void:
+	if _layer == null or not is_instance_valid(_layer):
+		return
+	for c in _layer.get_children():
+		c.queue_free()
+
+
 func _ui() -> CanvasLayer:
 	if _layer != null and is_instance_valid(_layer) and _layer.is_inside_tree():
 		return _layer

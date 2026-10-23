@@ -33,7 +33,19 @@ func _collect() -> void:
 	_picked = true
 	GameState.add_coins(value)
 	Sfx.play("coin", -10.0, randf_range(0.95, 1.2))
+	_spawn_trail()
 	queue_free()
+
+
+## 拾取粒子：从拾取点飞向 HUD 金币图标
+func _spawn_trail() -> void:
+	if GameState.bullets_root == null or not is_instance_valid(GameState.bullets_root):
+		return
+	var xf := get_viewport().get_canvas_transform()
+	var hud_pos: Vector2 = xf.affine_inverse() * Vector2(18, GameConfig.BASE_H - 17)
+	var fx = load("res://scripts/fx/pickup_trail.gd").new()
+	GameState.bullets_root.add_child(fx)
+	fx.setup(global_position, hud_pos, GameConfig.COL_GOLD, 2)
 
 
 func _draw() -> void:

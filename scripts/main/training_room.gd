@@ -7,6 +7,7 @@ const RoomScene = preload("res://scenes/rooms/room_basic.tscn")
 const PlayerScene = preload("res://scenes/player/player.tscn")
 const LaserScene = preload("res://scripts/weapons/laser_sweep.gd")
 const BulletScript = preload("res://scripts/weapons/bullet.gd")
+const GuideScript = preload("res://scripts/ui/tutorial_guide.gd")
 
 const PATTERN_NAMES := ["环形", "扇形", "追踪", "激光", "地雷", "反弹"]
 
@@ -46,7 +47,14 @@ func _ready() -> void:
 	layer.add_child(ui)
 	add_child(layer)
 	ui.draw.connect(_draw_ui)
+	# 分步引导：未完成训练场时逐步提示移动/射击/翻滚/副武器
+	if not MetaProgress.training_done():
+		var guide = GuideScript.new()
+		layer.add_child(guide)
+		guide.setup(player, self)
 	MusicManager.play("combat")
+	ScreenFx.set_battle(true)
+	BaCursor.set_battle(true)
 
 
 func _process(delta: float) -> void:
@@ -105,6 +113,8 @@ func _switch_char(id: String) -> void:
 
 func _exit() -> void:
 	GameState.training = false
+	ScreenFx.set_battle(false)
+	BaCursor.set_battle(false)
 	exit_requested.emit()
 
 
@@ -205,19 +215,19 @@ func _spawn(dir: Vector2, speed: float, radius: float) -> void:
 
 
 func _draw_ui() -> void:
-	if ui == null or GameConfig.ui_font == null:
+	if ui == null:
 		return
-	var f: Font = GameConfig.ui_font
 	# 发生器
 	var pulse: float = 0.5 + 0.5 * sin(t * 3.0)
 	ui.draw_circle(gen_pos, 26.0, Color(0.16, 0.18, 0.24))
 	ui.draw_arc(gen_pos, 26.0, 0.0, TAU, 24, Color(0.55, 0.7, 1.0, 0.5 + 0.4 * pulse), 2.0, true)
-	ui.draw_string(f, gen_pos + Vector2(-12, 4), "靶", HORIZONTAL_ALIGNMENT_LEFT, -1, 12,
-		Color(0.9, 0.95, 1.0))
+	UiKit.text_center(ui, gen_pos.x, gen_pos.y + 4.0, "靶", UiKit.F_H3, Color(0.9, 0.95, 1.0))
 
-	ui.draw_rect(Rect2(10, 10, 150, 22), Color(0.05, 0.07, 0.11, 0.85))
-	ui.draw_string(f, Vector2(18, 25), "弹幕：%s" % PATTERN_NAMES[pattern],
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.9, 0.95, 1.0))
-	ui.draw_string(f, Vector2(10, GameConfig.BASE_H - 12),
+	var panel := Rect2(10, 10, 150, 22)
+	ui.draw_style_box(UiKit.box(Color(1, 1, 1, 0.86), 8, Color(1, 1, 1, 0.9), 1, true), panel)
+	UiKit.text(ui, Vector2(18, 25), "弹幕 · %s" % PATTERN_NAMES[pattern], UiKit.F_SMALL, UiKit.TEXT)
+	var hint := Rect2(10, GameConfig.BASE_H - 26, GameConfig.BASE_W - 20, 18)
+	ui.draw_style_box(UiKit.box(Color(1, 1, 1, 0.55), 7, Color(1, 1, 1, 0.5), 1, false), hint)
+	UiKit.text(ui, Vector2(18, GameConfig.BASE_H - 13),
 		"← → / Q E 切换弹幕    R 重置    1/2/3 换角色    ESC 退出（不计统计）",
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.62, 0.68, 0.8))
+		UiKit.F_TINY, UiKit.TEXT)

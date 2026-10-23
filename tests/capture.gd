@@ -11,6 +11,10 @@ func _frames(n: int) -> void:
 		await get_tree().process_frame
 
 
+func _wait(sec: float) -> void:
+	await get_tree().create_timer(sec).timeout
+
+
 func _shot(name: String) -> void:
 	await RenderingServer.frame_post_draw
 	var img := get_viewport().get_texture().get_image()
@@ -33,11 +37,17 @@ func _close_overlay(g) -> void:
 func _run() -> void:
 	var main = load("res://scenes/main/main.tscn").instantiate()
 	add_child(main)
-	await _frames(20)
+	await _frames(6)
+	await _shot("splash")
+	await _wait(2.0)
+	await _shot("menu")
+
+	main.show_select()
+	await _frames(24)
 	await _shot("select")
 
 	main._on_character_chosen("deepseek")
-	await _frames(12)
+	await _wait(1.1)
 	var g = main.current
 	await _shot("intro_dialog")
 	await _close_overlay(g)
@@ -45,17 +55,24 @@ func _run() -> void:
 	GameState.player.invuln = 999.0
 	Input.action_press("move_right")
 	Input.action_press("shoot")
-	await _frames(40)
+	await _frames(30)
 	Input.action_release("move_right")
-	await _frames(20)
+	await _frames(16)
 	await _shot("battle")
 	Input.action_release("shoot")
+
+	# 副武器
+	Input.action_press("sub_weapon")
+	await _frames(6)
+	Input.action_release("sub_weapon")
+	await _frames(8)
+	await _shot("subweapon")
 
 	# 技能：蓄力到释放的瞬间
 	Input.action_press("skill")
 	await _frames(2)
 	Input.action_release("skill")
-	await _wait_frames(92)
+	await _frames(92)
 	await _shot("skill_beam")
 
 	# Boss 房
@@ -69,7 +86,7 @@ func _run() -> void:
 	# 商店
 	GameState.add_coins(300)
 	g._open_shop()
-	await _frames(10)
+	await _wait(0.6)
 	await _shot("shop")
 	get_tree().paused = false
 
@@ -78,11 +95,20 @@ func _run() -> void:
 	GameState.add_upgrade("sharp_round")
 	GameState.add_upgrade("crit_lens")
 	main._on_run_over()
-	await _frames(10)
+	await _wait(0.9)
 	await _shot("result")
 
+	# 图鉴 / 设置
+	main.show_collection()
+	await _frames(20)
+	await _shot("collection")
+	main.open_settings()
+	await _frames(20)
+	await _shot("settings")
+
+	# 训练场引导
+	main.show_training()
+	await _wait(0.8)
+	await _shot("training")
+
 	get_tree().quit()
-
-
-func _wait_frames(n: int) -> void:
-	await _frames(n)

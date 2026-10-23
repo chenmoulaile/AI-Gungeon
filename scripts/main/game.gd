@@ -52,6 +52,7 @@ var boss = null
 var busy: bool = false
 var intro_shown: bool = false
 var room_kind: int = Kind.SMALL
+var _dense_tick: int = 0
 
 
 func _ready() -> void:
@@ -60,6 +61,8 @@ func _ready() -> void:
 	GameState.run_ended.connect(_on_run_ended)
 	_spawn_player()
 	_start_room(GameState.room_index)
+	ScreenFx.set_battle(true)
+	BaCursor.set_battle(true)
 	if not intro_shown and GameState.floor_index == 1 and GameState.room_index == 1:
 		intro_shown = true
 		_show_intro_dialog()
@@ -76,12 +79,13 @@ func _build_layers() -> void:
 
 	ui_layer = CanvasLayer.new()
 	ui_layer.name = "UI"
+	ui_layer.layer = 10
 	add_child(ui_layer)
 
 	hud = HudScene.instantiate()
 	ui_layer.add_child(hud)
 
-	if not Settings.tutorial_done:
+	if not MetaProgress.training_done():
 		tutorial = TutorialScript.new()
 		tutorial.name = "Tutorial"
 		ui_layer.add_child(tutorial)
@@ -353,12 +357,22 @@ func _on_boss_dead() -> void:
 
 # ---------------- 房间推进 ----------------
 func _process(_delta: float) -> void:
+	_update_dense_warning()
 	if busy or not room_cleared or player == null or not is_instance_valid(player):
 		return
 	if not player.alive:
 		return
 	if room != null and is_instance_valid(room) and room.door_zone().has_point(player.global_position):
 		_advance()
+
+
+## 弹幕密集度：每 6 帧统计一次敌弹数量，超过 45 开始出现四角红色光晕
+func _update_dense_warning() -> void:
+	_dense_tick += 1
+	if _dense_tick % 6 != 0:
+		return
+	var n := get_tree().get_nodes_in_group("enemy_bullets").size()
+	ScreenFx.set_dense(clampf((float(n) - 45.0) / 40.0, 0.0, 1.0))
 
 
 func _advance() -> void:
@@ -381,13 +395,18 @@ func _advance() -> void:
 func _open_shop() -> void:
 	busy = true
 	MusicManager.play("explore")
+	DialogueManager.clear()
+	await Transition.cover("slide", 0.28)
+	if not is_inside_tree():
+		return
 	var shop = ShopScene.instantiate()
 	shop.process_mode = Node.PROCESS_MODE_ALWAYS
 	ui_layer.add_child(shop)
 	get_tree().paused = true
 	shop.closed.connect(func() -> void:
 		get_tree().paused = false
-		_start_room(5))
+		Transition.play("circle", func() -> void: _start_room(5), 0.3))
+	Transition.reveal(0.24)
 
 
 # ---------------- 设置 ----------------
@@ -417,6 +436,8 @@ func _on_run_ended() -> void:
 	if busy:
 		return
 	busy = true
+	ScreenFx.set_battle(false)
+	BaCursor.set_battle(false)
 	# 保留战场最后一帧给结算界面做背景（headless 下没有渲染，跳过）
 	if DisplayServer.get_name() != "headless":
 		await RenderingServer.frame_post_draw

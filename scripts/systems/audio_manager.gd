@@ -101,6 +101,12 @@ func _build_streams() -> void:
 		_tone(0.55, 130.0, 40.0, 3.0, "sine", 0.18),
 	])
 	_streams["ui"] = _tone(0.05, 700.0, 700.0, 22.0, "square", 0.14)
+	# 光标悬停 / 确认：比 ui 更轻，避免菜单里高频点击时刺耳
+	_streams["ui_hover"] = _tone(0.03, 1250.0, 1250.0, 46.0, "sine", 0.09)
+	_streams["ui_confirm"] = _mix([
+		_tone(0.04, 980.0, 1320.0, 34.0, "sine", 0.16),
+		_delay(_tone(0.05, 1320.0, 1560.0, 30.0, "sine", 0.12), 0.04),
+	])
 	_streams["skill"] = _mix([
 		_tone(0.30, 420.0, 980.0, 6.0, "sine", 0.22),
 		_tone(0.30, 210.0, 480.0, 6.0, "square", 0.10),

@@ -1,6 +1,8 @@
 # AI Gungeon
 
-一款 2D 像素俯视角 Roguelike 射击游戏，用 **Godot 4.4.1 + GDScript** 开发。
+**v0.4.0** · 视觉/UI 全面重做 · 角色动态与专属副武器 · 完整流程与新手引导
+
+一款 2D 像素俯视角 Roguelike 射击游戏，用 **Godot 4 + GDScript** 开发。
 玩法参考《Enter the Gungeon》的核心循环（角色选择 → 房间清怪 → 开门 → 商店 → Boss → 下一层），
 角色原型为三个 AI 助手的拟人形象，武器机制、数值、关卡与代码全部原创。
 

@@ -31,7 +31,11 @@ func _run() -> void:
 	var main = load("res://scenes/main/main.tscn").instantiate()
 	add_child(main)
 	await _frames(3)
-	_check(main.current != null, "主场景启动 -> 角色选择")
+	_check(main.current != null and main.current.name == "Splash", "启动 -> 启动画面")
+	await _wait(2.2)
+	_check(main.current != null and main.current.name == "MainMenu", "启动画面 -> 主菜单")
+	main.queue_free()
+	await _frames(3)
 
 	for cid in ["deepseek", "gpt", "claude"]:
 		await _test_character(cid)
@@ -124,6 +128,17 @@ func _test_character(cid: String) -> void:
 	await _wait(0.2)
 	Input.action_release("move_right")
 	_check(p.global_position.distance_to(before) > 2.0, "%s: 翻滚位移生效" % cid)
+
+	# 专属副武器（Q）
+	if p.sub != null:
+		Input.action_press("sub_weapon")
+		await _frames(4)
+		Input.action_release("sub_weapon")
+		await _wait(0.2)
+		_check(float(p.sub.cd_left) > 0.0, "%s: 副武器「%s」进入冷却（%.1fs）"
+			% [cid, String(p.sub.display_name), float(p.sub.cd_left)])
+	else:
+		_check(false, "%s: 副武器节点缺失" % cid)
 
 	# 清场 -> 开门
 	var cleared := await _clear_room(g)
@@ -218,7 +233,7 @@ func _test_death() -> void:
 	add_child(main)
 	await _frames(3)
 	main._on_character_chosen("gpt")
-	await _frames(6)
+	await _wait(1.0)
 	var g = main.current
 	_check(g != null and g.player != null, "通过主控进入一局")
 	if g == null or g.player == null:

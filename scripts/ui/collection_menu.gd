@@ -1,19 +1,23 @@
 extends Control
-## 藏品图鉴 + 局外统计（只读，不提供重置）
+## 藏品图鉴（蔚蓝档案风格）：5 列网格，未见过显示剪影，已见过悬停放大 1.05 + 右侧详情
 
 signal closed
 
-const COLS := 6
-const ICON := 34.0
-const GAP := 10.0
+const COLS := 5
+const CELL_W := 76.0
+const CELL_H := 58.0
+const GAP := 8.0
+const GRID_X := 28.0
+const GRID_Y := 62.0
 
 var _ids: Array = []
 var _rects: Array = []
 var _selected: String = ""
 var _hover: int = -1
-var _icon_cache: Dictionary = {}
+var _hover_k: Array = []
 var _t: float = 0.0
-var _focus: int = 0
+var _enter: float = 20.0
+var _back_btn: BaButton = null
 
 
 func _ready() -> void:
@@ -24,55 +28,52 @@ func _ready() -> void:
 	_ids = UpgradeDB.all_ids()
 	_ids.sort()
 	_layout()
+	_back_btn = BaButton.new()
+	add_child(_back_btn)
+	_back_btn.setup("返回  [C]", Rect2(GameConfig.BASE_W - 108, GameConfig.BASE_H - 34, 88, 24),
+		"secondary", "", UiKit.F_SMALL)
+	_back_btn.pressed.connect(_close)
+	BaCursor.set_battle(false)
+	var tw := create_tween()
+	tw.tween_property(self, "_enter", 0.0, 0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	Sfx.play("ui")
 
 
 func _layout() -> void:
 	_rects.clear()
-	var x0 := 34.0
-	var y0 := 92.0
+	_hover_k.clear()
 	for i in _ids.size():
 		var col := i % COLS
 		var row := int(i / COLS)
-		_rects.append(Rect2(x0 + col * (ICON + GAP), y0 + row * (ICON + GAP), ICON, ICON))
+		_rects.append(Rect2(GRID_X + col * (CELL_W + GAP), GRID_Y + row * (CELL_H + GAP),
+			CELL_W, CELL_H))
+		_hover_k.append(0.0)
 
 
 func _process(delta: float) -> void:
 	_t += delta
 	var mouse := get_local_mouse_position()
+	var prev := _hover
 	_hover = -1
 	for i in _rects.size():
-		if _rects[i].grow(2).has_point(mouse):
+		if (_rects[i] as Rect2).has_point(mouse) and MetaProgress.seen_relics.has(_ids[i]):
 			_hover = i
-	if Input.is_action_just_pressed("ui_left"):
-		_focus = maxi(0, _focus - 1)
-	if Input.is_action_just_pressed("ui_right"):
-		_focus = mini(_ids.size() - 1, _focus + 1)
-	if Input.is_action_just_pressed("ui_up"):
-		_focus = maxi(0, _focus - COLS)
-	if Input.is_action_just_pressed("ui_down"):
-		_focus = mini(_ids.size() - 1, _focus + COLS)
-	if Input.is_action_just_pressed("ui_accept") and _focus < _ids.size():
-		var uid: String = _ids[_focus]
-		if MetaProgress.seen_relics.has(uid):
-			_selected = uid
-			Sfx.play("ui")
-	if Input.is_action_just_pressed("ui_cancel"):
-		_close()
-	if InputDevice.using_pad:
-		_hover = _focus
+	if _hover != prev:
+		for i in _rects.size():
+			var on := i == _hover
+			var tw := create_tween()
+			tw.tween_method(func(v: float) -> void: _hover_k[i] = v, float(_hover_k[i]),
+				1.0 if on else 0.0, 0.12).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	if _hover >= 0:
+		BaCursor.force_hot()
 	queue_redraw()
 
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		if _hover >= 0:
-			var uid: String = _ids[_hover]
-			if MetaProgress.seen_relics.has(uid):
-				_selected = uid
-				Sfx.play("ui")
-		elif _back_rect().has_point(get_local_mouse_position()):
-			_close()
+			_selected = String(_ids[_hover])
+			Sfx.play("ui")
 		accept_event()
 
 
@@ -83,98 +84,80 @@ func _unhandled_input(event: InputEvent) -> void:
 			get_viewport().set_input_as_handled()
 
 
-func _back_rect() -> Rect2:
-	return Rect2(GameConfig.BASE_W - 92, GameConfig.BASE_H - 40, 74, 24)
-
-
 func _close() -> void:
 	Sfx.play("ui")
 	closed.emit()
+	queue_free()
 
 
 func _draw() -> void:
-	draw_rect(Rect2(0, 0, GameConfig.BASE_W, GameConfig.BASE_H), Color(0.04, 0.05, 0.08, 0.97))
-	if GameConfig.ui_font == null:
-		return
-	_text(Vector2(34, 30), "藏品图鉴", 16, GameConfig.COL_TEXT)
-	_text(Vector2(34, 48), "最高层数 %d    总击杀 %d    通关  DeepSeek %d / GPT %d / Claude %d"
+	UiKit.gradient_backdrop(self, Rect2(0, 0, GameConfig.BASE_W, GameConfig.BASE_H))
+	UiKit.stripes(self, Rect2(0, 0, GameConfig.BASE_W, 60), _t)
+	draw_set_transform(Vector2(0, _enter), 0.0, Vector2.ONE)
+
+	UiKit.text(self, Vector2(28, 32), "藏品图鉴", UiKit.F_H2, UiKit.TEXT)
+	UiKit.text(self, Vector2(28, 46), "最高层数 %d · 总击杀 %d · 通关 DS %d / GPT %d / CL %d"
 		% [MetaProgress.max_floor, MetaProgress.total_kills,
 		int(MetaProgress.clears["deepseek"]), int(MetaProgress.clears["gpt"]),
-		int(MetaProgress.clears["claude"])], 9, GameConfig.COL_DIM)
-	var hours := int(MetaProgress.total_time / 3600.0)
-	var mins := int(fmod(MetaProgress.total_time, 3600.0) / 60.0)
-	var top: Array = MetaProgress.top_relics(3)
-	var top_txt := ""
-	for i in top.size():
-		var up: Upgrade = UpgradeDB.get_upgrade(String(top[i]["id"]))
-		if up != null:
-			top_txt += ("%s×%d  " % [up.title, int(top[i]["count"])])
-	_text(Vector2(34, 62), "累计时长 %dh%02dm    最常见藏品：%s"
-		% [hours, mins, top_txt if top_txt != "" else "—"], 9, GameConfig.COL_DIM)
-	_text(Vector2(34, 74), "难度最高层  简单 %d / 普通 %d / 困难 %d    已完成挑战 %d"
-		% [int(MetaProgress.floor_by_difficulty[0]), int(MetaProgress.floor_by_difficulty[1]),
-		int(MetaProgress.floor_by_difficulty[2]), MetaProgress.challenges_done], 8,
-		GameConfig.COL_DIM)
+		int(MetaProgress.clears["claude"])], UiKit.F_TINY, UiKit.TEXT_DIM)
+	var seen_n := MetaProgress.seen_relics.size()
+	UiKit.text_right(self, 612, 46, "已收集 %d / %d" % [seen_n, _ids.size()], UiKit.F_SMALL,
+		UiKit.ACCENT)
 
 	for i in _ids.size():
-		var uid: String = _ids[i]
-		var seen: bool = MetaProgress.seen_relics.has(uid)
-		var r: Rect2 = _rects[i]
-		var up: Upgrade = UpgradeDB.get_upgrade(uid)
-		draw_rect(r, Color(0.08, 0.09, 0.13))
-		if seen and up != null:
-			var tex := _icon(up.icon_path)
-			if tex != null:
-				draw_texture_rect(tex, r, false)
-		else:
-			draw_rect(r, Color(0.05, 0.06, 0.09))
-			_text(Vector2(r.position.x + 12, r.position.y + 22), "?", 12, Color(0.3, 0.33, 0.4))
-		if _hover == i or (_focus == i and InputDevice.using_pad):
-			draw_rect(r, Color(1.0, 0.85, 0.4), false, 1.0)
-		if _selected == uid:
-			draw_rect(r.grow(1), Color(0.55, 0.75, 1.0), false, 2.0)
+		_draw_cell(i, _rects[i])
+	_draw_detail()
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
-	# 详情
-	var box := Rect2(34, 236, GameConfig.BASE_W - 68, 70)
-	draw_rect(box, Color(0.07, 0.08, 0.12, 0.96))
-	draw_rect(box, Color(0.3, 0.36, 0.48), false, 1.0)
-	if _selected == "":
-		_text(Vector2(box.position.x + 12, box.position.y + 22), "点击已见过的藏品查看描述", 10,
-			GameConfig.COL_DIM)
+
+func _draw_cell(i: int, r: Rect2) -> void:
+	var uid: String = _ids[i]
+	var seen: bool = MetaProgress.seen_relics.has(uid)
+	var hk: float = float(_hover_k[i])
+	var rr := r
+	if hk > 0.01:
+		var k := 1.0 + 0.05 * hk
+		rr = Rect2(r.get_center() - r.size * k * 0.5, r.size * k)
+	var bg := Color(1, 1, 1, 0.96) if seen else Color(0.90, 0.92, 0.96, 0.9)
+	draw_style_box(UiKit.box(bg, 9, Color(1, 1, 1, 0.8), 1, true), rr)
+	var up: Upgrade = UpgradeDB.get_upgrade(uid)
+	if seen and up != null:
+		var tex := UiKit.icon(up.icon_path)
+		if tex != null:
+			var sz := 30.0 * (1.0 + 0.06 * hk)
+			draw_texture_rect(tex, Rect2(rr.get_center() - Vector2(sz, sz) * 0.5, Vector2(sz, sz)),
+				false)
+		UiKit.text_center(self, rr.get_center().x, rr.end.y - 5, UiKit.fit(up.title, rr.size.x - 6,
+			UiKit.F_TINY), UiKit.F_TINY, UiKit.TEXT_DIM)
 	else:
-		var up2: Upgrade = UpgradeDB.get_upgrade(_selected)
-		if up2 != null:
-			_text(Vector2(box.position.x + 12, box.position.y + 22), up2.title, 12,
-				Color(1.0, 0.88, 0.5))
-			_text(Vector2(box.position.x + 12, box.position.y + 40), "价格 %d 金币" % up2.price,
-				9, GameConfig.COL_DIM)
-			draw_multiline_string(GameConfig.ui_font,
-				Vector2(box.position.x + 12, box.position.y + 56), up2.desc,
-				HORIZONTAL_ALIGNMENT_LEFT, box.size.x - 24, 9, 2, GameConfig.COL_TEXT)
-
-	var b := _back_rect()
-	draw_rect(b, Color(0.16, 0.22, 0.32))
-	draw_rect(b, Color(0.5, 0.65, 0.9), false, 1.0)
-	_text(Vector2(b.position.x + 18, b.position.y + 16), "返回 [C]", 10, GameConfig.COL_TEXT)
+		# 剪影：一个深色问号
+		draw_circle(rr.get_center() - Vector2(0, 4), 11.0, Color(0.72, 0.75, 0.82, 0.55))
+		UiKit.text_center(self, rr.get_center().x, rr.get_center().y + 2, "?", UiKit.F_H3,
+			Color(1, 1, 1, 0.9))
+	if _selected == uid:
+		draw_style_box(UiKit.box(Color(0, 0, 0, 0), 9, UiKit.ACCENT, 2, false), rr)
 
 
-func _icon(path: String) -> Texture2D:
-	if _icon_cache.has(path):
-		return _icon_cache[path]
-	if not ResourceLoader.exists(path):
-		return null
-	var tex: Texture2D = load(path)
-	_icon_cache[path] = tex
-	return tex
-
-
-func _text(pos: Vector2, s: String, size: int, color: Color,
-		align: int = HORIZONTAL_ALIGNMENT_LEFT) -> void:
-	if GameConfig.ui_font == null:
+func _draw_detail() -> void:
+	var box := Rect2(452, GRID_Y, 160, 4 * CELL_H + 3 * GAP)
+	draw_style_box(UiKit.box(Color(1, 1, 1, 0.94), 10, Color(1, 1, 1, 0.8), 1, true), box)
+	if _selected == "":
+		UiKit.text(self, box.position + Vector2(12, 24), "点击已见过的藏品", UiKit.F_SMALL, UiKit.TEXT_DIM)
+		UiKit.text(self, box.position + Vector2(12, 38), "查看效果与价格", UiKit.F_TINY, UiKit.TEXT_DIM)
 		return
-	var p := pos
-	if align != HORIZONTAL_ALIGNMENT_LEFT:
-		var w: float = GameConfig.ui_font.get_string_size(
-			s, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
-		p.x -= w
-	draw_string(GameConfig.ui_font, p, s, HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
+	var up: Upgrade = UpgradeDB.get_upgrade(_selected)
+	if up == null:
+		return
+	var tex := UiKit.icon(up.icon_path)
+	if tex != null:
+		draw_texture_rect(tex, Rect2(box.position + Vector2(12, 12), Vector2(36, 36)), false)
+	UiKit.text(self, box.position + Vector2(56, 30), up.title, UiKit.F_H3, UiKit.TEXT)
+	UiKit.text(self, box.position + Vector2(56, 44), "%d 金币" % up.price, UiKit.F_TINY,
+		Color(0.80, 0.58, 0.10))
+	draw_line(box.position + Vector2(12, 58), box.position + Vector2(box.size.x - 12, 58),
+		UiKit.LINE, 1.0)
+	UiKit.text_block(self, box.position + Vector2(12, 74), up.desc, box.size.x - 24,
+		UiKit.F_TINY, UiKit.TEXT, 6)
+	var owned := int(MetaProgress.relic_counts.get(_selected, 0))
+	UiKit.text(self, box.position + Vector2(12, box.size.y - 10), "已获得 %d 次" % owned,
+		UiKit.F_TINY, UiKit.TEXT_DIM)

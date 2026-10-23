@@ -37,7 +37,7 @@ func prepare() -> void:
 	already_hit.clear()
 	_trail_pts.clear()
 	_t = 0.0
-	_locked = 0.3 if destructible else 0.0
+	_locked = 0.3 if (destructible or homing > 0.0) else 0.0
 	visible = true
 	if friendly:
 		remove_from_group("enemy_bullets")
@@ -147,6 +147,11 @@ func _damage_enemy(e: Node) -> void:
 	var dmg := damage
 	var is_crit := crit
 	var p = GameState.player
+	# 深度检索：穿透弹对已标记目标造成 2 倍伤害
+	if tag == "retrieval_pierce" and float(e.mark_t) > 0.0:
+		dmg *= 2.0
+		GameFeel.burst(e.global_position, Color(0.45, 0.72, 1.0), 10, 150.0, 0.3)
+		GameFeel.aberrate(2.0, 0.1)
 	if p != null and is_instance_valid(p) and p.focus_target == e and p.focus_stacks > 0:
 		dmg *= 1.0 + 0.05 * float(p.focus_stacks)
 	if bool(GameState.mods.get("first_hit_crit", false)) and float(e.hp) >= float(e.max_hp) - 0.01:
@@ -158,6 +163,10 @@ func _damage_enemy(e: Node) -> void:
 	if is_crit and not crit:
 		dmg *= float(GameState.stat("crit_mult", 2.0))
 	e.take_damage(dmg, dir, tier, is_crit, tag)
+	# 标记弹：命中即标记 3s
+	if tag == "retrieval_mark":
+		e.mark_t = maxf(float(e.mark_t), 3.0)
+		GameFeel.burst(e.global_position, Color(0.45, 0.72, 1.0), 6, 90.0, 0.24)
 	if p != null and is_instance_valid(p):
 		p.record_hit(e)
 	hit_enemy.emit(e, self)
@@ -231,12 +240,13 @@ func _draw() -> void:
 		return
 
 	if trail and _trail_pts.size() > 1:
-		for i in range(_trail_pts.size() - 1):
-			var a: float = 1.0 - float(i) / float(_trail_pts.size())
-			var c2 := color
-			c2.a = a * 0.35
-			draw_line(to_local(_trail_pts[i]), to_local(_trail_pts[i + 1]), c2,
-				maxf(1.0, radius * 1.1 * a))
+		# 最多 3 个残影（半透明复制），不用粒子系统
+		var ghosts: int = mini(3, _trail_pts.size() - 1)
+		for g in range(ghosts, 0, -1):
+			var gp: Vector2 = to_local(_trail_pts[g])
+			var gc := color
+			gc.a = 0.26 * (1.0 - float(g) / float(ghosts + 1))
+			draw_circle(gp, radius * (1.0 - 0.16 * float(g)), gc)
 
 	if not friendly:
 		var glow := color

@@ -22,7 +22,24 @@ func _ready() -> void:
 	_build_lighting()
 	_build_walls()
 	_build_obstacles()
+	_build_floor_wave()
 	queue_redraw()
+
+
+## 地面微波动：一层极淡的正弦亮带（GPU 绘制，不额外消耗 CPU）
+func _build_floor_wave() -> void:
+	if not ResourceLoader.exists("res://shaders/floor_wave.gdshader"):
+		return
+	var rect := ColorRect.new()
+	rect.name = "FloorWave"
+	rect.position = Vector2.ZERO
+	rect.size = Vector2(GameConfig.ROOM_W, GameConfig.ROOM_H)
+	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://shaders/floor_wave.gdshader")
+	rect.material = mat
+	add_child(rect)
+	move_child(rect, 0)
 
 
 ## 0~3 个不可通行障碍（柱子/石台）+ 10% 概率一个可破坏木箱
@@ -118,7 +135,7 @@ func _process(delta: float) -> void:
 func _build_lighting() -> void:
 	# 环境压暗：偏冷的深蓝灰，让角色和子弹从背景里跳出来
 	_modulate = CanvasModulate.new()
-	_modulate.color = Color(0.72, 0.76, 0.88)
+	_modulate.color = Color(0.80, 0.84, 0.94)
 	add_child(_modulate)
 
 	var tex: Texture2D = load(LIGHT_TEX) if ResourceLoader.exists(LIGHT_TEX) else null
@@ -252,9 +269,10 @@ func _draw() -> void:
 		draw_rect(Rect2(w + i * 6, r.end.y - w - i * 6 - 6, r.size.x - (w + i * 6) * 2, 6),
 			Color(0, 0, 0, a))
 
-	# 障碍物（柱子 / 石台）
+	# 障碍物（柱子 / 石台）：向光源反方向偏移 4px 的投影
 	for o in _obstacles:
 		var rr: Rect2 = o
+		draw_rect(Rect2(rr.position + Vector2(4, 4), rr.size), Color(0, 0, 0, 0.28))
 		draw_rect(rr, Color(0.18, 0.21, 0.28))
 		draw_rect(rr, Color(0.34, 0.39, 0.5), false, 2.0)
 		draw_rect(Rect2(rr.position, Vector2(rr.size.x, 6)), Color(0.42, 0.48, 0.6))
@@ -274,6 +292,9 @@ func _draw() -> void:
 		draw_rect(rect, GameConfig.COL_WALL)
 		draw_line(rect.position, Vector2(rect.end.x, rect.position.y),
 			GameConfig.COL_WALL_TOP, 2.0)
+	# 墙体内缘 1px 暗色描边，强化空间感
+	var inner := Rect2(w, w, r.size.x - w * 2.0, r.size.y - w * 2.0)
+	draw_rect(inner, Color(0.05, 0.06, 0.10, 0.75), false, 1.0)
 
 	# 门
 	var dz := door_zone()

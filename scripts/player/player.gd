@@ -14,6 +14,9 @@ var data: CharacterData = null
 var anim: AnimatedSprite2D
 var cam: Camera2D
 var weapon = null
+var sub = null
+## 副武器长按等状态带来的额外移速倍率（与技能 move_mult 相乘）
+var sub_move_mult: float = 1.0
 
 ## 转向/动画分层：pivot 只做倾斜，bob 做待机与走路起伏，recoil 做后坐/受击位移，
 ## breath 做呼吸缩放，anim 只负责帧与翻滚挤压
@@ -26,6 +29,7 @@ var gun: Node2D
 
 var _move_tween: Tween = null
 var _breath_tween: Tween = null
+var _turn_tw: Tween = null
 var _anim_state: String = "idle"
 var _walk_dur: float = -1.0
 
@@ -76,6 +80,7 @@ func _ready() -> void:
 	hp = GameState.hp if GameState.hp > 0 else max_hp
 	_build_nodes()
 	_build_weapon()
+	_build_subweapon()
 	GameState.player = self
 
 
@@ -114,7 +119,7 @@ func _build_nodes() -> void:
 	anim = AnimatedSprite2D.new()
 	anim.sprite_frames = GameConfig.build_sprite_frames(char_id)
 	anim.offset = Vector2(0, -29)
-	anim.self_modulate = Color(1.42, 1.42, 1.5)
+	anim.self_modulate = Color(1.32, 1.32, 1.38)
 	anim.light_mask = 0   # 角色不参与 2D 光照，避免被自己的点光源打爆成白色
 	anim.play("idle")
 	breath.add_child(anim)
@@ -179,6 +184,26 @@ func _build_weapon() -> void:
 		weapon.setup(self)
 
 
+## 专属副武器：每个角色一把，只有对应角色能用
+func _build_subweapon() -> void:
+	var path := ""
+	match char_id:
+		"deepseek":
+			path = "res://scripts/weapons/sub_deep_retrieval.gd"
+		"gpt":
+			path = "res://scripts/weapons/sub_thought_chain.gd"
+		"claude":
+			path = "res://scripts/weapons/sub_alignment_protocol.gd"
+	if path == "" or not ResourceLoader.exists(path):
+		return
+	sub = Node2D.new()
+	sub.set_script(load(path))
+	sub.name = "SubWeapon"
+	add_child(sub)
+	if sub.has_method("setup"):
+		sub.setup(self)
+
+
 # ---------------- 主循环 ----------------
 func _physics_process(delta: float) -> void:
 	if not alive:
@@ -209,7 +234,7 @@ func _physics_process(delta: float) -> void:
 		var cs2: CharacterStats = Stats.char(char_id)
 		if cs2 != null:
 			base_spd = cs2.move_speed
-		var spd: float = base_spd * GameState.stat("move_speed", 1.0) * move_mult
+		var spd: float = base_spd * GameState.stat("move_speed", 1.0) * move_mult * sub_move_mult
 		if roll_speed_t > 0.0:
 			spd *= 1.0 + float(GameState.mods.get("roll_speed", 0.0))
 		var target := input * spd
@@ -316,18 +341,25 @@ func _kill_move_tween() -> void:
 		breath.scale = Vector2.ONE
 
 
-## 方向切换：短促挤压回弹，避免 2 方向翻转硬切
+## 方向切换：滞回阈值避免鼠标在正上方时反复翻转，切换瞬间挤压回弹
 func _update_facing() -> void:
-	var f := -1 if aim.x < 0.0 else 1
+	var f := facing
+	if aim.x > 0.16:
+		f = 1
+	elif aim.x < -0.16:
+		f = -1
 	if f == facing:
 		return
 	facing = f
 	anim.flip_h = facing > 0
 	if accent != null:
 		accent.scale.x = -1.0 if anim.flip_h else 1.0
-	var tw := anim.create_tween()
-	anim.scale = Vector2(0.86, 1.08)
-	tw.tween_property(anim, "scale", Vector2.ONE, 0.08)\
+	if _turn_tw != null and _turn_tw.is_valid():
+		_turn_tw.kill()
+	_turn_tw = create_tween()
+	_turn_tw.tween_property(anim, "scale", Vector2(0.88, 1.06), 0.04)\
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	_turn_tw.tween_property(anim, "scale", Vector2.ONE, 0.08)\
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
@@ -386,6 +418,8 @@ func _handle_actions() -> void:
 		Sfx.play("ui", -6.0)
 	if Input.is_action_just_pressed("skill"):
 		_try_skill()
+	if sub != null and is_instance_valid(sub):
+		sub.handle_input(get_physics_process_delta_time())
 
 	# 2) 射击：按住即射；翻滚期间的按下被缓冲，翻滚结束当帧释放
 	var want_fire: bool = Input.is_action_pressed("shoot") or InputBuffer.peek("shoot")
@@ -552,7 +586,7 @@ func take_damage(amount: int) -> void:
 	var tw := recoil.create_tween()
 	tw.tween_property(recoil, "position", Vector2.ZERO, 0.16)\
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
-	GameFeel.screen_shake(0.45)
+	GameFeel.screen_shake(0.45, -aim)
 	GameFeel.hit_stop(0.08, 0.06)
 	GameFeel.vibrate("light")
 	GameFeel.burst(global_position + Vector2(0, -14), Color(1.0, 0.35, 0.45), 8, 110.0, 0.3)
@@ -579,9 +613,11 @@ func _die() -> void:
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
 	tw.parallel().tween_property(anim, "scale", Vector2(1.1, 0.9), 0.4)\
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	# 闪白一帧后碎成 8 个小方块，向四周飞散 + 重力 + 0.4s 淡出
+	GameFeel.shards(global_position + Vector2(0, -16), GameConfig.char_color(char_id), 8, 170.0, 0.4)
 	GameFeel.screen_shake(0.8)
 	GameFeel.hit_stop(0.12, 0.05)
-	GameFeel.burst(global_position + Vector2(0, -14), Color(1.0, 0.4, 0.5), 8, 160.0, 0.4)
+	GameFeel.screen_flash(Color(0.95, 0.25, 0.3), 0.2, 0.5)
 	Sfx.play("die")
 	died.emit()
 	GameState.run_ended.emit()

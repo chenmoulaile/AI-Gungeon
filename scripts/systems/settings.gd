@@ -26,6 +26,7 @@ const DEFAULT_BINDINGS := {
 	"shoot": {"device": "mouse", "code": MOUSE_BUTTON_LEFT},
 	"roll": {"device": "key", "code": KEY_SPACE},
 	"skill": {"device": "key", "code": KEY_E},
+	"sub_weapon": {"device": "key", "code": KEY_Q},
 	"switch_mode": {"device": "key", "code": KEY_R},
 }
 
@@ -42,13 +43,14 @@ var PAD_BINDINGS := {
 	"shoot": {"device": "joy_axis", "code": 5, "dir": 1},
 	"roll": {"device": "joy_button", "code": 0, "dir": 1},
 	"skill": {"device": "joy_button", "code": 2, "dir": 1},
+	"sub_weapon": {"device": "joy_button", "code": 10, "dir": 1},
 	"switch_mode": {"device": "joy_button", "code": 3, "dir": 1},
 	"pause": {"device": "joy_button", "code": 6, "dir": 1},
 }
 
 const PAD_ACTIONS := ["move_left", "move_right", "move_up", "move_down",
 	"aim_left", "aim_right", "aim_up", "aim_down",
-	"shoot", "roll", "skill", "switch_mode", "pause"]
+	"shoot", "roll", "skill", "sub_weapon", "switch_mode", "pause"]
 
 
 func _ready() -> void:

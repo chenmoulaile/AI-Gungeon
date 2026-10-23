@@ -27,8 +27,25 @@ func _process(delta: float) -> void:
 		charge_t += delta
 		if player != null and is_instance_valid(player):
 			player.charge_ratio = clampf(charge_t / CHARGE_TIME, 0.0, 1.0)
+			# 蓄力：角色周围收拢的光环粒子
+			_charge_particle(delta)
 		if charge_t >= CHARGE_TIME:
 			_release_charge()
+
+
+var _pt: float = 0.0
+
+
+## 每 0.09s 生成一个从外圈向角色中心收拢的光点
+func _charge_particle(delta: float) -> void:
+	_pt -= delta
+	if _pt > 0.0:
+		return
+	_pt = 0.09
+	var ang := randf() * TAU
+	var r := randf_range(26.0, 40.0)
+	GameFeel.burst(player.global_position + Vector2(0, -14) + Vector2(cos(ang), sin(ang)) * r,
+		Color(0.55, 0.75, 1.0), 1, 26.0, 0.3)
 
 
 func fire(dir: Vector2) -> void:

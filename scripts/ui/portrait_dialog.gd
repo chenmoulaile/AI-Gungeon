@@ -119,18 +119,18 @@ func _draw() -> void:
 					"空格 / 点击 继续", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, GameConfig.COL_DIM)
 		return
 
-	# 非阻塞模式：只留一个贴底的小条，不挡战斗
-	var bar := Rect2(20, GameConfig.BASE_H - 58, GameConfig.BASE_W - 40, 34)
-	draw_rect(bar, Color(0.03, 0.05, 0.08, 0.78))
-	draw_rect(bar, Color(0.55, 0.7, 1.0, 0.35), false, 1.0)
+	# 非阻塞模式：贴底小条，位置上移避开右下角技能环
+	var bar_y := GameConfig.BASE_H - 86.0
+	var bar := Rect2(20, bar_y, GameConfig.BASE_W - 40, 30)
+	draw_style_box(UiKit.box(Color(1, 1, 1, 0.88), 9, Color(1, 1, 1, 0.9), 1, true), bar)
 	if _tex != null:
-		draw_texture_rect_region(_tex, Rect2(24, GameConfig.BASE_H - 54, 26, 26),
-			Rect2(0, 0, 1024, 1024))
+		draw_texture_rect_region(_tex, Rect2(26, bar_y + 4, 22, 22),
+			Rect2(120, 40, 800, 800))
 	if GameConfig.ui_font == null:
 		return
-	draw_string(GameConfig.ui_font, Vector2(56, GameConfig.BASE_H - 42), speaker,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(1.0, 0.86, 0.45))
+	draw_string(GameConfig.ui_font, Vector2(56, bar_y + 12), speaker,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.78, 0.55, 0.12))
 	var full2: String = str(lines[line_index]) if line_index < lines.size() else ""
-	draw_multiline_string(GameConfig.ui_font, Vector2(56, GameConfig.BASE_H - 30),
+	draw_multiline_string(GameConfig.ui_font, Vector2(56, bar_y + 24),
 		full2.substr(0, int(typed)), HORIZONTAL_ALIGNMENT_LEFT, GameConfig.BASE_W - 90,
-		10, 1, GameConfig.COL_TEXT)
+		8, 1, UiKit.TEXT)

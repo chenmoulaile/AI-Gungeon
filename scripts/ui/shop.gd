@@ -1,19 +1,26 @@
 extends Control
-## 商店：每层第 4 间房清空后出现，金币购买藏品
+## 商店（蔚蓝档案风格）：三张商品卡片，悬停上浮 6px + 描边高亮 + 图标微旋转
+## 买不起：整体降饱和 + 价格变红 + 不响应上浮
 
 signal closed
 
-const CARD_W := 168.0
-const CARD_H := 186.0
+const CARD_W := 150.0
+const CARD_H := 170.0
+const CARD_Y := 76.0
+const CARD_GAP := 14.0
 
 var offers: Array = []
 var _rects: Array = []
 var _hover: int = -1
-var _focus: int = 0
+var _hover_k: Array = []
+var _icon_rot: Array = []
 var _msg: String = ""
 var _msg_t: float = 0.0
-var _cont_rect := Rect2(GameConfig.BASE_W * 0.5 - 70, GameConfig.BASE_H - 44, 140, 26)
-var _icon_cache: Dictionary = {}
+var _enter: float = 20.0
+var _t: float = 0.0
+var _coins_shown: float = 0.0
+var _show_tip: bool = false
+var _skip_btn: BaButton = null
 
 
 func _ready() -> void:
@@ -22,52 +29,94 @@ func _ready() -> void:
 		theme = load("res://resources/ui/theme.tres")
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	offers = UpgradeDB.roll_offers(3, GameState.upgrades)
-	var total: float = offers.size() * CARD_W + maxf(0.0, offers.size() - 1) * 16.0
-	var x0: float = (GameConfig.BASE_W - total) * 0.5
-	for i in offers.size():
-		_rects.append(Rect2(x0 + i * (CARD_W + 16.0), 78, CARD_W, CARD_H))
+	_show_tip = not MetaProgress.tutorial_flag("seen_shop_tip")
+	_coins_shown = float(GameState.coins)
+	_relayout()
+	_skip_btn = BaButton.new()
+	add_child(_skip_btn)
+	_skip_btn.setup("跳过", Rect2(GameConfig.BASE_W * 0.5 - 44, 286, 88, 24),
+		"ghost", "", UiKit.F_BODY)
+	_skip_btn.pressed.connect(_close)
+	BaCursor.set_battle(false)
+	var tw := create_tween()
+	tw.tween_property(self, "_enter", 0.0, 0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	Sfx.play("ui")
 
 
+func _relayout() -> void:
+	_rects.clear()
+	_hover_k.clear()
+	_icon_rot.clear()
+	var total: float = offers.size() * CARD_W + maxf(0.0, offers.size() - 1) * CARD_GAP
+	var x0: float = (GameConfig.BASE_W - total) * 0.5
+	for i in offers.size():
+		_rects.append(Rect2(x0 + i * (CARD_W + CARD_GAP), CARD_Y, CARD_W, CARD_H))
+		_hover_k.append(0.0)
+		_icon_rot.append(0.0)
+
+
 func _process(delta: float) -> void:
+	_t += delta
 	_msg_t = maxf(0.0, _msg_t - delta)
+	if absf(_coins_shown - float(GameState.coins)) > 0.01:
+		_coins_shown = move_toward(_coins_shown, float(GameState.coins),
+			maxf(1.0, absf(float(GameState.coins) - _coins_shown) * 8.0) * delta)
 	var mouse := get_local_mouse_position()
+	var prev := _hover
 	_hover = -1
 	for i in _rects.size():
-		if _rects[i].has_point(mouse):
+		if (_rects[i] as Rect2).has_point(mouse):
 			_hover = i
-	# 手柄 / 方向键：卡片 0..n-1，最后一格是"继续"
-	if Input.is_action_just_pressed("ui_left"):
-		_focus = maxi(0, _focus - 1)
-	if Input.is_action_just_pressed("ui_right"):
-		_focus = mini(offers.size(), _focus + 1)
-	if Input.is_action_just_pressed("ui_accept"):
-		if _focus >= offers.size():
-			Sfx.play("ui")
-			closed.emit()
-			queue_free()
-		elif _focus < offers.size():
-			_buy(_focus)
-	if InputDevice.using_pad:
-		_hover = _focus if _focus < offers.size() else -1
+	if _hover != prev:
+		for i in _rects.size():
+			var can := _affordable(i)
+			_tween_hover(i, 1.0 if (i == _hover and can) else 0.0)
+			_tween_icon(i, 3.0 if (i == _hover and can) else 0.0)
+	if _hover >= 0 and _affordable(_hover):
+		BaCursor.force_hot()
 	queue_redraw()
 
 
+func _tween_hover(i: int, target: float) -> void:
+	var tw := create_tween()
+	tw.tween_method(func(v: float) -> void: _hover_k[i] = v, float(_hover_k[i]), target, 0.12)\
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+
+func _tween_icon(i: int, deg: float) -> void:
+	var tw := create_tween()
+	tw.tween_method(func(v: float) -> void: _icon_rot[i] = v, float(_icon_rot[i]), deg, 0.12)\
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+
+func _affordable(i: int) -> bool:
+	if i < 0 or i >= offers.size():
+		return false
+	return GameState.coins >= (offers[i] as Upgrade).price
+
+
 func _gui_input(event: InputEvent) -> void:
-	if not (event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT):
+	if not (event is InputEventMouseButton and event.pressed
+			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT):
 		return
-	if _cont_rect.has_point(get_local_mouse_position()):
-		Sfx.play("ui")
-		closed.emit()
-		queue_free()
-		accept_event()
-		return
-	if _hover >= 0 and _hover < offers.size():
+	if _hover >= 0:
 		_buy(_hover)
 		accept_event()
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.physical_keycode in [KEY_ESCAPE, KEY_ENTER, KEY_SPACE]:
+			_close()
+			get_viewport().set_input_as_handled()
+		elif event.physical_keycode in [KEY_1, KEY_2, KEY_3]:
+			_buy(event.physical_keycode - KEY_1)
+			get_viewport().set_input_as_handled()
+
+
 func _buy(index: int) -> void:
+	if index < 0 or index >= offers.size():
+		return
 	var up: Upgrade = offers[index]
 	if GameState.coins < up.price:
 		_msg = "金币不足（需要 %d）" % up.price
@@ -75,75 +124,86 @@ func _buy(index: int) -> void:
 		Sfx.play("hurt", -12.0, 1.5)
 		return
 	if GameState.try_buy(up):
-		_msg = "已获得：%s" % up.title
+		_msg = "已获得 · %s" % up.title
 		_msg_t = 1.8
 		Sfx.play("coin")
+		MetaProgress.set_tutorial_flag("seen_shop_tip")
+		_show_tip = false
 		offers.remove_at(index)
-		_rects.clear()
-		var total: float = offers.size() * CARD_W + maxf(0.0, offers.size() - 1) * 16.0
-		var x0: float = (GameConfig.BASE_W - total) * 0.5
-		for i in offers.size():
-			_rects.append(Rect2(x0 + i * (CARD_W + 16.0), 78, CARD_W, CARD_H))
+		_relayout()
 		_hover = -1
 
 
+func _close() -> void:
+	MetaProgress.set_tutorial_flag("seen_shop_tip")
+	Sfx.play("ui")
+	closed.emit()
+	queue_free()
+
+
+# ---------------- 绘制 ----------------
 func _draw() -> void:
-	draw_rect(Rect2(0, 0, GameConfig.BASE_W, GameConfig.BASE_H), Color(0.02, 0.03, 0.05, 0.86))
-	if GameConfig.ui_font == null:
-		return
-	draw_string(GameConfig.ui_font, Vector2(0, 40), "算力商店",
-		HORIZONTAL_ALIGNMENT_CENTER, GameConfig.BASE_W, 18, Color(1.0, 0.86, 0.45))
-	draw_string(GameConfig.ui_font, Vector2(0, 58), "金币 %d" % GameState.coins,
-		HORIZONTAL_ALIGNMENT_CENTER, GameConfig.BASE_W, 11, GameConfig.COL_GOLD)
-	draw_string(GameConfig.ui_font, Vector2(0, GameConfig.BASE_H - 54),
-		"藏品可叠加，两件特定藏品同时持有会激活组合效果", HORIZONTAL_ALIGNMENT_CENTER,
-		GameConfig.BASE_W, 9, GameConfig.COL_DIM)
+	# 半透明浅色底板（横向滑动转场配合）
+	draw_rect(Rect2(0, 0, GameConfig.BASE_W, GameConfig.BASE_H), Color(0.06, 0.09, 0.16, 0.55))
+	draw_set_transform(Vector2(0, _enter), 0.0, Vector2.ONE)
+	var panel := Rect2(16, 8, GameConfig.BASE_W - 32, GameConfig.BASE_H - 16)
+	draw_style_box(UiKit.box(Color(0.96, 0.97, 1.0, 0.97), 12, Color(1, 1, 1, 0.7), 1, true), panel)
+	UiKit.text(self, Vector2(30, 34), "算力商店", UiKit.F_H2, UiKit.TEXT)
+	UiKit.text(self, Vector2(30, 46), "每层限时一次 · 藏品可叠加", UiKit.F_TINY, UiKit.TEXT_DIM)
+	# 金币
+	draw_circle(Vector2(548, 30), 7.0, UiKit.GOLD)
+	draw_circle(Vector2(546, 28), 2.4, Color(1, 1, 1, 0.9))
+	UiKit.text(self, Vector2(560, 34), str(int(round(_coins_shown))), UiKit.F_H2,
+		Color(0.24, 0.26, 0.32))
+
+	if _show_tip:
+		var tip := Rect2(30, 54, GameConfig.BASE_W - 60, 16)
+		draw_style_box(UiKit.box(Color(1.0, 0.97, 0.86, 0.95), 7, Color(1, 1, 1, 0.8), 1, false), tip)
+		UiKit.text_center(self, tip.get_center().x, tip.get_center().y + 2.0,
+			"用金币购买藏品，增强本局能力", UiKit.F_TINY, Color(0.58, 0.44, 0.12))
 
 	for i in offers.size():
 		_draw_card(i, _rects[i], offers[i])
 
-	# 继续按钮
-	var hovered := _cont_rect.has_point(get_local_mouse_position()) \
-		or (_focus >= offers.size() and InputDevice.using_pad)
-	draw_rect(_cont_rect, Color(0.14, 0.18, 0.26) if not hovered else Color(0.2, 0.28, 0.4))
-	draw_rect(_cont_rect, Color(0.5, 0.6, 0.8), false, 1.0)
-	draw_string(GameConfig.ui_font, Vector2(_cont_rect.position.x, _cont_rect.position.y + 18),
-		"继续前进", HORIZONTAL_ALIGNMENT_CENTER, _cont_rect.size.x, 11, GameConfig.COL_TEXT)
-
 	if _msg_t > 0.0:
-		draw_string(GameConfig.ui_font, Vector2(0, GameConfig.BASE_H - 70), _msg,
-			HORIZONTAL_ALIGNMENT_CENTER, GameConfig.BASE_W, 10,
-			Color(1, 1, 1, clampf(_msg_t, 0.0, 1.0)))
+		UiKit.text_center(self, GameConfig.BASE_W * 0.5, 272, _msg,
+			UiKit.F_SMALL, Color(UiKit.DANGER.r, UiKit.DANGER.g, UiKit.DANGER.b,
+			clampf(_msg_t, 0.0, 1.0)))
+	UiKit.text_center(self, GameConfig.BASE_W * 0.5, 324,
+		"点击卡片购买 · ESC 跳过", UiKit.F_TINY, UiKit.TEXT_DIM)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
 func _draw_card(i: int, r: Rect2, up: Upgrade) -> void:
-	var hovered := (_hover == i)
-	var affordable := GameState.coins >= up.price
-	var border := Color(0.95, 0.78, 0.35) if hovered else Color(0.3, 0.34, 0.44)
-	draw_rect(r, Color(0.09, 0.1, 0.14, 0.98))
-	if hovered:
-		draw_rect(r.grow(3), Color(1.0, 0.85, 0.4, 0.14))
-	draw_rect(r, border, false, 2.0 if hovered else 1.0)
+	var hk: float = float(_hover_k[i])
+	var can := GameState.coins >= up.price
+	var lift: float = -6.0 * hk
+	var rr := Rect2(r.position + Vector2(0, lift), r.size)
+	var bg := Color(1, 1, 1, 0.98) if can else Color(0.93, 0.94, 0.96, 0.96)
+	draw_style_box(UiKit.box(bg, 10, Color(1, 1, 1, 0.9), 1, true), rr)
+	if hk > 0.01:
+		draw_style_box(UiKit.box(Color(0, 0, 0, 0), 10,
+			Color(UiKit.ACCENT.r, UiKit.ACCENT.g, UiKit.ACCENT.b, 0.85 * hk), 2, false), rr)
 
-	var icon_rect := Rect2(r.position + Vector2(r.size.x * 0.5 - 24, 12), Vector2(48, 48))
-	var tex := _icon(up.icon_path)
+	# 图标（悬停轻微旋转 ±3°）
+	var ic := rr.position + Vector2(rr.size.x * 0.5, 44) + Vector2(0, _enter)
+	draw_circle(ic, 24.0, Color(UiKit.ACCENT.r, UiKit.ACCENT.g, UiKit.ACCENT.b, 0.10))
+	draw_set_transform(ic, deg_to_rad(float(_icon_rot[i])), Vector2.ONE)
+	var tex := UiKit.icon(up.icon_path)
 	if tex != null:
-		draw_texture_rect(tex, icon_rect, false)
+		var tint := Color(1, 1, 1, 1) if can else Color(0.62, 0.64, 0.70, 1)
+		draw_texture_rect(tex, Rect2(-18, -18, 36, 36), false, tint)
+	draw_set_transform(Vector2(0, _enter), 0.0, Vector2.ONE)
 
-	draw_string(GameConfig.ui_font, Vector2(r.position.x, r.position.y + 82), up.title,
-		HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 12, GameConfig.COL_TEXT)
-	draw_multiline_string(GameConfig.ui_font, Vector2(r.position.x + 10, r.position.y + 100),
-		up.desc, HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 20, 9, -1, GameConfig.COL_DIM)
-	draw_string(GameConfig.ui_font, Vector2(r.position.x, r.end.y - 12),
-		"%d 金币" % up.price, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 10,
-		GameConfig.COL_GOLD if affordable else Color(0.6, 0.35, 0.35))
-	draw_string(GameConfig.ui_font, Vector2(r.position.x, r.position.y - 4),
-		"[%d]" % (i + 1), HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 8, GameConfig.COL_DIM)
-	# 与已持有藏品能凑组合时给出暗示
+	UiKit.text_center(self, rr.get_center().x, rr.position.y + 86, up.title, UiKit.F_H3,
+		UiKit.TEXT if can else UiKit.TEXT_DIM)
+	UiKit.text_block(self, rr.position + Vector2(10, 98), up.desc, rr.size.x - 20,
+		UiKit.F_TINY, UiKit.TEXT_DIM if can else Color(0.62, 0.64, 0.70), 3)
+	UiKit.text_center(self, rr.get_center().x, rr.end.y - 12, "%d 金币" % up.price, UiKit.F_SMALL,
+		UiKit.ACCENT if can else UiKit.DANGER)
 	if _forms_combo(up.id):
-		draw_string(GameConfig.ui_font, Vector2(r.position.x, r.end.y + 11),
-			"★ 与已有藏品共鸣", HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 8,
-			Color(1.0, 0.82, 0.35))
+		UiKit.text_center(self, rr.get_center().x, rr.end.y - 2, "★ 与已有藏品共鸣",
+			UiKit.F_TINY, Color(0.85, 0.62, 0.12))
 
 
 func _forms_combo(uid: String) -> bool:
@@ -152,13 +212,3 @@ func _forms_combo(uid: String) -> bool:
 				(c["b"] == uid and GameState.upgrades.has(c["a"])):
 			return true
 	return false
-
-
-func _icon(path: String) -> Texture2D:
-	if _icon_cache.has(path):
-		return _icon_cache[path]
-	if not ResourceLoader.exists(path):
-		return null
-	var tex: Texture2D = load(path)
-	_icon_cache[path] = tex
-	return tex

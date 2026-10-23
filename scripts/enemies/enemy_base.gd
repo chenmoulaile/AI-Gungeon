@@ -5,6 +5,7 @@ class_name EnemyBase
 
 const BulletScript = preload("res://scripts/weapons/bullet.gd")
 const CoinScript = preload("res://scripts/systems/coin.gd")
+const TelegraphScript = preload("res://scripts/fx/telegraph.gd")
 
 signal died(enemy: Node)
 
@@ -31,6 +32,8 @@ var knock_vel: Vector2 = Vector2.ZERO
 var stun: float = 0.0
 var last_hit_tag: String = ""
 var hit_off: float = 0.0
+## 深度检索标记：标记期间受到的所有伤害 +15%
+var mark_t: float = 0.0
 
 
 func _ready() -> void:
@@ -77,6 +80,7 @@ func _physics_process(delta: float) -> void:
 	t += delta
 	contact_cd = maxf(0.0, contact_cd - delta)
 	stun = maxf(0.0, stun - delta)
+	mark_t = maxf(0.0, mark_t - delta)
 
 	if player == null or not is_instance_valid(player):
 		player = GameState.player
@@ -149,6 +153,8 @@ func take_damage(dmg: float, dir: Vector2 = Vector2.ZERO, tier: String = "medium
 		return
 	if tag != "":
 		last_hit_tag = tag
+	if mark_t > 0.0:
+		dmg *= 1.15
 	hp -= dmg
 	var preset := tier
 	if preset == "small":
@@ -180,8 +186,9 @@ func _die() -> void:
 	GameState.on_enemy_killed(last_hit_tag)
 	if GameState.player != null and is_instance_valid(GameState.player):
 		GameState.player.on_kill()
-	GameFeel.burst(global_position + Vector2(0, -radius * 0.5), accent,
-		20 if elite else 14, 150.0, 0.42)
+	# 碎成 6~8 个小方块，重力下坠 + 0.4s 淡出
+	var shard_n: int = 10 if elite else 8
+	GameFeel.shards(global_position + Vector2(0, -radius * 0.5), accent, shard_n, 160.0, 0.4)
 	GameFeel.screen_shake(0.18 if elite else 0.12)
 	_drop_coins()
 	died.emit(self)
@@ -223,6 +230,12 @@ func shoot_at(dir: Vector2, speed: float = 155.0, bullet_radius: float = 3.8,
 	b.tier = "medium"
 	b.global_position = global_position + dir.normalized() * (radius + 2.0)
 	b.prepare()
+	# 枪口弹道线：让玩家一眼看出这一发的来向
+	if GameState.bullets_root != null and is_instance_valid(GameState.bullets_root):
+		var tg = TelegraphScript.new()
+		GameState.bullets_root.add_child(tg)
+		tg.setup(b.global_position, b.global_position + dir.normalized() * 70.0, 0.14,
+			Color(1.0, 0.34, 0.40, 0.5), 1.0)
 
 
 # ---------------- 绘制 ----------------
@@ -236,6 +249,17 @@ func _draw() -> void:
 		var pulse: float = 0.35 + 0.2 * sin(t * 4.0)
 		draw_arc(Vector2.ZERO, radius + 5.0, 0.0, TAU, 24,
 			Color(1.0, 0.82, 0.35, pulse), 1.5, true)
+	# 深度检索标记：头顶蓝色三角，快消失时闪烁
+	if mark_t > 0.0:
+		var a: float = 1.0
+		if mark_t < 0.8:
+			a = 0.45 + 0.55 * absf(sin(t * 14.0))
+		var ty := -radius - 8.0
+		var tri := PackedVector2Array([
+			Vector2(0, ty - 4.0), Vector2(3.4, ty + 1.6), Vector2(-3.4, ty + 1.6)])
+		draw_colored_polygon(tri, Color(0.42, 0.68, 1.0, a))
+		draw_polyline(PackedVector2Array([tri[0], tri[1], tri[2], tri[0]]),
+			Color(0.16, 0.32, 0.62, a * 0.9), 1.0)
 
 
 func _draw_body() -> void:

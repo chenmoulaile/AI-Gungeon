@@ -30,12 +30,17 @@ var trauma_decay: float = 1.55
 var shake_strength: float = 7.5
 var shake_scale: float = 0.7
 var camera: Camera2D = null
+## 方向性震动：受击方向的反方向偏移，避免全向乱抖
+var shake_dir: Vector2 = Vector2.ZERO
+
+const PARTICLE_CAP := 200
 
 var _hitstop_token: int = 0
 var _hitstop_lock: float = 0.0
 var _bullet_pool: Array = []
 var _spark_pool: Array = []
 var _number_pool: Array = []
+var _particle_live: int = 0
 
 
 func _ready() -> void:
@@ -48,7 +53,13 @@ func _process(delta: float) -> void:
 		trauma = maxf(0.0, trauma - trauma_decay * delta)
 		if camera != null and is_instance_valid(camera):
 			var s: float = shake_strength * shake_scale * trauma * trauma
-			camera.offset = Vector2(randf_range(-s, s), randf_range(-s, s))
+			if shake_dir == Vector2.ZERO:
+				camera.offset = Vector2(randf_range(-s, s), randf_range(-s, s))
+			else:
+				# 沿受击反方向回弹 + 轻微垂直抖动
+				var back: float = s * randf_range(0.75, 1.0)
+				var side: float = s * 0.28 * randf_range(-1.0, 1.0)
+				camera.offset = shake_dir * back + Vector2(-shake_dir.y, shake_dir.x) * side
 	elif camera != null and is_instance_valid(camera) and camera.offset != Vector2.ZERO:
 		camera.offset = Vector2.ZERO
 
@@ -73,8 +84,21 @@ func hit_stop(duration: float, scale: float = 0.05) -> void:
 		Engine.time_scale = 1.0
 
 
-func screen_shake(amount: float) -> void:
+func screen_shake(amount: float, dir: Vector2 = Vector2.ZERO) -> void:
 	trauma = clampf(trauma + amount, 0.0, 1.0)
+	shake_dir = dir.normalized() if dir.length() > 0.01 else Vector2.ZERO
+
+
+## 重击 / Boss 阶段转换的短促色差
+func aberrate(strength: float = 2.6, dur: float = 0.15) -> void:
+	if ScreenFx != null:
+		ScreenFx.aberrate(strength, dur)
+
+
+## 全屏闪色：死亡闪红 / Boss 转换闪白
+func screen_flash(color: Color, dur: float = 0.2, peak: float = 0.55) -> void:
+	if ScreenFx != null:
+		ScreenFx.flash(color, dur, peak)
 
 
 ## 手柄震动：统一走这里，强度跟随屏幕震动滑块
@@ -123,13 +147,32 @@ func release_number(node: Node2D) -> void:
 
 func burst(pos: Vector2, color: Color, count: int = 6, speed: float = 90.0,
 		life: float = 0.32) -> void:
+	if _particle_live >= PARTICLE_CAP:
+		return
+	_particle_live += count
 	var node := _take_spark()
 	if node != null:
+		node.mode = "spark"
+		node.gravity = 0.0
+		node.burst(pos, color, count, speed, life)
+
+
+## 碎块：死亡碎裂，重力下坠 + 自旋 + 0.4s 淡出
+func shards(pos: Vector2, color: Color, count: int = 8, speed: float = 150.0,
+		life: float = 0.4) -> void:
+	if _particle_live >= PARTICLE_CAP:
+		return
+	_particle_live += count
+	var node := _take_spark()
+	if node != null:
+		node.mode = "shard"
+		node.gravity = 520.0
 		node.burst(pos, color, count, speed, life)
 
 
 func release_spark(node: Node2D) -> void:
 	if node != null and is_instance_valid(node):
+		_particle_live = maxi(0, _particle_live - int(node.particle_count()))
 		PoolManager.recycle(node)
 
 
@@ -170,6 +213,8 @@ func impact(preset: String, world_pos: Vector2, node: Node, dir: Vector2,
 	vibrate(preset)
 	if float(p["hitstop"]) > 0.0:
 		hit_stop(float(p["hitstop"]))
+	if preset == "heavy":
+		aberrate(2.6, 0.15)
 	if node != null and is_instance_valid(node) and dir != Vector2.ZERO:
 		knockback(node, dir, 46.0 if preset != "light" else 26.0)
 
