@@ -329,8 +329,11 @@ func _draw_card(i: int, r: Rect2) -> void:
 	UiKit.text(self, Vector2(tx, base + 44), "技能 · " + d.skill_name, UiKit.F_TINY, UiKit.TEXT)
 
 	if selected:
-		draw_circle(Vector2(rr.end.x - 12, rr.position.y + 12), 4.0, accent)
-		UiKit.text_center(self, rr.end.x - 12, rr.position.y + 15.4, "✓", 6, UiKit.TEXT_LIGHT)
+		var cc := Vector2(rr.end.x - 12, rr.position.y + 12)
+		draw_circle(cc, 5.0, accent)
+		draw_polyline(PackedVector2Array([
+			cc + Vector2(-2.4, 0.2), cc + Vector2(-0.6, 2.0), cc + Vector2(2.6, -2.0)]),
+			Color(1, 1, 1, 0.96), 1.6, true)
 
 
 func _sub_name(id: String) -> String:
