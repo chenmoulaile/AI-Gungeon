@@ -6,8 +6,8 @@ extends "res://scripts/weapons/weapon_base.gd"
 const BeamScript = preload("res://scripts/weapons/beam.gd")
 const DamageZone = preload("res://scripts/weapons/damage_zone.gd")
 const CHARGE_TIME := 1.5
-const MAX_GEN := 2          # gen 0/1/2 共 3 代
-const SPLIT_DMG := 0.7      # 每代衰减 30%
+var max_gen: int = 2
+var split_dmg: float = 0.7
 
 var charging: bool = false
 var charge_t: float = 0.0
@@ -15,6 +15,10 @@ var charge_t: float = 0.0
 
 func _ready() -> void:
 	mode_name = "推理链"
+	var ws: WeaponStats = Stats.weapon("reasoning_chain")
+	if ws != null:
+		max_gen = ws.split_gen
+		split_dmg = ws.split_decay
 
 
 func _process(delta: float) -> void:
@@ -28,7 +32,8 @@ func _process(delta: float) -> void:
 
 
 func fire(dir: Vector2) -> void:
-	var rate := 4.6 * fire_rate_mult()
+	var ws2: WeaponStats = Stats.weapon("reasoning_chain")
+	var rate := (ws2.fire_rate if ws2 != null else 4.6) * fire_rate_mult()
 	cooldown = 1.0 / rate
 	var origin: Vector2 = player.global_position + Vector2(0, -16) + dir * 10.0
 	_shoot_one(origin, dir)
@@ -38,16 +43,18 @@ func fire(dir: Vector2) -> void:
 
 
 func _shoot_one(origin: Vector2, dir: Vector2) -> void:
-	var b: Node = spawn_bullet(origin, dir, 6.0, 330.0, Color("#8ee6ff"),
+	var wsd: WeaponStats = Stats.weapon("reasoning_chain")
+	var b: Node = spawn_bullet(origin, dir, wsd.damage if wsd != null else 6.0,
+		wsd.bullet_speed if wsd != null else 330.0, Color("#8ee6ff"),
 		{"radius": 3.4, "gen": 0, "life": 2.0})
 	b.hit_enemy.connect(_on_bullet_hit)
 
 
 ## 命中分裂：每代衰减 30%，最多 3 代
 func _on_bullet_hit(enemy: Node, bullet: Node) -> void:
-	if bullet.gen >= MAX_GEN:
+	if bullet.gen >= max_gen:
 		return
-	var base_dmg: float = bullet.damage * SPLIT_DMG
+	var base_dmg: float = bullet.damage * split_dmg
 	# 藏品协同：裂开的小弹继承穿透
 	var inherit_pierce: int = 0
 	if bool(GameState.mods.get("split_inherit_pierce", false)):

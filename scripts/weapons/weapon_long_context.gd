@@ -8,8 +8,9 @@ const GROW_TIME := 1.0
 const RELEASE_CD := 1.2
 const MIN_WIDTH := 3.0
 const MAX_WIDTH := 13.0
-const MIN_DPS := 26.0
-const MAX_DPS := 78.0
+var min_dps: float = 26.0
+var max_dps: float = 78.0
+var release_cd: float = 1.2
 
 var beam: Node = null
 var grow: float = 0.0
@@ -19,6 +20,11 @@ var overloaded: bool = false
 
 func _ready() -> void:
 	mode_name = "长上下文"
+	var ws: WeaponStats = Stats.weapon("long_context")
+	if ws != null:
+		min_dps = ws.damage
+		max_dps = ws.beam_max_dps
+		release_cd = ws.release_cd
 
 
 func _process(delta: float) -> void:
@@ -43,11 +49,11 @@ func _process(delta: float) -> void:
 			overloaded = true
 		beam.length = 560.0
 		beam.width = lerpf(MIN_WIDTH, MAX_WIDTH, ratio) * (2.0 if overloaded else 1.0)
-		beam.dps = lerpf(MIN_DPS, MAX_DPS, ratio) * damage_mult() * (1.6 if overloaded else 1.0)
+		beam.dps = lerpf(min_dps, max_dps, ratio) * damage_mult() * (1.6 if overloaded else 1.0)
 		beam.set_beam(player.global_position + Vector2(0, -16), player.aim)
 		player.fire_anim = 0.1
 	elif beam != null:
-		var cd := RELEASE_CD * (1.5 if overloaded else 1.0)
+		var cd := release_cd * (1.5 if overloaded else 1.0)
 		_stop_beam()
 		cooldown = cd
 

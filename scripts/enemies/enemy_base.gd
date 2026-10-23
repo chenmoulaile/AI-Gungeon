@@ -30,6 +30,7 @@ var contact_cd: float = 0.0
 var knock_vel: Vector2 = Vector2.ZERO
 var stun: float = 0.0
 var last_hit_tag: String = ""
+var hit_off: float = 0.0
 
 
 func _ready() -> void:
@@ -158,8 +159,17 @@ func take_damage(dmg: float, dir: Vector2 = Vector2.ZERO, tier: String = "medium
 		crit, Color(2.8, 2.8, 2.8), accent.lightened(0.45))
 	if preset != "light" and not is_boss:
 		stun = 0.055
+	_shake_hit()
 	if hp <= 0.0:
 		_die()
+
+
+## 受击水平抖动 2~3px（Tween，不用手写插值）
+func _shake_hit() -> void:
+	var tw := create_tween()
+	tw.tween_property(self, "hit_off", 3.0, 0.03)
+	tw.tween_property(self, "hit_off", -2.5, 0.03)
+	tw.tween_property(self, "hit_off", 0.0, 0.02)
 
 
 func _die() -> void:
@@ -219,8 +229,9 @@ func shoot_at(dir: Vector2, speed: float = 155.0, bullet_radius: float = 3.8,
 func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.42))
 	draw_circle(Vector2(0, radius * 0.7), radius * 1.05, Color(0, 0, 0, 0.28))
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	draw_set_transform(Vector2(hit_off, 0), 0.0, Vector2.ONE)
 	_draw_body()
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if elite:
 		var pulse: float = 0.35 + 0.2 * sin(t * 4.0)
 		draw_arc(Vector2.ZERO, radius + 5.0, 0.0, TAU, 24,

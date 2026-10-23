@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="RelicStats" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/relic_stats.gd" id="1_s"]
+
+[resource]
+script = ExtResource("1_s")
+id = "ds_homing_split"
+trigger = "split_homing"
+value = 1.0
+tag = "追踪分裂"

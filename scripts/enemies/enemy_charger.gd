@@ -13,12 +13,13 @@ var _hit_wall: bool = false
 
 
 func _setup() -> void:
-	max_hp = 18.0 * GameState.enemy_scale()
+	var st: EnemyStats = Stats.enemy("charger")
+	max_hp = st.max_hp * GameState.enemy_scale()
 	hp = max_hp
-	speed = 46.0
+	speed = st.speed
 	radius = 10.0
-	contact_damage = 1
-	coin_value = 3
+	contact_damage = st.contact_damage
+	coin_value = st.coin_value
 	accent = Color("#ff5f4d")
 	timer = SeedManager.randf_range(0.4, 1.2)
 

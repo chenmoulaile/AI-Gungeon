@@ -148,6 +148,10 @@ func _update_phase() -> void:
 		summon_lock = 0.75 + 0.5
 		GameFeel.hit_stop(0.12, 0.05)
 		GameFeel.screen_shake(0.55)
+		# 闪白 1 帧后整体提饱和，暗示"变强了"
+		modulate = Color(3.0, 3.0, 3.0)
+		var tw := create_tween()
+		tw.tween_property(self, "modulate", Color(1.15, 0.92, 1.18), 0.25)
 		GameFeel.burst(global_position, Color(1.0, 0.35, 0.45), 16, 190.0, 0.5)
 		Sfx.play("boss", -2.0, 1.1)
 

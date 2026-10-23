@@ -11,12 +11,13 @@ var ring_mode: bool = false
 
 
 func _setup() -> void:
-	max_hp = 18.0 * GameState.enemy_scale()
+	var st: EnemyStats = Stats.enemy("spreader")
+	max_hp = st.max_hp * GameState.enemy_scale()
 	hp = max_hp
-	speed = 30.0
+	speed = st.speed
 	radius = 10.5
-	contact_damage = 1
-	coin_value = 4
+	contact_damage = st.contact_damage
+	coin_value = st.coin_value
 	accent = Color("#c76bff")
 	fire_cd = SeedManager.randf_range(1.2, 2.0)
 	ring_mode = GameState.floor_index >= 3

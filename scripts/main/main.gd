@@ -29,6 +29,8 @@ func show_select() -> void:
 	s.character_chosen.connect(_on_character_chosen)
 	s.open_collection.connect(show_collection)
 	s.open_training.connect(show_training)
+	s.resume_requested.connect(resume_run)
+	s.abandon_requested.connect(abandon_run)
 	_swap(s)
 
 
@@ -39,6 +41,22 @@ func _on_character_chosen(id: String, seed_text: String = "", difficulty: int = 
 	var g: Node = GameScene.instantiate()
 	g.run_over.connect(_on_run_over)
 	_swap(g)
+
+
+func resume_run() -> void:
+	var d := RunSave.load_run()
+	if d.is_empty():
+		show_select()
+		return
+	GameState.restore_run(d)
+	var g: Node = GameScene.instantiate()
+	g.run_over.connect(_on_run_over)
+	_swap(g)
+
+
+func abandon_run() -> void:
+	RunSave.clear()
+	show_select()
 
 
 func show_training() -> void:

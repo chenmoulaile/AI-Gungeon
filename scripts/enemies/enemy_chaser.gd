@@ -5,12 +5,13 @@ var _wobble: float = 0.0
 
 
 func _setup() -> void:
-	max_hp = 11.0 * GameState.enemy_scale()
+	var st: EnemyStats = Stats.enemy("chaser")
+	max_hp = st.max_hp * GameState.enemy_scale()
 	hp = max_hp
-	speed = 52.0 + 6.0 * float(GameState.floor_index - 1)
+	speed = st.speed + 6.0 * float(GameState.floor_index - 1)
 	radius = 9.0
-	contact_damage = 1
-	coin_value = 2
+	contact_damage = st.contact_damage
+	coin_value = st.coin_value
 	accent = Color("#ff7a9c")
 	_wobble = SeedManager.randf() * TAU
 

@@ -7,12 +7,13 @@ var can_split: bool = true
 
 
 func _setup() -> void:
-	max_hp = 30.0 * GameState.enemy_scale()
+	var st: EnemyStats = Stats.enemy("splitter")
+	max_hp = st.max_hp * GameState.enemy_scale()
 	hp = max_hp
-	speed = 24.0
+	speed = st.speed
 	radius = 13.0
-	contact_damage = 1
-	coin_value = 4
+	contact_damage = st.contact_damage
+	coin_value = st.coin_value
 	accent = Color("#7de0c0")
 
 

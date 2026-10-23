@@ -98,11 +98,11 @@ func roll_offers(n: int, owned: Array) -> Array:
 			for owned_id in owned:
 				var ou: Upgrade = upgrades.get(owned_id, null)
 				if ou != null and ou.char_tag == up.char_tag:
-					w = maxi(w, 2)
+					w = maxi(w, Stats.economy.char_weight if Stats.economy != null else 2)
 					break
 		for c in COMBOS:
 			if (c["a"] == id and owned.has(c["b"])) or (c["b"] == id and owned.has(c["a"])):
-				w = 3
+				w = Stats.economy.combo_weight if Stats.economy != null else 3
 				related = true
 		weighted.append({"id": id, "w": w})
 		if related:

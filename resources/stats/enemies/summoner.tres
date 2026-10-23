@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="EnemyStats" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/enemy_stats.gd" id="1_s"]
+
+[resource]
+script = ExtResource("1_s")
+enemy_id = "summoner"
+max_hp = 12.0
+speed = 34.0
+contact_damage = 1
+coin_value = 5
+attack_interval = 4.00
+warn_time = 0.50

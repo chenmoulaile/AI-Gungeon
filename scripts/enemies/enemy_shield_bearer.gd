@@ -11,12 +11,13 @@ var swing: float = 0.0
 
 
 func _setup() -> void:
-	max_hp = 26.0 * GameState.enemy_scale()
+	var st: EnemyStats = Stats.enemy("shield_bearer")
+	max_hp = st.max_hp * GameState.enemy_scale()
 	hp = max_hp
-	speed = 26.0
+	speed = st.speed
 	radius = 12.0
-	contact_damage = 1
-	coin_value = 5
+	contact_damage = st.contact_damage
+	coin_value = st.coin_value
 	accent = Color("#c9c2a8")
 	melee_cd = SeedManager.randf_range(0.6, 1.2)
 

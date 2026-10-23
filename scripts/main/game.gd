@@ -168,6 +168,7 @@ func _start_room(index: int) -> void:
 		hud.show_toast("B%d · 房间 %d" % [GameState.floor_index, index], 1.4)
 		_spawn_wave()
 	ChallengeManager.on_room_start(GameState.floor_index)
+	RunSave.save_run()
 	if tutorial != null and is_instance_valid(tutorial):
 		tutorial.on_room_start(index)
 
@@ -317,6 +318,8 @@ func _on_room_cleared() -> void:
 	if room != null and is_instance_valid(room):
 		room.open_door()
 	var bonus := 4
+	if Stats.economy != null:
+		bonus = Stats.economy.room_clear_coins
 	if room_kind == Kind.BREATHER:
 		bonus = 12
 	GameState.add_coins(bonus)
@@ -337,7 +340,7 @@ func _on_boss_dead() -> void:
 		if is_instance_valid(e):
 			e.queue_free()
 	alive_count = 0
-	GameState.add_coins(25)
+	GameState.add_coins(Stats.economy.boss_clear_coins if Stats.economy != null else 25)
 	room_cleared = true
 	if room != null and is_instance_valid(room):
 		room.open_door()
@@ -422,6 +425,7 @@ func _on_run_ended() -> void:
 			img.save_png("user://last_frame.png")
 	MetaProgress.finish_run(GameState.char_id, GameState.floor_index,
 		GameState.run_cleared, GameState.run_time, SeedManager.difficulty)
+	RunSave.clear()
 	await get_tree().create_timer(1.1).timeout
 	if not is_inside_tree():
 		return

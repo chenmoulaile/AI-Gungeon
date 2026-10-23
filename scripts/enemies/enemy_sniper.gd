@@ -12,12 +12,13 @@ var aim_dir: Vector2 = Vector2.RIGHT
 
 
 func _setup() -> void:
-	max_hp = 11.0 * GameState.enemy_scale()
+	var st: EnemyStats = Stats.enemy("sniper")
+	max_hp = st.max_hp * GameState.enemy_scale()
 	hp = max_hp
-	speed = 44.0
+	speed = st.speed
 	radius = 9.0
-	contact_damage = 1
-	coin_value = 4
+	contact_damage = st.contact_damage
+	coin_value = st.coin_value
 	accent = Color("#ff8fb1")
 	timer = SeedManager.randf_range(1.0, 2.0)
 

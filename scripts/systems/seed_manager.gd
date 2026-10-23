@@ -44,6 +44,22 @@ func set_difficulty(d: int) -> void:
 
 
 func diff(key: String) -> float:
+	var d: DifficultyConfig = Stats.difficulty if Stats != null else null
+	if d != null:
+		var arr: Array = []
+		match key:
+			"hp":
+				arr = d.hp_mult
+			"dmg":
+				arr = d.dmg_mult
+			"bullet":
+				arr = d.bullet_mult
+			"coin":
+				arr = d.coin_mult
+			"wave":
+				arr = d.extra_waves
+		if arr.size() > difficulty:
+			return float(arr[difficulty])
 	return float(DIFFICULTY_PARAMS[difficulty].get(key, 1.0))
 
 

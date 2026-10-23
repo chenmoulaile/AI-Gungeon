@@ -12,12 +12,13 @@ var spin: float = 0.0
 
 
 func _setup() -> void:
-	max_hp = 14.0 * GameState.enemy_scale()
+	var st: EnemyStats = Stats.enemy("shooter")
+	max_hp = st.max_hp * GameState.enemy_scale()
 	hp = max_hp
-	speed = 38.0
+	speed = st.speed
 	radius = 9.5
-	contact_damage = 1
-	coin_value = 3
+	contact_damage = st.contact_damage
+	coin_value = st.coin_value
 	accent = Color("#ff9f43")
 	fire_cd = SeedManager.randf_range(1.0, 1.8)
 	if GameState.floor_index >= 2:

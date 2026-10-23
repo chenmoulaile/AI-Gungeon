@@ -78,6 +78,28 @@ func start_run(id: String, seed_text: String = "") -> void:
 	upgrades_changed.emit()
 
 
+## 从存档恢复（不重新抽种子/挑战）
+func restore_run(d: Dictionary) -> void:
+	char_id = String(d.get("char", "deepseek"))
+	char_data = load_character(char_id)
+	SeedManager.difficulty = int(d.get("difficulty", 1))
+	SeedManager.seed_string = String(d.get("seed", ""))
+	SeedManager.rng.seed = hash(SeedManager.seed_string)
+	floor_index = int(d.get("floor", 1))
+	room_index = int(d.get("room", 1))
+	coins = int(d.get("coins", 0))
+	kills = int(d.get("kills", 0))
+	run_time = float(d.get("time", 0.0))
+	upgrades = d.get("upgrades", []).duplicate()
+	combos = d.get("combos", []).duplicate()
+	recalc_stats()
+	hp = clampi(int(d.get("hp", max_hp)), 1, max_hp)
+	run_cleared = false
+	coins_changed.emit(coins)
+	hp_changed.emit(hp, max_hp)
+	upgrades_changed.emit()
+
+
 func load_character(id: String) -> CharacterData:
 	var path := "res://resources/characters/%s.tres" % id
 	if ResourceLoader.exists(path):
@@ -158,19 +180,11 @@ func _recalc_mods() -> void:
 		m["low_hp_damage"] = 0.25
 	if upgrades.has("scholar_page"):
 		m["room_clear_heal"] = 1
-	# 质变型藏品
-	if upgrades.has("ds_homing_split"):
-		m["split_homing"] = true
-	if upgrades.has("ds_burn_zone"):
-		m["beam_burn"] = true
-	if upgrades.has("gpt_echo_clone"):
-		m["echo_clone"] = true
-	if upgrades.has("gpt_voice_haste"):
-		m["voice_haste"] = true
-	if upgrades.has("cl_break_burst"):
-		m["shield_break_burst"] = true
-	if upgrades.has("cl_overload"):
-		m["beam_overload"] = true
+	# 质变型藏品：钩子参数来自 resources/relics/*.tres
+	for rs in Stats.relics:
+		var r: RelicStats = rs
+		if r != null and upgrades.has(r.id) and m.has(r.trigger):
+			m[r.trigger] = true if r.value >= 1.0 else r.value
 	# 由数值改为条件触发的四件
 	if upgrades.has("sharp_round"):
 		m["focus_crit_at"] = 3
@@ -238,6 +252,7 @@ func add_upgrade(uid: String) -> Array:
 		return []
 	upgrades.append(uid)
 	MetaProgress.see_relic(uid)
+	RunSave.save_run()
 	var new_combos: Array = []
 	var found: Array = UpgradeDB.detect_combos(upgrades)
 	for cname in found:

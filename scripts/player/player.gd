@@ -43,6 +43,7 @@ var hit_chain: int = 0
 var hit_chain_t: float = 0.0
 var roll_speed_t: float = 0.0
 var _low_hp_said: bool = false
+var _shield_flash: float = 0.0
 
 var _blink: float = 0.0
 var _ghost_t: float = 0.0
@@ -54,8 +55,11 @@ func _ready() -> void:
 	add_to_group("player")
 	char_id = GameState.char_id
 	data = GameState.char_data
-	max_hp = GameState.max_hp
-	hp = GameState.hp
+	var cs: CharacterStats = Stats.char(char_id)
+	if cs != null:
+		max_hp = cs.max_hp + int(GameState.stat("max_hp_bonus", 0))
+	GameState.max_hp = max_hp
+	hp = GameState.hp if GameState.hp > 0 else max_hp
 	_build_nodes()
 	_build_weapon()
 	GameState.player = self
@@ -150,7 +154,11 @@ func _physics_process(delta: float) -> void:
 		_spawn_ghost(delta)
 	else:
 		var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
-		var spd: float = GameConfig.PLAYER_SPEED * GameState.stat("move_speed", 1.0) * move_mult
+		var base_spd: float = GameConfig.PLAYER_SPEED
+		var cs2: CharacterStats = Stats.char(char_id)
+		if cs2 != null:
+			base_spd = cs2.move_speed
+		var spd: float = base_spd * GameState.stat("move_speed", 1.0) * move_mult
 		if roll_speed_t > 0.0:
 			spd *= 1.0 + float(GameState.mods.get("roll_speed", 0.0))
 		var target := input * spd
@@ -172,6 +180,7 @@ func _tick_timers(delta: float) -> void:
 	fire_anim = maxf(0.0, fire_anim - delta)
 	shield_t = maxf(0.0, shield_t - delta)
 	hurt_stun = maxf(0.0, hurt_stun - delta)
+	_shield_flash = maxf(0.0, _shield_flash - delta)
 	roll_speed_t = maxf(0.0, roll_speed_t - delta)
 	if hit_chain_t > 0.0:
 		hit_chain_t -= delta
@@ -265,7 +274,11 @@ func _try_roll() -> void:
 	var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	roll_dir = input.normalized() if input.length() > 0.1 else aim
 	roll_t = GameConfig.ROLL_TIME
-	roll_cd = GameConfig.ROLL_CD * GameState.stat("roll_cd_mult", 1.0)
+	var rcd: float = GameConfig.ROLL_CD
+	var cs3: CharacterStats = Stats.char(char_id)
+	if cs3 != null:
+		rcd = cs3.roll_cd
+	roll_cd = rcd * GameState.stat("roll_cd_mult", 1.0)
 	grant_invuln(GameConfig.ROLL_TIME + 0.02)
 	if anim.sprite_frames.has_animation("roll"):
 		anim.play("roll")
@@ -311,6 +324,7 @@ func try_absorb_bullet() -> bool:
 	if shield_hits <= 0:
 		return false
 	shield_hits -= 1
+	_shield_flash = 0.12
 	GameState.heal(2)
 	hp = GameState.hp
 	GameFeel.burst(global_position + Vector2(0, -14), Color(1.0, 0.85, 0.45), 5, 90.0, 0.25)
@@ -386,12 +400,18 @@ func take_damage(amount: int) -> void:
 	hp -= amount
 	GameState.hp = maxi(0, hp)
 	GameState.hp_changed.emit(GameState.hp, GameState.max_hp)
+	RunSave.note_hp(GameState.hp)
 	# 受击硬直：不接受翻滚，但仍然可以移动
 	hurt_stun = HURT_STUN
 	ChallengeManager.on_damage()
 	InputBuffer.clear("roll")
 
 	GameFeel.flash(anim, Color(2.6, 0.6, 0.7), 0.14)
+	# 后仰 3px 再回弹
+	anim.position = Vector2(-3.0 * float(facing), 0)
+	var tw := anim.create_tween()
+	tw.tween_property(anim, "position", Vector2.ZERO, 0.16)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	GameFeel.screen_shake(0.45)
 	GameFeel.hit_stop(0.08, 0.06)
 	GameFeel.vibrate("light")
@@ -452,8 +472,18 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	if shield_hits > 0:
 		var a: float = 0.35 + 0.25 * sin(Time.get_ticks_msec() / 90.0)
+		if _shield_flash > 0.0:
+			a = 1.0
 		draw_circle(Vector2(0, -14), 26.0, Color(0.98, 0.75, 0.35, 0.10))
 		draw_arc(Vector2(0, -14), 26.0, 0.0, TAU, 32, Color(0.98, 0.78, 0.4, a), 2.0, true)
+		# 六边形边框：展开时从中心扩散
+		var k: float = clampf((3.0 - shield_t) / 0.3, 0.0, 1.0)
+		var hex_r: float = 26.0 * (0.35 + 0.65 * k)
+		var hex := PackedVector2Array()
+		for i in 7:
+			var ang2 := TAU * float(i % 6) / 6.0 - PI / 2.0
+			hex.append(Vector2(0, -14) + Vector2(cos(ang2), sin(ang2)) * hex_r)
+		draw_polyline(hex, Color(1.0, 0.86, 0.5, 0.35 + 0.5 * _shield_flash / 0.12), 1.5)
 		for i in shield_hits:
 			var ang := TAU * i / 6.0
 			draw_circle(Vector2(0, -14) + Vector2(cos(ang), sin(ang)) * 26.0, 1.8,

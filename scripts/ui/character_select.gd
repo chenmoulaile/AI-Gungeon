@@ -4,6 +4,8 @@ extends Control
 signal character_chosen(id: String)
 signal open_collection
 signal open_training
+signal resume_requested
+signal abandon_requested
 
 const IDS := ["deepseek", "gpt", "claude"]
 const CARD_W := 186.0
@@ -20,6 +22,8 @@ var _focus: int = 0
 var seed_text: String = ""
 var _difficulty: int = 1
 var _editing: bool = false
+var _has_save: bool = false
+var _confirm_abandon: float = 0.0
 
 
 func _ready() -> void:
@@ -32,6 +36,7 @@ func _ready() -> void:
 		var p := "res://assets/portraits/%s_full.png" % id
 		_tex.append(load(p) if ResourceLoader.exists(p) else null)
 		_intro.append(DialogueManager.pick(id, "intro"))
+	_has_save = RunSave.has_save()
 	_difficulty = clampi(Settings.difficulty, 0, 2)
 	SeedManager.difficulty = _difficulty
 	_layout()
@@ -46,6 +51,7 @@ func _layout() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
+	_confirm_abandon = maxf(0.0, _confirm_abandon - delta)
 	var mouse := get_local_mouse_position()
 	_hover = -1
 	for i in _rects.size():
@@ -112,6 +118,18 @@ func _unhandled_input(event: InputEvent) -> void:
 			Sfx.play("ui")
 			open_training.emit()
 			get_viewport().set_input_as_handled()
+		elif event.physical_keycode == KEY_V and _has_save:
+			Sfx.play("ui")
+			resume_requested.emit()
+			get_viewport().set_input_as_handled()
+		elif event.physical_keycode == KEY_X and _has_save:
+			if _confirm_abandon > 0.0:
+				Sfx.play("ui")
+				abandon_requested.emit()
+			else:
+				_confirm_abandon = 2.0
+				Sfx.play("hurt", -8.0, 1.4)
+			get_viewport().set_input_as_handled()
 
 
 func _diff_rect(i: int) -> Rect2:
@@ -175,6 +193,13 @@ func _draw() -> void:
 		Color(1.0, 0.88, 0.5) if _editing else GameConfig.COL_DIM)
 	draw_string(GameConfig.ui_font, Vector2(GameConfig.BASE_W - 10, 323), "训练场 [T]",
 		HORIZONTAL_ALIGNMENT_RIGHT, -1, 9, Color(0.6, 0.8, 1.0))
+	if _has_save:
+		draw_string(GameConfig.ui_font, Vector2(GameConfig.BASE_W - 10, 14),
+			"继续上一局 [V]", HORIZONTAL_ALIGNMENT_RIGHT, -1, 9, Color(0.7, 1.0, 0.75))
+		draw_string(GameConfig.ui_font, Vector2(GameConfig.BASE_W - 10, 26),
+			("再按一次 X 确认放弃" if _confirm_abandon > 0.0 else "放弃当前局 [X]"),
+			HORIZONTAL_ALIGNMENT_RIGHT, -1, 8,
+			Color(1.0, 0.45, 0.45) if _confirm_abandon > 0.0 else Color(0.6, 0.5, 0.5))
 
 
 func _draw_card(i: int, r: Rect2) -> void:

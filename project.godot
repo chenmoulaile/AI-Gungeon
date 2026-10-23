@@ -15,6 +15,8 @@ boot_splash/bg_color=Color(0.043, 0.05, 0.075, 1)
 
 GameConfig="*res://scripts/systems/game_config.gd"
 SeedManager="*res://scripts/systems/seed_manager.gd"
+Stats="*res://scripts/systems/stats_db.gd"
+RunSave="*res://scripts/systems/run_save.gd"
 Settings="*res://scripts/systems/settings.gd"
 MetaProgress="*res://scripts/systems/meta_progress.gd"
 InputBuffer="*res://scripts/systems/input_buffer.gd"

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="WeaponStats" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/weapon_stats.gd" id="1_s"]
+
+[resource]
+script = ExtResource("1_s")
+weapon_id = "multimodal"
+damage = 4.2
+fire_rate = 8.50
+bullet_speed = 430.0
+bullet_count = 1
+split_gen = 0
+split_decay = 1.00
+mode2_rate = 2.40
+mode2_damage = 3.6
+mode3_damage = 11.0
+beam_max_dps = 0.0
+release_cd = 0.00

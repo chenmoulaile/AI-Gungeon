@@ -21,6 +21,8 @@ func on_switch_mode() -> void:
 	mode_name = MODE_NAMES[mode]
 	if player != null and is_instance_valid(player):
 		player.fire_anim = 0.16
+		var cols := [Color("#6fa8ff"), Color("#c9a6ff"), Color("#ffb066")]
+		GameFeel.flash(player.anim, cols[mode], 0.14)
 	# 藏品：切换瞬间留下残影，0.25s 后替玩家打一次旧模式
 	if bool(GameState.mods.get("echo_clone", false)) and player.anim != null:
 		var tex: Texture2D = player.anim.sprite_frames.get_frame_texture(
@@ -61,24 +63,31 @@ func fire(dir: Vector2) -> void:
 
 # ---------------- A 文本：高射速单发 ----------------
 func _fire_text(dir: Vector2) -> void:
-	cooldown = 1.0 / (8.5 * fire_rate_mult())
+	var ws: WeaponStats = Stats.weapon("multimodal")
+	var rate: float = ws.fire_rate if ws != null else 8.5
+	var dmg: float = ws.damage if ws != null else 4.2
+	var spd: float = ws.bullet_speed if ws != null else 430.0
+	cooldown = 1.0 / (rate * fire_rate_mult())
 	var origin: Vector2 = player.global_position + Vector2(0, -16) + dir * 10.0
-	_shot(origin, dir, 4.2, 430.0, 2.7)
+	_shot(origin, dir, dmg, spd, 2.7)
 	for off in proj_offsets():
-		_shot(origin, dir.rotated(off), 4.2, 430.0, 2.7)
+		_shot(origin, dir.rotated(off), dmg, spd, 2.7)
 	Sfx.play("shoot", -8.0, SeedManager.randf_range(1.0, 1.15))
 
 
 # ---------------- B 图像：5 发扇形 ----------------
 func _fire_image(dir: Vector2) -> void:
-	cooldown = 1.0 / (2.4 * fire_rate_mult())
+	var ws: WeaponStats = Stats.weapon("multimodal")
+	var rate: float = ws.mode2_rate if ws != null else 2.4
+	var dmg: float = ws.mode2_damage if ws != null else 3.6
+	cooldown = 1.0 / (rate * fire_rate_mult())
 	var origin: Vector2 = player.global_position + Vector2(0, -16) + dir * 10.0
 	var spread := 34.0
 	for i in 5:
 		var t := float(i) / 4.0 - 0.5
-		_shot(origin, dir.rotated(deg_to_rad(spread * t)), 3.6, 340.0, 3.0)
+		_shot(origin, dir.rotated(deg_to_rad(spread * t)), dmg, 340.0, 3.0)
 	for off in proj_offsets():
-		_shot(origin, dir.rotated(off), 3.6, 340.0, 3.0)
+		_shot(origin, dir.rotated(off), dmg, 340.0, 3.0)
 	Sfx.play("shoot", -6.0, 0.9)
 
 
@@ -91,7 +100,8 @@ func _fire_voice(dir: Vector2) -> void:
 	beam.dir = dir
 	beam.length = 104.0
 	beam.width = 34.0
-	beam.dps = 11.0 * damage_mult()
+	var wsv: WeaponStats = Stats.weapon("multimodal")
+	beam.dps = (wsv.mode3_damage if wsv != null else 11.0) * damage_mult()
 	beam.color = Color("#c9b6ff")
 	beam.tag = "voice"
 	beam.life = 0.14

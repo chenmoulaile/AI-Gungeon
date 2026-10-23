@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="CharacterStats" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/character_stats.gd" id="1_s"]
+
+[resource]
+script = ExtResource("1_s")
+char_id = "deepseek"
+max_hp = 6
+move_speed = 120.0
+roll_cd = 0.80
+skill_cd = 9.0
+passive_power = 1.00
