@@ -75,7 +75,28 @@ func _run() -> void:
 	await _frames(92)
 	await _shot("skill_beam")
 
-	# Boss 房
+	# 三层主题
+	GameState.floor_index = 1
+	g._start_room(1)
+	await _wait(1.6)
+	await _shot("floor1")
+	GameState.floor_index = 2
+	g._start_room(1)
+	await _wait(1.6)
+	await _shot("floor2")
+	GameState.floor_index = 3
+	g._start_room(1)
+	await _wait(1.6)
+	await _shot("floor3")
+	# 层间转场卡片
+	var card = load("res://scripts/ui/floor_card.gd").new()
+	card.setup(2)
+	g.ui_layer.add_child(card)
+	await _wait(0.55)
+	await _shot("floor_card")
+	card.queue_free()
+
+	# Boss 房（沿用第 3 层主题的强化版）
 	g._start_room(5)
 	await _frames(20)
 	await _shot("boss_intro")

@@ -32,6 +32,7 @@ const BossIntroScene = preload("res://scenes/ui/boss_intro.tscn")
 const PortraitDialogScene = preload("res://scenes/ui/portrait_dialog.tscn")
 const SettingsScene = preload("res://scenes/ui/settings_menu.tscn")
 const TutorialScript = preload("res://scripts/ui/tutorial_hint.gd")
+const FloorCardScript = preload("res://scripts/ui/floor_card.gd")
 
 enum Kind {SMALL, MIXED, ELITE, BREATHER, CLIMAX, BOSS}
 
@@ -157,11 +158,18 @@ func _start_room(index: int) -> void:
 	if room != null and is_instance_valid(room):
 		room.queue_free()
 	room = RoomScene.instantiate()
+	room.is_boss = is_boss_room
 	add_child(room)
 	move_child(room, 0)
 
 	player.global_position = room.spawn_point(0)
 	player.grant_invuln(1.0)
+	# 角色手电亮度跟随层主题（浅色地面不需要那么亮的光池）
+	if player.key_light != null and is_instance_valid(player.key_light):
+		var th: Dictionary = FloorTheme.get_theme(GameState.floor_index)
+		player.key_light.energy = float(th.get("light_energy", 0.6))
+		var lum := float(th.get("sprite_lum", 1.2))
+		player.anim.self_modulate = Color(lum, lum, lum * 1.04)
 
 	if is_boss_room:
 		MusicManager.play("boss")
@@ -384,8 +392,10 @@ func _advance() -> void:
 	if is_boss_room:
 		GameState.floor_index += 1
 		GameState.add_coins(10)
-		hud.show_toast("进入 B%d 层（敌人强度 +20%%）" % GameState.floor_index, 2.0)
 		await get_tree().create_timer(0.9).timeout
+		if not is_inside_tree():
+			return
+		await _floor_interlude()
 		if not is_inside_tree():
 			return
 		_start_room(1)
@@ -393,6 +403,20 @@ func _advance() -> void:
 		_open_shop()
 	else:
 		_start_room(idx + 1)
+
+
+## 层间转场：层名 + 序号，1.2s 仪式感，结束后进该层第一间房
+func _floor_interlude() -> void:
+	ScreenFx.set_dense(0.0)
+	var card = FloorCardScript.new()
+	card.name = "FloorCard"
+	ui_layer.add_child(card)
+	card.setup(GameState.floor_index)
+	Sfx.play("floor_shift", -4.0, 1.0)
+	await card.finished
+	if is_instance_valid(card):
+		card.queue_free()
+	await get_tree().create_timer(0.15).timeout
 
 
 func _open_shop() -> void:

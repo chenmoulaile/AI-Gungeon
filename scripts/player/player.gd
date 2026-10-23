@@ -26,6 +26,7 @@ var recoil: Node2D
 var breath: Node2D
 var accent: Node2D
 var gun: Node2D
+var key_light: PointLight2D
 
 var _move_tween: Tween = null
 var _breath_tween: Tween = null
@@ -122,6 +123,11 @@ func _build_nodes() -> void:
 	anim.self_modulate = Color(1.32, 1.32, 1.38)
 	anim.light_mask = 0   # 角色不参与 2D 光照，避免被自己的点光源打爆成白色
 	anim.play("idle")
+	# 暗色描边：浅色地面上白色系角色也能和背景分开
+	if ResourceLoader.exists("res://shaders/sprite_outline.gdshader"):
+		var om := ShaderMaterial.new()
+		om.shader = load("res://shaders/sprite_outline.gdshader")
+		anim.material = om
 	breath.add_child(anim)
 
 	# 配饰：鲸尾 / 龙翼 / 向日葵（程序化绘制，Tween 驱动）
@@ -152,6 +158,7 @@ func _build_nodes() -> void:
 	light.shadow_enabled = true
 	light.shadow_filter = Light2D.SHADOW_FILTER_NONE
 	add_child(light)
+	key_light = light
 
 	cam = Camera2D.new()
 	cam.position_smoothing_enabled = true
