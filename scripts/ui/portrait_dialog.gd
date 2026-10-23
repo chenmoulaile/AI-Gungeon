@@ -96,27 +96,26 @@ func _advance() -> void:
 
 
 func _draw() -> void:
-	var pr := Rect2(28 + _slide * 240.0, 34, 208, 208)
+	var pr := Rect2(24 + _slide * 240.0, 30, 200, 200)
 	if not non_blocking:
-		draw_rect(Rect2(0, 0, GameConfig.BASE_W, GameConfig.BASE_H), Color(0.01, 0.02, 0.04, 0.74))
-		draw_rect(pr.grow(3), Color(0, 0, 0, 0.5))
+		draw_rect(Rect2(0, 0, GameConfig.BASE_W, GameConfig.BASE_H), Color(0.06, 0.09, 0.16, 0.55))
+		# 立绘卡片
+		draw_style_box(UiKit.box(Color(1, 1, 1, 0.92), 12, Color(1, 1, 1, 0.85), 1, true), pr)
 		if _tex != null:
-			draw_texture_rect(_tex, pr, false)
-		var box := Rect2(250, 44, GameConfig.BASE_W - 280, 196)
-		draw_rect(box, Color(0.07, 0.08, 0.11, 0.94))
-		draw_rect(box, Color(0.45, 0.5, 0.65, 0.8), false, 1.0)
-		draw_line(Vector2(box.position.x, box.position.y + 26),
-			Vector2(box.end.x, box.position.y + 26), Color(0.3, 0.35, 0.45), 1.0)
-		if GameConfig.ui_font != null:
-			draw_string(GameConfig.ui_font, box.position + Vector2(12, 18), speaker,
-				HORIZONTAL_ALIGNMENT_LEFT, -1, 12, Color(1.0, 0.86, 0.45))
-			var full: String = str(lines[line_index]) if line_index < lines.size() else ""
-			draw_multiline_string(GameConfig.ui_font, box.position + Vector2(14, 52),
-				full.substr(0, int(typed)), HORIZONTAL_ALIGNMENT_LEFT, box.size.x - 28,
-				11, -1, GameConfig.COL_TEXT)
-			if fmod(_blink, 0.9) < 0.55:
-				draw_string(GameConfig.ui_font, Vector2(box.end.x - 92, box.end.y - 10),
-					"空格 / 点击 继续", HORIZONTAL_ALIGNMENT_LEFT, -1, 9, GameConfig.COL_DIM)
+			draw_texture_rect(_tex, pr.grow(-4), false)
+		var box := Rect2(236, 40, GameConfig.BASE_W - 262, 190)
+		draw_style_box(UiKit.box(Color(0.98, 0.99, 1.0, 0.97), 12, Color(1, 1, 1, 0.9), 1, true), box)
+		draw_style_box(UiKit.box(Color(0, 0, 0, 0), 12,
+			Color(UiKit.ACCENT.r, UiKit.ACCENT.g, UiKit.ACCENT.b, 0.35), 1, false), box)
+		draw_line(Vector2(box.position.x + 12, box.position.y + 30),
+			Vector2(box.end.x - 12, box.position.y + 30), UiKit.LINE, 1.0)
+		UiKit.text(self, box.position + Vector2(14, 21), speaker, UiKit.F_H3, UiKit.ACCENT)
+		var full: String = str(lines[line_index]) if line_index < lines.size() else ""
+		UiKit.text_block(self, box.position + Vector2(14, 52),
+			full.substr(0, int(typed)), box.size.x - 28, UiKit.F_BODY, UiKit.TEXT, 5)
+		if fmod(_blink, 0.9) < 0.55:
+			UiKit.text_right(self, box.end.x - 14, box.end.y - 10, "空格 / 点击 继续",
+				UiKit.F_TINY, UiKit.TEXT_DIM)
 		return
 
 	# 非阻塞模式：贴底小条，位置上移避开右下角技能环
@@ -126,11 +125,7 @@ func _draw() -> void:
 	if _tex != null:
 		draw_texture_rect_region(_tex, Rect2(26, bar_y + 4, 22, 22),
 			Rect2(120, 40, 800, 800))
-	if GameConfig.ui_font == null:
-		return
-	draw_string(GameConfig.ui_font, Vector2(56, bar_y + 12), speaker,
-		HORIZONTAL_ALIGNMENT_LEFT, -1, 8, Color(0.78, 0.55, 0.12))
+	UiKit.text(self, Vector2(56, bar_y + 12), speaker, UiKit.F_TINY, Color(0.78, 0.55, 0.12))
 	var full2: String = str(lines[line_index]) if line_index < lines.size() else ""
-	draw_multiline_string(GameConfig.ui_font, Vector2(56, bar_y + 24),
-		full2.substr(0, int(typed)), HORIZONTAL_ALIGNMENT_LEFT, GameConfig.BASE_W - 90,
-		8, 1, UiKit.TEXT)
+	UiKit.text_block(self, Vector2(56, bar_y + 24),
+		full2.substr(0, int(typed)), GameConfig.BASE_W - 90, UiKit.F_BODY, UiKit.TEXT, 1)

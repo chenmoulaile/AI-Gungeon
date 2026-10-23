@@ -84,7 +84,10 @@ func say_text(char_id: String, text: String, hold: float = 2.2) -> void:
 	dlg.non_blocking = true
 	dlg.auto_delay = hold
 	layer.add_child(dlg)
-	dlg.setup("res://assets/portraits/%s_full.png" % char_id, display_name(char_id), [text])
+	var portrait := "res://assets/portraits/%s_bust.png" % char_id
+	if not ResourceLoader.exists(portrait):
+		portrait = "res://assets/portraits/%s_full.png" % char_id
+	dlg.setup(portrait, display_name(char_id), [text])
 
 
 ## 清掉所有非阻塞台词条（切场景 / 打开商店时调用，避免盖住面板）

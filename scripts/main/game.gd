@@ -274,7 +274,10 @@ func _show_intro_dialog() -> void:
 	var dlg = PortraitDialogScene.instantiate()
 	dlg.process_mode = Node.PROCESS_MODE_ALWAYS
 	ui_layer.add_child(dlg)
-	dlg.setup("res://assets/portraits/%s_full.png" % GameState.char_id, d.display_name,
+	var portrait := "res://assets/portraits/%s_bust.png" % GameState.char_id
+	if not ResourceLoader.exists(portrait):
+		portrait = "res://assets/portraits/%s_full.png" % GameState.char_id
+	dlg.setup(portrait, d.display_name,
 		[d.blurb, "武器「%s」：%s" % [d.weapon_name, d.weapon_desc],
 		 "技能「%s」：%s" % [d.skill_name, d.skill_desc],
 		 "清空 5 个房间，第 5 间是 Boss。走吧。"])

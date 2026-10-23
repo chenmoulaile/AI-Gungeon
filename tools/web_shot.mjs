@@ -1,122 +1,86 @@
-// Web 版自检截图：用本机 Chrome 无头模式打开本地服务器页面并截图
-// 用法：node tools/web_shot.mjs [outPrefix]
-import pw from "file:///C:/Users/Chenkx/.workbuddy-ai/binaries/node/workspace/node_modules/playwright-core/index.js";
-const { chromium } = pw;
+// Web 版自检：无头 Chrome 打开本地服务器页面，等真实时间后截图
+// 用法：node tools/web_shot.mjs [输出前缀] [等待秒数]
+import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 
-const OUT = process.argv[2] || "tests/_web";
-const URL = "http://127.0.0.1:8765/index.html";
-
+const OUT = process.argv[2] || "D:/DevTools/cache/temp/web";
+const WAIT = Number(process.argv[3] || 12);
+const URL_PAGE = "http://127.0.0.1:8765/index.html";
 const CHROME = "C:/Program Files/Google/Chrome/Application/chrome.exe";
-const EDGE = "C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe";
+const PORT = 9333;
 
-const browser = await chromium.launch({
-  executablePath: CHROME,
-  headless: true,
-  args: [
-    "--use-gl=angle",
-    "--use-angle=swiftshader",
-    "--enable-unsafe-swiftshader",
-    "--disable-gpu-sandbox",
-    "--no-sandbox",
-  ],
+const chrome = spawn(CHROME, [
+  "--headless=new",
+  `--remote-debugging-port=${PORT}`,
+  "--enable-unsafe-swiftshader",
+  "--use-gl=angle",
+  "--use-angle=swiftshader",
+  "--no-sandbox",
+  "--disable-gpu-sandbox",
+  "--window-size=1280,720",
+  "--hide-scrollbars",
+  "about:blank",
+], { stdio: "ignore" });
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function getWs() {
+  for (let i = 0; i < 40; i++) {
+    try {
+      const res = await fetch(`http://127.0.0.1:${PORT}/json/list`);
+      const list = await res.json();
+      const page = list.find((t) => t.type === "page");
+      if (page) return page.webSocketDebuggerUrl;
+    } catch {}
+    await sleep(250);
+  }
+  throw new Error("chrome devtools not ready");
+}
+
+const wsUrl = await getWs();
+const ws = new WebSocket(wsUrl);
+let id = 0;
+const pending = new Map();
+
+ws.addEventListener("message", (ev) => {
+  const msg = JSON.parse(ev.data);
+  if (msg.id && pending.has(msg.id)) {
+    pending.get(msg.id)(msg.result);
+    pending.delete(msg.id);
+  }
+  if (msg.method === "Runtime.consoleAPICalled") {
+    const args = (msg.params.args || []).map((a) => a.value ?? a.description ?? "").join(" ");
+    if (args && !args.includes("Deprecation")) console.log("[console]", args.slice(0, 240));
+  }
+  if (msg.method === "Runtime.exceptionThrown") {
+    console.log("[error]", JSON.stringify(msg.params.exceptionDetails).slice(0, 400));
+  }
 });
 
-const page = await browser.newPage({ viewport: { width: 1280, height: 720 } });
-page.on("console", (m) => {
-  const t = m.text();
-  if (!t.includes("Deprecation")) console.log("[console]", m.type(), t.slice(0, 300));
-});
-page.on("pageerror", (e) => console.log("[pageerror]", e.message));
+await new Promise((r) => ws.addEventListener("open", r));
 
-await page.goto(URL, { waitUntil: "load", timeout: 90000 });
-// 等 Godot 启动（wasm 42MB，首次加载会久一点）
-for (let i = 0; i < 40; i++) {
-  const ready = await page.evaluate(() => {
-    const c = document.querySelector("canvas");
-    return !!c && c.width > 100;
+function send(method, params = {}) {
+  return new Promise((resolve) => {
+    const mid = ++id;
+    pending.set(mid, resolve);
+    ws.send(JSON.stringify({ id: mid, method, params }));
   });
-  if (ready) break;
-  await page.waitForTimeout(1000);
 }
-await page.waitForTimeout(6000);
-await page.screenshot({ path: `${OUT}_select.png` });
-console.log("shot select");
 
-// 训练场
-await page.mouse.click(20, 20);
-await page.keyboard.press("t");
-await page.waitForTimeout(2500);
-await page.screenshot({ path: `${OUT}_training.png` });
-console.log("shot training");
-// 训练场：切三个角色各截一张，检查配饰/朝向/手持装置
-for (const [key, tag] of [["2", "gpt"], ["3", "claude"], ["1", "deepseek"]]) {
-  await page.keyboard.press(key);
-  await page.waitForTimeout(1100);
-  await page.screenshot({ path: `${OUT}_char_${tag}.png` });
-  console.log(`shot char_${tag}`);
-}
-await page.keyboard.press("Escape");
-await page.waitForTimeout(900);
-
-// 图鉴
-await page.mouse.click(20, 20);
-await page.keyboard.press("c");
-await page.waitForTimeout(1200);
-await page.screenshot({ path: `${OUT}_collection.png` });
-console.log("shot collection");
-await page.keyboard.press("c");
-await page.waitForTimeout(800);
-
-// 先点画布拿焦点，再按 1 选 DeepSeek（比点卡片稳）
-await page.mouse.click(20, 20);
-await page.waitForTimeout(300);
-await page.keyboard.press("1");
-await page.waitForTimeout(2500);
-await page.screenshot({ path: `${OUT}_dialog.png` });
-console.log("shot dialog");
-
-// 跳过对话：按空格（每句两下：补全 -> 下一句）
-for (let i = 0; i < 8; i++) {
-  await page.keyboard.press("Space");
-  await page.waitForTimeout(240);
-}
-await page.waitForTimeout(1500);
-// 往右走一点，让相机居中
-await page.keyboard.down("KeyD");
-await page.waitForTimeout(900);
-await page.keyboard.up("KeyD");
-await page.waitForTimeout(600);
-await page.screenshot({ path: `${OUT}_battle.png` });
-console.log("shot battle");
-
-// 开火 1.2s
-await page.mouse.move(900, 360);
-await page.mouse.down();
-await page.waitForTimeout(1400);
-await page.screenshot({ path: `${OUT}_shoot.png` });
-await page.mouse.up();
-console.log("shot shoot");
-
-// 设置菜单
-await page.keyboard.press("Escape");
-await page.waitForTimeout(700);
-await page.screenshot({ path: `${OUT}_settings.png` });
-console.log("shot settings");
-await page.keyboard.press("Escape");
-await page.waitForTimeout(400);
-
-const fps = await page.evaluate(() => {
-  return new Promise((res) => {
-    let n = 0;
-    const t0 = performance.now();
-    const tick = () => {
-      n++;
-      if (performance.now() - t0 < 2000) requestAnimationFrame(tick);
-      else res((n / (performance.now() - t0)) * 1000);
-    };
-    requestAnimationFrame(tick);
-  });
+await send("Page.enable");
+await send("Runtime.enable");
+await send("Emulation.setDeviceMetricsOverride", {
+  width: 1280, height: 720, deviceScaleFactor: 1, mobile: false,
 });
-console.log("approx_fps", fps.toFixed(1));
+await send("Page.navigate", { url: URL_PAGE });
+await sleep(WAIT * 1000);
 
-await browser.close();
+const shot = await send("Page.captureScreenshot", { format: "png" });
+fs.mkdirSync(path.dirname(OUT), { recursive: true });
+fs.writeFileSync(`${OUT}.png`, Buffer.from(shot.data, "base64"));
+console.log("saved", `${OUT}.png`);
+
+ws.close();
+chrome.kill();
+process.exit(0);
