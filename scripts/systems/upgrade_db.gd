@@ -61,8 +61,11 @@ func _load_all() -> void:
 			names.append(id + ".tres")
 	for n in names:
 		var res = load("%s/%s" % [UPGRADE_DIR, n])
-		if res != null and String(res.get("id")) != "":
-			upgrades[String(res.get("id"))] = res
+		if res == null:
+			continue
+		var rid = res.get("id")
+		if rid != null and String(rid) != "":
+			upgrades[String(rid)] = res
 
 
 func get_upgrade(id: String) -> Upgrade:

@@ -16,7 +16,10 @@ func _ready() -> void:
 		var path := "%s/%s.tres" % [DIR, id]
 		# 导出包里 .tres 会被重映射成 .res，直接 load，不做 exists 判断
 		var res = load(path)
-		if res != null and String(res.get("intro_text")) != "":
+		if res == null:
+			continue
+		var raw = res.get("intro_text")
+		if raw != null and String(raw) != "":
 			_data[id] = res
 
 
