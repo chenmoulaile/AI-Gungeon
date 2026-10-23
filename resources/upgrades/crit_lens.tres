@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="Upgrade" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/upgrade.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "crit_lens"
+title = "暴击透镜"
+desc = "对满血敌人的第一击必定暴击"
+price = 28
+icon_path = "res://assets/icons/crit_lens.png"
+char_tag = ""
+mutation = false
+effects = {
+}

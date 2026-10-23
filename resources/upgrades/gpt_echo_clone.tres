@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="Upgrade" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/upgrade.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "gpt_echo_clone"
+title = "模态残响"
+desc = "换模式的瞬间，留下一个影子替你打一下"
+price = 34
+icon_path = "res://assets/icons/gpt_echo_clone.png"
+char_tag = "gpt"
+mutation = true
+effects = {
+}

@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="WeaponStats" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/weapon_stats.gd" id="1_s"]
+
+[resource]
+script = ExtResource("1_s")
+weapon_id = "reasoning_chain"
+damage = 6.0
+fire_rate = 4.60
+bullet_speed = 330.0
+bullet_count = 1
+split_gen = 2
+split_decay = 0.70
+mode2_rate = 0.00
+mode2_damage = 0.0
+mode3_damage = 0.0
+beam_max_dps = 0.0
+release_cd = 0.00

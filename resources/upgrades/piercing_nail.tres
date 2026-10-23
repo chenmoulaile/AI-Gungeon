@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="Upgrade" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/upgrade.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "piercing_nail"
+title = "穿甲长钉"
+desc = "子弹穿透 +1"
+price = 26
+icon_path = "res://assets/icons/piercing_nail.png"
+char_tag = ""
+mutation = false
+effects = {
+"pierce": 1,
+}

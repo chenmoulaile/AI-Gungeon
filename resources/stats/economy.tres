@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="EconomyConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/economy_config.gd" id="1_s"]
+
+[resource]
+script = ExtResource("1_s")
+coin_per_kill_min = 1
+coin_per_kill_max = 3
+room_clear_coins = 4
+boss_clear_coins = 25
+combo_weight = 3
+char_weight = 2

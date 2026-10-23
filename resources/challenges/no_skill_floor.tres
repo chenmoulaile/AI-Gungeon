@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="Challenge" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/challenge.gd" id="1_ch"]
+
+[resource]
+script = ExtResource("1_ch")
+id = "no_skill_floor"
+title = "克制"
+desc = "整层不使用主动技能"

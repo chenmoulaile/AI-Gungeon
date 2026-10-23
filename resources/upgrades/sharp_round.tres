@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="Upgrade" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/upgrade.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "sharp_round"
+title = "锋利弹头"
+desc = "同一目标连续命中 3 次后，之后的每一发都暴击"
+price = 24
+icon_path = "res://assets/icons/sharp_round.png"
+char_tag = ""
+mutation = false
+effects = {
+}

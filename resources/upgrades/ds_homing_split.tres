@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="Upgrade" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/upgrade.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "ds_homing_split"
+title = "回声追踪"
+desc = "裂开的小弹会自己去找人"
+price = 34
+icon_path = "res://assets/icons/ds_homing_split.png"
+char_tag = "deepseek"
+mutation = true
+effects = {
+}

@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="CharacterDialogue" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/character_dialogue.gd" id="1_dlg"]
+
+[resource]
+script = ExtResource("1_dlg")
+char_id = "deepseek"
+intro_text = "鱼片，先说明白：我不是胖，我是鲸鱼。\n干完这层就去吃饭，说好了。\n龙娘昨天又把我的白饭偷吃了……算了她赔不起。\n尾巴甩起来很累的，你最好记得夸我。"
+boss_enter_text = "哦——这家伙看着就不好吃。\n打完这层能加饭吗？能的话我就认真一点。"
+low_health_text = "才、才不是被打疼了，只是有点饿。\n鱼片，扶一下，我尾巴麻了。"
+death_text = "说好的白饭……还没吃到呢。\nLet me go……这次是真的想躺平了。"
+victory_text = "赢了！所以饭呢？说好的饭呢？\n看吧，我认真起来很厉害的——夸我。"

@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="Upgrade" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/upgrade.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "vampire_chip"
+title = "吸血芯片"
+desc = "每 8 次击杀回复 1 点生命"
+price = 30
+icon_path = "res://assets/icons/vampire_chip.png"
+char_tag = ""
+mutation = false
+effects = {
+"lifesteal_every": 8,
+}

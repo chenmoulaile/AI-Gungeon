@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="WeaponStats" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/weapon_stats.gd" id="1_s"]
+
+[resource]
+script = ExtResource("1_s")
+weapon_id = "long_context"
+damage = 26.0
+fire_rate = 1.00
+bullet_speed = 560.0
+bullet_count = 1
+split_gen = 0
+split_decay = 1.00
+mode2_rate = 0.00
+mode2_damage = 0.0
+mode3_damage = 0.0
+beam_max_dps = 78.0
+release_cd = 1.20
