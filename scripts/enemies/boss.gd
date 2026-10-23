@@ -1,9 +1,21 @@
 extends EnemyBase
 ## Boss「回响聚合体」
-## 三阶段：100%~60% 环形弹 / 60%~25% 追踪弹 / 25%~0% 扇形弹 + 召唤
-## 阶段转换：0.75s 预警，预警开始即停止召唤，并额外留 0.5s 喘息窗口
+## 三阶段固定，但每个阶段从行为池随机抽 2 个招式循环使用；同一局内固定，不同局不同
+## 阶段转换：0.75s 预警 + 0.5s 停火喘息，预警开始即停止召唤
 
 const ChaserScene = preload("res://scenes/enemies/enemy_chaser.tscn")
+const LaserScene = preload("res://scripts/weapons/laser_sweep.gd")
+
+const POOLS := {
+	1: ["ring", "fan", "charge"],
+	2: ["homing", "summon", "laser", "fan"],
+	3: ["ring", "fan", "charge", "homing", "summon", "laser", "spiral", "mine"],
+}
+
+const MOVE_LABEL := {
+	"ring": "环", "fan": "扇", "charge": "冲", "homing": "追",
+	"summon": "召", "laser": "激", "spiral": "旋", "mine": "雷",
+}
 
 var phase: int = 1
 var atk_cd: float = 1.6
@@ -12,6 +24,14 @@ var summon_lock: float = 0.0
 var ring_angle: float = 0.0
 var telegraph: float = 0.0
 var pending_phase: int = 0
+
+var moves: Dictionary = {1: [], 2: [], 3: []}
+var move_idx: int = 0
+var spiral_left: int = 0
+var spiral_t: float = 0.0
+var spiral_angle: float = 0.0
+var charge_t: float = 0.0
+var charge_dir: Vector2 = Vector2.RIGHT
 
 
 func _setup() -> void:
@@ -34,6 +54,20 @@ func _setup() -> void:
 	light.shadow_filter = Light2D.SHADOW_FILTER_NONE
 	add_child(light)
 	atk_cd = 1.8
+	_roll_moves()
+
+
+## 每个阶段抽 2 个不重复招式
+func _roll_moves() -> void:
+	for p in [1, 2, 3]:
+		var pool: Array = POOLS[p].duplicate()
+		pool.shuffle()
+		moves[p] = [pool[0], pool[1]]
+	move_idx = 0
+
+
+func current_moves() -> Array:
+	return moves.get(phase, [])
 
 
 func _ai(delta: float) -> void:
@@ -42,6 +76,27 @@ func _ai(delta: float) -> void:
 	var to_player: Vector2 = player.global_position - global_position
 	var dist := to_player.length()
 	var dir := to_player.normalized()
+
+	# 冲锋中
+	if charge_t > 0.0:
+		charge_t -= delta
+		position += charge_dir * 300.0 * delta
+		if charge_t <= 0.0:
+			GameFeel.screen_shake(0.2)
+		return
+
+	# 螺旋弹持续发射
+	if spiral_left > 0:
+		spiral_t -= delta
+		if spiral_t <= 0.0:
+			spiral_t = 0.1
+			spiral_left -= 1
+			spiral_angle += deg_to_rad(20.0)
+			shoot_at(Vector2(cos(spiral_angle), sin(spiral_angle)), 150.0, 4.0)
+		if spiral_left <= 0:
+			atk_cd = 0.8
+		return
+
 	if dist > 130.0:
 		position += dir * speed * delta
 	else:
@@ -49,7 +104,7 @@ func _ai(delta: float) -> void:
 
 	summon_lock = maxf(0.0, summon_lock - delta)
 
-	# 阶段转换预警：停止攻击、闪红、震屏，给玩家 0.75s 反应时间
+	# 阶段转换预警
 	if telegraph > 0.0:
 		telegraph -= delta
 		if telegraph <= 0.0 and pending_phase > 0:
@@ -57,27 +112,20 @@ func _ai(delta: float) -> void:
 			pending_phase = 0
 			atk_cd = 0.55
 			summon_lock = 0.5
+			move_idx = 0
 			GameFeel.screen_shake(0.3)
 		return
 
 	atk_cd -= delta
 	if atk_cd <= 0.0:
-		match phase:
-			1:
-				_attack_ring()
-				atk_cd = 1.7
-			2:
-				_attack_homing(dir)
-				atk_cd = 1.25
-			_:
-				_attack_fan(dir)
-				atk_cd = 1.05
+		_do_move(dir)
+		atk_cd = 1.5
 
 	if phase >= 3 and summon_lock <= 0.0:
 		summon_cd -= delta
 		if summon_cd <= 0.0:
-			summon_cd = 6.0
-			_summon()
+			summon_cd = 8.0
+			_do_summon()
 
 
 func _physics_process(delta: float) -> void:
@@ -97,14 +145,50 @@ func _update_phase() -> void:
 		pending_phase = new_phase
 		telegraph = 0.75
 		atk_cd = 1.2
-		summon_lock = 0.75 + 0.5   # 预警 + 转换后的 0.5s 喘息窗口内不再召唤
+		summon_lock = 0.75 + 0.5
 		GameFeel.hit_stop(0.12, 0.05)
 		GameFeel.screen_shake(0.55)
 		GameFeel.burst(global_position, Color(1.0, 0.35, 0.45), 16, 190.0, 0.5)
 		Sfx.play("boss", -2.0, 1.1)
 
 
-# 阶段 1：环形弹
+func _do_move(dir: Vector2) -> void:
+	var list := current_moves()
+	if list.is_empty():
+		_attack_ring()
+		return
+	var mv: String = list[move_idx % list.size()]
+	move_idx += 1
+	match mv:
+		"ring":
+			_attack_ring()
+		"fan":
+			_attack_fan(dir)
+		"charge":
+			charge_dir = dir
+			charge_t = 0.6
+			Sfx.play("roll", -4.0, 0.6)
+		"homing":
+			_attack_homing(dir)
+		"summon":
+			_do_summon()
+		"laser":
+			var l = LaserScene.new()
+			l.origin = global_position
+			l.base_angle = dir.angle()
+			GameState.bullets_root.add_child(l)
+			Sfx.play("skill", -4.0, 1.3)
+		"spiral":
+			spiral_left = 15
+			spiral_t = 0.0
+			spiral_angle = dir.angle()
+			Sfx.play("skill", -6.0, 0.9)
+		"mine":
+			_drop_mines()
+		_:
+			_attack_ring()
+
+
 func _attack_ring() -> void:
 	var count := 14
 	ring_angle += 0.22
@@ -114,15 +198,13 @@ func _attack_ring() -> void:
 	Sfx.play("hit", -8.0, 0.7)
 
 
-# 阶段 2：追踪弹
 func _attack_homing(dir: Vector2) -> void:
 	for i in 3:
 		var a := dir.rotated(deg_to_rad(-18.0 + 18.0 * i))
-		shoot_at(a, 118.0, 4.6, 2.2, 1.4)
+		_spawn_homing(a)
 	Sfx.play("hit", -8.0, 1.1)
 
 
-# 阶段 3：扇形弹
 func _attack_fan(dir: Vector2) -> void:
 	for i in 7:
 		var t2 := float(i) / 6.0 - 0.5
@@ -130,14 +212,65 @@ func _attack_fan(dir: Vector2) -> void:
 	Sfx.play("hit", -8.0, 0.85)
 
 
-func _summon() -> void:
+## 追踪弹：可被玩家子弹击落
+func _spawn_homing(a: Vector2) -> void:
+	var b = GameFeel.get_bullet()
+	if b == null:
+		return
+	b.friendly = false
+	b.dir = a
+	b.speed = 100.0
+	b.damage = 1.0
+	b.radius = 4.6
+	b.color = Color("#ff8a4d")
+	b.life = 6.0
+	b.homing = 2.2
+	b.homing_time = 2.5
+	b.destructible = true
+	b.pierce = 0
+	b.gen = 0
+	b.trail = true
+	b.crit = false
+	b.tier = "medium"
+	b.global_position = global_position + a * (radius + 4.0)
+	b.prepare()
+
+
+func _drop_mines() -> void:
+	for i in 3:
+		var b = GameFeel.get_bullet()
+		if b == null:
+			return
+		var ang := randf() * TAU
+		var dist := randf_range(70.0, 170.0)
+		b.friendly = false
+		b.dir = Vector2.ZERO
+		b.speed = 0.0
+		b.damage = 1.0
+		b.radius = 5.0
+		b.color = Color("#ff6b3d")
+		b.life = 4.0
+		b.mine = true
+		b.mine_fuse = 1.5
+		b.pierce = 0
+		b.gen = 0
+		b.trail = false
+		b.crit = false
+		b.tier = "medium"
+		b.global_position = global_position + Vector2(cos(ang), sin(ang)) * dist
+		b.prepare()
+	Sfx.play("hit", -10.0, 0.5)
+
+
+func _do_summon() -> void:
 	if GameState.bullets_root == null:
 		return
 	for i in 2:
-		var e: Node2D = ChaserScene.instantiate()
+		var e = ChaserScene.instantiate()
 		var ang := randf() * TAU
 		e.position = global_position + Vector2(cos(ang), sin(ang)) * 60.0
 		GameState.bullets_root.add_child(e)
+	Sfx.play("skill", -8.0, 1.4)
 
 
 # ---------------- 绘制 ----------------
@@ -167,5 +300,7 @@ func _draw_body() -> void:
 		var warn := Color(1.0, 0.35, 0.4, 0.55 * (1.0 - k * 0.6))
 		draw_arc(Vector2.ZERO, radius + 14.0 + k * 26.0, 0.0, TAU, 40, warn, 2.0, true)
 		draw_circle(Vector2.ZERO, radius * 0.5, Color(1.0, 0.3, 0.35, 0.25))
+	if charge_t > 0.0:
+		draw_line(Vector2.ZERO, charge_dir * (radius + 30.0), Color(1.0, 0.3, 0.25, 0.5), 3.0)
 	draw_circle(Vector2.ZERO, radius * 0.44, Color(1, 1, 1, 0.95))
 	draw_circle(Vector2.ZERO, radius * 0.24, Color(0.1, 0.02, 0.15, 1.0))

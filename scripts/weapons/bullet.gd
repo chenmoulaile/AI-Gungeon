@@ -1,6 +1,6 @@
 extends Node2D
 ## 子弹：手写圆形碰撞 + 对象池（由 GameFeel 回收）
-## 敌方子弹用暖红/品红 + 外发光，玩家子弹用青/紫，色相明确区分
+## 支持：反弹弹（撞墙反弹）、地雷弹（落地引爆）、追踪弹（可被击落）、盾卫格挡
 
 signal hit_enemy(enemy: Node, bullet: Node)
 
@@ -12,22 +12,31 @@ var friendly: bool = true
 var life: float = 2.2
 var color: Color = Color("#8ee6ff")
 var pierce: int = 0
-var gen: int = 0              # 分裂代数（推理链用）
-var homing: float = 0.0       # 追踪强度
+var gen: int = 0
+var homing: float = 0.0
 var homing_time: float = 0.0
 var crit: bool = false
-var tier: String = "medium"   # 反馈档位 small / medium / large
-var tag: String = ""          # 伤害来源（协同钩子用）
+var tier: String = "medium"
 var trail: bool = false
+var tag: String = ""
+
+var bounce: int = 0            # 剩余反弹次数
+var mine: bool = false         # 地雷弹
+var mine_fuse: float = 1.5
+var destructible: bool = false # 可被玩家子弹击落（追踪弹）
+var shoot_down: bool = true    # 玩家子弹是否去击落 destructible 弹
+
 var already_hit: Array = []
 var _trail_pts: Array = []
 var _t: float = 0.0
+var _locked: float = 0.0
 
 
 func prepare() -> void:
 	already_hit.clear()
 	_trail_pts.clear()
 	_t = 0.0
+	_locked = 0.3 if destructible else 0.0
 	visible = true
 	if friendly:
 		remove_from_group("enemy_bullets")
@@ -41,6 +50,17 @@ func prepare() -> void:
 func _physics_process(delta: float) -> void:
 	_t += delta
 	life -= delta
+	_locked = maxf(0.0, _locked - delta)
+
+	# 地雷：停下引信，最后 0.5s 闪得更快
+	if mine:
+		mine_fuse -= delta
+		if mine_fuse <= 0.0:
+			_explode()
+			return
+		queue_redraw()
+		return
+
 	if life <= 0.0:
 		_despawn()
 		return
@@ -72,11 +92,34 @@ func _check_hit() -> void:
 			if not is_instance_valid(e) or already_hit.has(e):
 				continue
 			if global_position.distance_to(e.global_position) < radius + float(e.radius):
+				# 盾卫：正面格挡
+				if e.has_method("blocks_hit") and e.blocks_hit(dir):
+					e.on_blocked(global_position, dir)
+					_despawn()
+					return
 				_damage_enemy(e)
 				if pierce > 0:
 					pierce -= 1
 					already_hit.append(e)
 				else:
+					_despawn()
+					return
+		# 木箱
+		for c in GameState.crates:
+			if not is_instance_valid(c) or c.dead:
+				continue
+			if global_position.distance_to(c.global_position) < radius + 18.0:
+				c.hit(damage, dir)
+				_despawn()
+				return
+		# 玩家子弹可以击落追踪弹
+		if shoot_down:
+			for b in get_tree().get_nodes_in_group("enemy_bullets"):
+				if b == self or not is_instance_valid(b) or not b.destructible:
+					continue
+				if global_position.distance_to(b.global_position) < radius + b.radius + 2.0:
+					GameFeel.burst(b.global_position, Color(1.0, 0.8, 0.6), 4, 80.0, 0.2)
+					b._despawn()
 					_despawn()
 					return
 	else:
@@ -95,13 +138,10 @@ func _damage_enemy(e: Node) -> void:
 	var dmg := damage
 	var is_crit := crit
 	var p = GameState.player
-	# DeepSeek 被动「注意力聚焦」：对同一目标叠层加伤
 	if p != null and is_instance_valid(p) and p.focus_target == e and p.focus_stacks > 0:
 		dmg *= 1.0 + 0.05 * float(p.focus_stacks)
-	# 藏品：对满血敌人的第一击必定暴击
 	if bool(GameState.mods.get("first_hit_crit", false)) and float(e.hp) >= float(e.max_hp) - 0.01:
 		is_crit = true
-	# 藏品：对同一目标连续命中 3 次后必暴
 	var focus_at: int = int(GameState.mods.get("focus_crit_at", 0))
 	if focus_at > 0 and p != null and is_instance_valid(p) \
 			and p.focus_target == e and p.focus_stacks >= focus_at:
@@ -114,10 +154,57 @@ func _damage_enemy(e: Node) -> void:
 	hit_enemy.emit(e, self)
 
 
+func _explode() -> void:
+	var p = GameState.player
+	if p != null and is_instance_valid(p):
+		if global_position.distance_to(p.global_position) < 60.0 + GameConfig.PLAYER_RADIUS:
+			p.take_damage(1)
+	GameFeel.burst(global_position, Color(1.0, 0.55, 0.3), 14, 170.0, 0.4)
+	GameFeel.screen_shake(0.22)
+	Sfx.play("boss", -8.0, 1.5)
+	_despawn()
+
+
 func _check_bounds() -> void:
-	var r := GameConfig.room_rect().grow(48.0)
-	if not r.has_point(global_position):
+	# 障碍物：挡子弹（双方都挡），反弹弹则反弹
+	for o in GameState.obstacles:
+		var r: Rect2 = o
+		if r.grow(radius).has_point(global_position):
+			if bounce > 0:
+				bounce -= 1
+				_bounce_off(r)
+				return
+			GameFeel.burst(global_position, Color(0.8, 0.82, 0.9), 3, 60.0, 0.18)
+			_despawn()
+			return
+
+	var room := GameConfig.room_rect()
+	if not room.grow(48.0).has_point(global_position):
 		_despawn()
+		return
+	# 房间墙：反弹弹反弹
+	if bounce > 0:
+		var inner := room.grow(-GameConfig.WALL)
+		if not inner.has_point(global_position):
+			bounce -= 1
+			if global_position.x < inner.position.x or global_position.x > inner.end.x:
+				dir.x = -dir.x
+			if global_position.y < inner.position.y or global_position.y > inner.end.y:
+				dir.y = -dir.y
+			rotation = dir.angle()
+			Sfx.play("ui", -6.0, 1.6)
+			GameFeel.burst(global_position, color, 3, 70.0, 0.2)
+
+
+func _bounce_off(r: Rect2) -> void:
+	var c := r.get_center()
+	var d := global_position - c
+	if absf(d.x / r.size.x) > absf(d.y / r.size.y):
+		dir.x = -dir.x
+	else:
+		dir.y = -dir.y
+	rotation = dir.angle()
+	Sfx.play("ui", -6.0, 1.6)
 
 
 func _despawn() -> void:
@@ -125,21 +212,33 @@ func _despawn() -> void:
 
 
 func _draw() -> void:
+	if mine:
+		var k: float = 1.0 - clampf(mine_fuse / 1.5, 0.0, 1.0)
+		var blink: float = 1.0 if mine_fuse > 0.5 else (0.35 + 0.65 * absf(sin(_t * 18.0)))
+		draw_circle(Vector2.ZERO, radius + 4.0, Color(1.0, 0.4, 0.2, 0.18 * blink))
+		draw_circle(Vector2.ZERO, radius, Color(0.9, 0.3, 0.15, blink))
+		draw_arc(Vector2.ZERO, 8.0 + 26.0 * k, 0.0, TAU, 20, Color(1.0, 0.5, 0.3, 0.5), 1.0, true)
+		return
+
 	if trail and _trail_pts.size() > 1:
 		for i in range(_trail_pts.size() - 1):
 			var a: float = 1.0 - float(i) / float(_trail_pts.size())
-			var c := color
-			c.a = a * 0.35
-			draw_line(to_local(_trail_pts[i]), to_local(_trail_pts[i + 1]), c,
+			var c2 := color
+			c2.a = a * 0.35
+			draw_line(to_local(_trail_pts[i]), to_local(_trail_pts[i + 1]), c2,
 				maxf(1.0, radius * 1.1 * a))
 
 	if not friendly:
-		# 危险色外发光，保证在深色地板上依然醒目
 		var glow := color
 		glow.a = 0.22
 		draw_circle(Vector2.ZERO, radius + 3.2, glow)
 		draw_circle(Vector2.ZERO, radius + 1.3, Color(0.1, 0.02, 0.06, 0.75))
 		draw_circle(Vector2.ZERO, radius, color)
+		# 锁定闪烁（追踪弹生成后 0.3s）
+		if _locked > 0.0:
+			var k2: float = 0.5 + 0.5 * sin(_t * 40.0)
+			draw_arc(Vector2.ZERO, radius + 4.0, 0.0, TAU, 16,
+				Color(1, 1, 1, 0.6 * k2), 1.0, true)
 		draw_circle(Vector2.ZERO, radius * 0.5, Color(1, 0.96, 0.98, 0.95))
 	else:
 		draw_circle(Vector2.ZERO, radius + 1.2, Color(0, 0, 0, 0.45))

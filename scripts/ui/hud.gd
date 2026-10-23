@@ -282,6 +282,18 @@ func _draw_boss() -> void:
 		draw_line(Vector2(mx, y - 2), Vector2(mx, y + 10), Color(1, 1, 1, 0.45), 1.0)
 	_text(Vector2(GameConfig.BASE_W * 0.5, y - 3), "回响聚合体 · 第 %d 阶段" % boss.phase,
 		9, GameConfig.COL_TEXT, HORIZONTAL_ALIGNMENT_CENTER)
+	# 本阶段抽到的两个招式
+	var mv: Array = boss.current_moves() if boss.has_method("current_moves") else []
+	var labels := {"ring": "环", "fan": "扇", "charge": "冲", "homing": "追",
+		"summon": "召", "laser": "激", "spiral": "旋", "mine": "雷"}
+	for i in mv.size():
+		var bx := x + i * 18.0
+		var box := Rect2(Vector2(bx, y + 12), Vector2(15, 13))
+		draw_rect(box, Color(0.12, 0.1, 0.18, 0.9))
+		draw_rect(box, Color(0.6, 0.5, 0.85, 0.8), false, 1.0)
+		_text(Vector2(box.position.x, box.position.y + 10), String(labels.get(String(mv[i]), "?")),
+			8, Color(0.9, 0.85, 1.0))
+
 	# 阶段转换预警横幅
 	if float(boss.telegraph) > 0.0:
 		var a: float = clampf(float(boss.telegraph) / 0.75, 0.0, 1.0)

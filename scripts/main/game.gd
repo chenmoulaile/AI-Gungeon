@@ -10,6 +10,22 @@ const ChaserScene = preload("res://scenes/enemies/enemy_chaser.tscn")
 const ShooterScene = preload("res://scenes/enemies/enemy_shooter.tscn")
 const SpreaderScene = preload("res://scenes/enemies/enemy_spreader.tscn")
 const BossScene = preload("res://scenes/enemies/boss.tscn")
+const ChargerScene = preload("res://scenes/enemies/enemy_charger.tscn")
+const RingScene = preload("res://scenes/enemies/enemy_ring_shooter.tscn")
+const SummonerScene = preload("res://scenes/enemies/enemy_summoner.tscn")
+const ShieldScene = preload("res://scenes/enemies/enemy_shield_bearer.tscn")
+const SplitterScene = preload("res://scenes/enemies/enemy_splitter.tscn")
+const SniperScene = preload("res://scenes/enemies/enemy_sniper.tscn")
+
+## 分层敌人池：第 1 层三种，第 2 层加环形射手/分裂体，第 3 层加召唤者/盾卫/狙击手
+const POOL_F1 := ["chaser", "charger", "shooter"]
+const POOL_F2 := ["chaser", "charger", "shooter", "ring", "splitter"]
+const POOL_F3 := ["chaser", "charger", "shooter", "ring", "splitter",
+	"summoner", "shield", "sniper"]
+
+## 需要走位的 / 需要优先击杀的
+const KITE_TYPES := ["charger", "ring", "sniper", "shooter"]
+const PRIORITY_TYPES := ["summoner", "shield", "splitter"]
 const HudScene = preload("res://scenes/ui/hud.tscn")
 const ShopScene = preload("res://scenes/ui/shop.tscn")
 const BossIntroScene = preload("res://scenes/ui/boss_intro.tscn")
@@ -158,8 +174,9 @@ func _spawn_wave() -> void:
 		return
 	wave_index += 1
 	var count: int = _count_for(room_kind)
+	var types := _wave_types()
 	for i in count:
-		var scene: PackedScene = _pick_enemy()
+		var scene: PackedScene = _scene_for(String(types[i % types.size()]))
 		var e = scene.instantiate()
 		if room_kind == Kind.ELITE and randf() < 0.45:
 			e.elite = true
@@ -176,14 +193,59 @@ func _spawn_wave() -> void:
 		alive_count += 1
 
 
-func _pick_enemy() -> PackedScene:
-	var roll := randf()
-	var floor_bonus := 0.08 * float(GameState.floor_index - 1)
-	if roll < 0.5 - floor_bonus:
-		return ChaserScene
-	elif roll < 0.8:
-		return ShooterScene
-	return SpreaderScene
+func _pool() -> Array:
+	var f: int = GameState.floor_index
+	if f <= 1:
+		return POOL_F1
+	if f == 2:
+		return POOL_F2
+	return POOL_F3
+
+
+## 每波 2~4 种，尽量保证「一个要躲的 + 一个要先杀的」
+func _wave_types() -> Array:
+	var pool := _pool().duplicate()
+	pool.shuffle()
+	var out: Array = []
+	var want := mini(pool.size(), randi_range(2, 4))
+	# 先塞一个需要走位的
+	for t in KITE_TYPES:
+		if pool.has(t) and out.size() < want:
+			out.append(t)
+			break
+	# 再塞一个需要优先击杀的
+	for t in PRIORITY_TYPES:
+		if pool.has(t) and not out.has(t) and out.size() < want:
+			out.append(t)
+			break
+	for t in pool:
+		if out.size() >= want:
+			break
+		if not out.has(t):
+			out.append(t)
+	if out.is_empty():
+		out = ["chaser"]
+	return out
+
+
+func _scene_for(key: String) -> PackedScene:
+	match key:
+		"charger":
+			return ChargerScene
+		"ring":
+			return RingScene
+		"summoner":
+			return SummonerScene
+		"shield":
+			return ShieldScene
+		"splitter":
+			return SplitterScene
+		"sniper":
+			return SniperScene
+		"shooter":
+			return ShooterScene
+		_:
+			return ChaserScene
 
 
 func _spawn_boss() -> void:

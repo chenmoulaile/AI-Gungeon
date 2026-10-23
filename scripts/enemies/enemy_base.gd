@@ -19,6 +19,8 @@ var accent: Color = Color("#ff6b8b")
 var coin_value: int = 2
 var is_boss: bool = false
 var elite: bool = false
+var mini: bool = false
+var mini_speed_scale: float = 1.0
 var hp_scale: float = 1.0
 var dead: bool = false
 
@@ -40,6 +42,11 @@ func _ready() -> void:
 		coin_value += 2
 	if hp_scale != 1.0:
 		max_hp *= hp_scale
+	if mini:
+		max_hp = maxf(3.0, max_hp * 0.22)
+		radius *= 0.62
+		speed *= mini_speed_scale
+		coin_value = 1
 	hp = max_hp
 	GameState.register_enemy(self)
 	queue_redraw()
@@ -93,6 +100,18 @@ func _clamp_in_room() -> void:
 	var r := GameConfig.room_rect().grow(-GameConfig.WALL - radius)
 	position.x = clampf(position.x, r.position.x, r.end.x)
 	position.y = clampf(position.y, r.position.y, r.end.y)
+	# 障碍物：从最近的一边推出去
+	for o in GameState.obstacles:
+		var rect: Rect2 = o
+		if rect.grow(radius).has_point(global_position):
+			var c := rect.get_center()
+			var d := global_position - c
+			if absf(d.x / rect.size.x) > absf(d.y / rect.size.y):
+				global_position.x = rect.position.x - radius if d.x < 0.0 \
+					else rect.end.x + radius
+			else:
+				global_position.y = rect.position.y - radius if d.y < 0.0 \
+					else rect.end.y + radius
 
 
 func _touch_player() -> void:
@@ -103,6 +122,18 @@ func _touch_player() -> void:
 	if global_position.distance_to(player.global_position) < radius + GameConfig.PLAYER_RADIUS:
 		contact_cd = 0.7
 		player.take_damage(contact_damage)
+
+
+## 盾卫等正面免伤的敌人覆写这个方法
+func blocks_hit(_bullet_dir: Vector2) -> bool:
+	return false
+
+
+## 子弹被挡下时的反馈（金属叮 + 火花 + light 硬直）
+func on_blocked(pos: Vector2, _dir: Vector2) -> void:
+	Sfx.play("hit", 0.0, 1.9)
+	GameFeel.burst(pos, Color(1.0, 0.95, 0.7), 6, 110.0, 0.22)
+	GameFeel.hit_stop(0.04, 0.08)
 
 
 func hp_ratio() -> float:

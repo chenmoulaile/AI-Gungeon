@@ -6,6 +6,7 @@ class_name RoomBasic
 
 const DOOR_H := 64.0
 const LIGHT_TEX := "res://assets/fx/light_radial.png"
+const CrateScript = preload("res://scripts/systems/crate.gd")
 
 var cleared: bool = false
 var door_open: bool = false
@@ -14,12 +15,83 @@ var _gate: StaticBody2D = null
 var _t: float = 0.0
 var _door_light: PointLight2D = null
 var _modulate: CanvasModulate = null
+var _obstacles: Array = []
 
 
 func _ready() -> void:
 	_build_lighting()
 	_build_walls()
+	_build_obstacles()
 	queue_redraw()
+
+
+## 0~3 个不可通行障碍（柱子/石台）+ 10% 概率一个可破坏木箱
+func _build_obstacles() -> void:
+	GameState.obstacles.clear()
+	GameState.crates.clear()
+	var r := GameConfig.room_rect()
+	var door_pt := Vector2(r.end.x - 30.0, r.size.y * 0.5)
+	var spawn_pt := Vector2(r.position.x + 90.0, r.size.y * 0.5)
+	var count := randi() % 4
+	var tries := 0
+	while _obstacles.size() < count and tries < 60:
+		tries += 1
+		var sz := Vector2(randf_range(44.0, 60.0), randf_range(44.0, 60.0))
+		var px := randf_range(r.position.x + 80.0, r.end.x - 80.0 - sz.x)
+		var py := randf_range(r.position.y + 80.0, r.end.y - 80.0 - sz.y)
+		var rect := Rect2(px, py, sz.x, sz.y)
+		# 不堵门、不压出生点、彼此留出通道
+		if rect.grow(80.0).has_point(door_pt):
+			continue
+		if rect.grow(70.0).has_point(spawn_pt):
+			continue
+		var ok := true
+		for o in _obstacles:
+			if (o as Rect2).grow(80.0).intersects(rect):
+				ok = false
+		if not ok:
+			continue
+		_obstacles.append(rect)
+		_add_obstacle(rect)
+	GameState.obstacles = _obstacles.duplicate()
+
+	if randf() < 0.1:
+		for i in 20:
+			var p := Vector2(randf_range(r.position.x + 120.0, r.end.x - 120.0),
+				randf_range(r.position.y + 120.0, r.end.y - 120.0))
+			if p.distance_to(door_pt) < 140.0 or p.distance_to(spawn_pt) < 140.0:
+				continue
+			var clear := true
+			for o in _obstacles:
+				if (o as Rect2).grow(40.0).has_point(p):
+					clear = false
+			if clear:
+				var crate := CrateScript.new()
+				crate.position = p
+				add_child(crate)
+				GameState.crates.append(crate)
+				break
+
+
+func _add_obstacle(rect: Rect2) -> void:
+	var body := StaticBody2D.new()
+	body.position = rect.get_center()
+	var shape := CollisionShape2D.new()
+	var box := RectangleShape2D.new()
+	box.size = rect.size
+	shape.shape = box
+	body.add_child(shape)
+	add_child(body)
+	# 障碍也挡光，但只有墙级别的遮挡体，不额外加光源
+	var occ := LightOccluder2D.new()
+	var poly := OccluderPolygon2D.new()
+	var hw := rect.size.x * 0.5
+	var hh := rect.size.y * 0.5
+	poly.polygon = PackedVector2Array([Vector2(-hw, -hh), Vector2(hw, -hh),
+		Vector2(hw, hh), Vector2(-hw, hh)])
+	occ.occluder = poly
+	occ.position = rect.get_center()
+	add_child(occ)
 
 
 ## 光照采样吸附到像素网格，消除平滑插值造成的糊边
@@ -46,14 +118,14 @@ func _process(delta: float) -> void:
 func _build_lighting() -> void:
 	# 环境压暗：偏冷的深蓝灰，让角色和子弹从背景里跳出来
 	_modulate = CanvasModulate.new()
-	_modulate.color = Color(0.80, 0.84, 0.94)
+	_modulate.color = Color(0.72, 0.76, 0.88)
 	add_child(_modulate)
 
 	var tex: Texture2D = load(LIGHT_TEX) if ResourceLoader.exists(LIGHT_TEX) else null
 	# 房间中心的大范围补光，避免四角全黑影响弹幕可读性
 	var fill := PointLight2D.new()
 	fill.texture = tex
-	fill.energy = 0.28
+	fill.energy = 0.18
 	fill.texture_scale = 5.0
 	fill.color = Color(0.62, 0.72, 1.0)
 	fill.position = Vector2(GameConfig.ROOM_W * 0.5, GameConfig.ROOM_H * 0.5)
@@ -179,6 +251,15 @@ func _draw() -> void:
 			Color(0, 0, 0, a))
 		draw_rect(Rect2(w + i * 6, r.end.y - w - i * 6 - 6, r.size.x - (w + i * 6) * 2, 6),
 			Color(0, 0, 0, a))
+
+	# 障碍物（柱子 / 石台）
+	for o in _obstacles:
+		var rr: Rect2 = o
+		draw_rect(rr, Color(0.18, 0.21, 0.28))
+		draw_rect(rr, Color(0.34, 0.39, 0.5), false, 2.0)
+		draw_rect(Rect2(rr.position, Vector2(rr.size.x, 6)), Color(0.42, 0.48, 0.6))
+		draw_rect(Rect2(rr.position + Vector2(0, rr.size.y - 8), Vector2(rr.size.x, 8)),
+			Color(0.1, 0.12, 0.17))
 
 	# 墙体
 	var gap_top: float = r.position.y + r.size.y * 0.5 - DOOR_H * 0.5

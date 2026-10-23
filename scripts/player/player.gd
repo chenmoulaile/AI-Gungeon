@@ -88,7 +88,7 @@ func _build_nodes() -> void:
 	var light := PointLight2D.new()
 	if ResourceLoader.exists("res://assets/fx/light_radial.png"):
 		light.texture = load("res://assets/fx/light_radial.png")
-	light.energy = 1.15
+	light.energy = 0.85
 	light.texture_scale = 1.9
 	light.color = Color(1.0, 0.96, 0.9)
 	light.position = Vector2(0, -14)

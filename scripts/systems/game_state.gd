@@ -34,6 +34,8 @@ var stats: Dictionary = {}
 var player: Node2D = null
 var bullets_root: Node2D = null
 var enemies: Array = []
+var obstacles: Array = []   # Rect2：挡子弹、挡移动
+var crates: Array = []      # 可破坏木箱节点
 
 
 func _ready() -> void:
@@ -59,6 +61,8 @@ func start_run(id: String) -> void:
 	combos = []
 	synergies = []
 	enemies = []
+	obstacles = []
+	crates = []
 	player = null
 	recalc_stats()
 	hp = max_hp
