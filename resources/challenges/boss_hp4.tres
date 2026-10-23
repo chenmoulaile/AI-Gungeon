@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="Challenge" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/challenge.gd" id="1_ch"]
+
+[resource]
+script = ExtResource("1_ch")
+id = "boss_hp4"
+title = "从容"
+desc = "击败 Boss 时生命不低于 4"

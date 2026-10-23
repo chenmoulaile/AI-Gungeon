@@ -23,6 +23,7 @@ var kills: int = 0
 var run_time: float = 0.0
 var coins_earned: int = 0
 var run_cleared: bool = false
+var training: bool = false
 
 var upgrades: Array = []      # 已持有藏品 id
 var combos: Array = []        # 已激活组合名
@@ -47,8 +48,10 @@ func _process(delta: float) -> void:
 		run_time += delta
 
 
-func start_run(id: String) -> void:
+func start_run(id: String, seed_text: String = "") -> void:
 	char_id = id
+	SeedManager.start_run(seed_text)
+	ChallengeManager.start_run()
 	char_data = load_character(id)
 	hp = PLAYER_MAX_HP
 	max_hp = PLAYER_MAX_HP

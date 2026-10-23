@@ -61,7 +61,7 @@ func _setup() -> void:
 func _roll_moves() -> void:
 	for p in [1, 2, 3]:
 		var pool: Array = POOLS[p].duplicate()
-		pool.shuffle()
+		SeedManager.shuffle(pool)
 		moves[p] = [pool[0], pool[1]]
 	move_idx = 0
 
@@ -243,8 +243,8 @@ func _drop_mines() -> void:
 		var b = GameFeel.get_bullet()
 		if b == null:
 			return
-		var ang := randf() * TAU
-		var dist := randf_range(70.0, 170.0)
+		var ang := SeedManager.randf() * TAU
+		var dist := SeedManager.randf_range(70.0, 170.0)
 		b.friendly = false
 		b.dir = Vector2.ZERO
 		b.speed = 0.0
@@ -269,7 +269,7 @@ func _do_summon() -> void:
 		return
 	for i in 2:
 		var e = ChaserScene.instantiate()
-		var ang := randf() * TAU
+		var ang := SeedManager.randf() * TAU
 		e.position = global_position + Vector2(cos(ang), sin(ang)) * 60.0
 		GameState.bullets_root.add_child(e)
 	Sfx.play("skill", -8.0, 1.4)

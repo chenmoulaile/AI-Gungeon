@@ -42,6 +42,15 @@ await page.waitForTimeout(6000);
 await page.screenshot({ path: `${OUT}_select.png` });
 console.log("shot select");
 
+// 训练场
+await page.mouse.click(20, 20);
+await page.keyboard.press("t");
+await page.waitForTimeout(2500);
+await page.screenshot({ path: `${OUT}_training.png` });
+console.log("shot training");
+await page.keyboard.press("Escape");
+await page.waitForTimeout(800);
+
 // 图鉴
 await page.mouse.click(20, 20);
 await page.keyboard.press("c");

@@ -2,13 +2,22 @@ extends Node2D
 ## 伤害数字（由 GameFeel 对象池管理）
 
 var value: float = 0.0
+var text: String = ""
 var crit: bool = false
 var _tw: Tween = null
 
 
+func show_text(pos: Vector2, s: String) -> void:
+	text = s
+	show_number(pos, 0.0, false)
+
+
 func show_number(pos: Vector2, amount: float, is_crit: bool) -> void:
 	global_position = pos
-	value = amount
+	if text == "":
+		value = amount
+	else:
+		value = 0.0
 	crit = is_crit
 	visible = true
 	set_process(true)
@@ -31,7 +40,7 @@ func show_number(pos: Vector2, amount: float, is_crit: bool) -> void:
 func _draw() -> void:
 	if GameConfig.ui_font == null:
 		return
-	var txt := str(int(round(value)))
+	var txt := text if text != "" else str(int(round(value)))
 	var size := 11 if crit else 9
 	var col := Color(1.0, 0.86, 0.35) if crit else Color(0.94, 0.97, 1.0)
 	var w: float = GameConfig.ui_font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x

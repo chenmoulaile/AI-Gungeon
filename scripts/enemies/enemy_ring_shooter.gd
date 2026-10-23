@@ -18,8 +18,8 @@ func _setup() -> void:
 	contact_damage = 1
 	coin_value = 4
 	accent = Color("#8fb6ff")
-	timer = randf_range(1.2, 2.4)
-	spin = randf() * TAU
+	timer = SeedManager.randf_range(1.2, 2.4)
+	spin = SeedManager.randf() * TAU
 
 
 func _ai(delta: float) -> void:

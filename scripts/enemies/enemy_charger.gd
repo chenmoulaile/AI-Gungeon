@@ -20,7 +20,7 @@ func _setup() -> void:
 	contact_damage = 1
 	coin_value = 3
 	accent = Color("#ff5f4d")
-	timer = randf_range(0.4, 1.2)
+	timer = SeedManager.randf_range(0.4, 1.2)
 
 
 func _ai(delta: float) -> void:
@@ -57,7 +57,7 @@ func _ai(delta: float) -> void:
 		"stun":
 			if timer <= 0.0:
 				state = "idle"
-				timer = randf_range(1.0, 1.8)
+				timer = SeedManager.randf_range(1.0, 1.8)
 
 
 func _hit_obstacle() -> bool:

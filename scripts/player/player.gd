@@ -270,6 +270,7 @@ func _try_roll() -> void:
 	if anim.sprite_frames.has_animation("roll"):
 		anim.play("roll")
 	_ghost_t = 0.0
+	ChallengeManager.on_roll()
 	roll_buff = float(GameState.mods.get("roll_shot_bonus", 0.0))
 	if float(GameState.mods.get("roll_speed", 0.0)) > 0.0:
 		roll_speed_t = 1.2
@@ -297,6 +298,7 @@ func _try_skill() -> void:
 		return
 	if weapon.use_skill():
 		weapon.start_skill_cd()
+		ChallengeManager.on_skill()
 		fire_anim = 0.2
 
 
@@ -386,6 +388,7 @@ func take_damage(amount: int) -> void:
 	GameState.hp_changed.emit(GameState.hp, GameState.max_hp)
 	# 受击硬直：不接受翻滚，但仍然可以移动
 	hurt_stun = HURT_STUN
+	ChallengeManager.on_damage()
 	InputBuffer.clear("roll")
 
 	GameFeel.flash(anim, Color(2.6, 0.6, 0.7), 0.14)

@@ -164,9 +164,10 @@ func _start_room(index: int) -> void:
 		_spawn_boss()
 	else:
 		MusicManager.play("combat")
-		wave_total = _wave_total_for(room_kind)
+		wave_total = _wave_total_for(room_kind) + int(SeedManager.diff("wave"))
 		hud.show_toast("B%d · 房间 %d" % [GameState.floor_index, index], 1.4)
 		_spawn_wave()
+	ChallengeManager.on_room_start(GameState.floor_index)
 	if tutorial != null and is_instance_valid(tutorial):
 		tutorial.on_room_start(index)
 
@@ -180,7 +181,7 @@ func _spawn_wave() -> void:
 	for i in count:
 		var scene: PackedScene = _scene_for(String(types[i % types.size()]))
 		var e = scene.instantiate()
-		if room_kind == Kind.ELITE and randf() < 0.45:
+		if room_kind == Kind.ELITE and SeedManager.randf() < 0.45:
 			e.elite = true
 		if room_kind == Kind.CLIMAX:
 			e.hp_scale = 0.85
@@ -207,9 +208,9 @@ func _pool() -> Array:
 ## 每波 2~4 种，尽量保证「一个要躲的 + 一个要先杀的」
 func _wave_types() -> Array:
 	var pool := _pool().duplicate()
-	pool.shuffle()
+	SeedManager.shuffle(pool)
 	var out: Array = []
-	var want := mini(pool.size(), randi_range(2, 4))
+	var want := mini(pool.size(), SeedManager.randi_range(2, 4))
 	# 先塞一个需要走位的
 	for t in KITE_TYPES:
 		if pool.has(t) and out.size() < want:
@@ -301,7 +302,7 @@ func _on_enemy_died(e: Node) -> void:
 		return
 	if wave_index < wave_total:
 		# 波间隔 1.5~2s，给玩家走位空间
-		await get_tree().create_timer(randf_range(1.5, 2.0)).timeout
+		await get_tree().create_timer(SeedManager.randf_range(1.5, 2.0)).timeout
 		if not is_inside_tree() or busy:
 			return
 		_spawn_wave()
@@ -325,6 +326,7 @@ func _on_room_cleared() -> void:
 		hud.show_toast("房间清空 · 回复 %d 点生命 · 向右离开" % heal, 2.4)
 	else:
 		hud.show_toast("房间清空 · 向右离开", 2.2)
+	ChallengeManager.on_room_cleared()
 	if tutorial != null and is_instance_valid(tutorial):
 		tutorial.on_room_cleared()
 
@@ -342,6 +344,7 @@ func _on_boss_dead() -> void:
 	hud.show_toast("回响聚合体已被击破！向右进入下一层", 3.0)
 	Sfx.play("skill", -2.0, 0.7)
 	GameState.run_cleared = true
+	ChallengeManager.on_boss_killed(GameState.hp)
 	DialogueManager.say(GameState.char_id, "victory", 2.6)
 
 
@@ -418,7 +421,7 @@ func _on_run_ended() -> void:
 		if img != null and img.get_width() > 0:
 			img.save_png("user://last_frame.png")
 	MetaProgress.finish_run(GameState.char_id, GameState.floor_index,
-		GameState.run_cleared, GameState.run_time)
+		GameState.run_cleared, GameState.run_time, SeedManager.difficulty)
 	await get_tree().create_timer(1.1).timeout
 	if not is_inside_tree():
 		return

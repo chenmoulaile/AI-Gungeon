@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="Challenge" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/challenge.gd" id="1_ch"]
+
+[resource]
+script = ExtResource("1_ch")
+id = "kill_50"
+title = "清扫"
+desc = "一局内击杀 50 个敌人"

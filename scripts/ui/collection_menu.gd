@@ -30,7 +30,7 @@ func _ready() -> void:
 func _layout() -> void:
 	_rects.clear()
 	var x0 := 34.0
-	var y0 := 84.0
+	var y0 := 92.0
 	for i in _ids.size():
 		var col := i % COLS
 		var row := int(i / COLS)
@@ -111,6 +111,10 @@ func _draw() -> void:
 			top_txt += ("%s×%d  " % [up.title, int(top[i]["count"])])
 	_text(Vector2(34, 62), "累计时长 %dh%02dm    最常见藏品：%s"
 		% [hours, mins, top_txt if top_txt != "" else "—"], 9, GameConfig.COL_DIM)
+	_text(Vector2(34, 74), "难度最高层  简单 %d / 普通 %d / 困难 %d    已完成挑战 %d"
+		% [int(MetaProgress.floor_by_difficulty[0]), int(MetaProgress.floor_by_difficulty[1]),
+		int(MetaProgress.floor_by_difficulty[2]), MetaProgress.challenges_done], 8,
+		GameConfig.COL_DIM)
 
 	for i in _ids.size():
 		var uid: String = _ids[i]
@@ -131,7 +135,7 @@ func _draw() -> void:
 			draw_rect(r.grow(1), Color(0.55, 0.75, 1.0), false, 2.0)
 
 	# 详情
-	var box := Rect2(34, 232, GameConfig.BASE_W - 68, 74)
+	var box := Rect2(34, 236, GameConfig.BASE_W - 68, 70)
 	draw_rect(box, Color(0.07, 0.08, 0.12, 0.96))
 	draw_rect(box, Color(0.3, 0.36, 0.48), false, 1.0)
 	if _selected == "":

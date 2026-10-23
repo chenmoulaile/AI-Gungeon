@@ -19,7 +19,7 @@ func _setup() -> void:
 	contact_damage = 1
 	coin_value = 4
 	accent = Color("#ff8fb1")
-	timer = randf_range(1.0, 2.0)
+	timer = SeedManager.randf_range(1.0, 2.0)
 
 
 func _ai(delta: float) -> void:

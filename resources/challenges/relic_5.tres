@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="Challenge" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/challenge.gd" id="1_ch"]
+
+[resource]
+script = ExtResource("1_ch")
+id = "relic_5"
+title = "收藏家"
+desc = "一局内获得 5 个藏品"

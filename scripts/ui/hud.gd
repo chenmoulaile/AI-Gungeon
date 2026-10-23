@@ -12,6 +12,10 @@ var _pop: Dictionary = {}          # uid -> 剩余弹跳时间
 var _desc_uid: String = ""
 var _desc_t: float = 0.0
 var _low_flash: float = 0.0
+var _challenge_title: String = ""
+var _challenge_desc: String = ""
+var _challenge_done: bool = false
+var _challenge_pop: float = 0.0
 
 
 func _ready() -> void:
@@ -23,6 +27,8 @@ func _ready() -> void:
 	GameState.upgrades_changed.connect(_on_upgrades_changed)
 	GameState.synergy_activated.connect(_on_synergy)
 	GameState.low_health_triggered.connect(_on_low_health)
+	ChallengeManager.challenge_changed.connect(_on_challenge)
+	ChallengeManager.completed.connect(_on_challenge_done)
 
 
 func _process(delta: float) -> void:
@@ -32,6 +38,7 @@ func _process(delta: float) -> void:
 		_pop[k] = maxf(0.0, float(_pop[k]) - delta)
 	_desc_t = maxf(0.0, _desc_t - delta)
 	_low_flash = maxf(0.0, _low_flash - delta)
+	_challenge_pop = maxf(0.0, _challenge_pop - delta)
 	queue_redraw()
 
 
@@ -44,6 +51,19 @@ func _on_combo_activated(combo_name: String) -> void:
 	combo_text = "组合效果激活：%s" % combo_name
 	combo_time = 3.0
 	Sfx.play("skill", -4.0, 1.3)
+
+
+func _on_challenge(title: String, desc: String) -> void:
+	_challenge_title = title
+	_challenge_desc = desc
+	_challenge_done = false
+
+
+func _on_challenge_done(title: String) -> void:
+	_challenge_done = true
+	_challenge_pop = 1.0
+	_challenge_title = title
+	Sfx.play("relic", -2.0, 1.2)
 
 
 func _on_low_health() -> void:
@@ -80,6 +100,7 @@ func _draw() -> void:
 	_draw_specialty()
 	_draw_relic_desc()
 	_draw_boss()
+	_draw_challenge()
 	_draw_toasts()
 
 
@@ -303,6 +324,21 @@ func _draw_boss() -> void:
 			Color(0.45, 0.06, 0.10, 0.75 * a))
 		_text(Vector2(GameConfig.BASE_W * 0.5, y + 24), "阶段转换！", 10,
 			Color(1.0, 0.55, 0.55, a), HORIZONTAL_ALIGNMENT_CENTER)
+
+
+## 顶部小字挑战：完成时变金色并放大一次
+func _draw_challenge() -> void:
+	if _challenge_title == "" or GameConfig.ui_font == null:
+		return
+	var txt := "挑战 · %s：%s" % [_challenge_title, _challenge_desc]
+	var size := 8 + int(round(2.0 * _challenge_pop))
+	var col := Color(1.0, 0.85, 0.35) if _challenge_done else Color(0.62, 0.68, 0.8)
+	if _challenge_pop > 0.0:
+		col = col.lerp(Color(1, 1, 1), _challenge_pop * 0.5)
+	_text(Vector2(GameConfig.BASE_W * 0.5, 12), txt, size, col, HORIZONTAL_ALIGNMENT_CENTER)
+	if _challenge_done:
+		_text(Vector2(GameConfig.BASE_W * 0.5, 22), "已完成", 8,
+			Color(1.0, 0.85, 0.35, 0.8), HORIZONTAL_ALIGNMENT_CENTER)
 
 
 func _draw_toasts() -> void:

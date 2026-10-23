@@ -18,7 +18,7 @@ func _setup() -> void:
 	contact_damage = 1
 	coin_value = 4
 	accent = Color("#c76bff")
-	fire_cd = randf_range(1.2, 2.0)
+	fire_cd = SeedManager.randf_range(1.2, 2.0)
 	ring_mode = GameState.floor_index >= 3
 
 
@@ -49,7 +49,7 @@ func _ai(delta: float) -> void:
 					shoot_at(dir.rotated(deg_to_rad(30.0 * t2)), 165.0, 4.0)
 			Sfx.play_at("hit", global_position, -8.0, 0.9)
 	if fire_cd <= 0.0:
-		fire_cd = randf_range(2.3, 3.0)
+		fire_cd = SeedManager.randf_range(2.3, 3.0)
 		telegraph = 0.45
 
 

@@ -14,6 +14,7 @@ boot_splash/bg_color=Color(0.043, 0.05, 0.075, 1)
 [autoload]
 
 GameConfig="*res://scripts/systems/game_config.gd"
+SeedManager="*res://scripts/systems/seed_manager.gd"
 Settings="*res://scripts/systems/settings.gd"
 MetaProgress="*res://scripts/systems/meta_progress.gd"
 InputBuffer="*res://scripts/systems/input_buffer.gd"
@@ -23,6 +24,7 @@ MusicManager="*res://scripts/systems/music_manager.gd"
 Sfx="*res://scripts/systems/audio_manager.gd"
 InputDevice="*res://scripts/systems/input_device.gd"
 DialogueManager="*res://scripts/systems/dialogue_manager.gd"
+ChallengeManager="*res://scripts/systems/challenge_manager.gd"
 UpgradeDB="*res://scripts/systems/upgrade_db.gd"
 
 [display]

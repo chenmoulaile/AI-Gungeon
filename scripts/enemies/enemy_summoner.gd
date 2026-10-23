@@ -17,7 +17,7 @@ func _setup() -> void:
 	contact_damage = 1
 	coin_value = 5
 	accent = Color("#9be36b")
-	timer = randf_range(1.4, 2.6)
+	timer = SeedManager.randf_range(1.4, 2.6)
 
 
 func _ai(delta: float) -> void:
@@ -48,7 +48,7 @@ func _summon() -> void:
 	for i in 2:
 		var e = ChaserScene.instantiate()
 		e.mini = true
-		var ang := randf() * TAU
+		var ang := SeedManager.randf() * TAU
 		e.position = global_position + Vector2(cos(ang), sin(ang)) * 26.0
 		GameState.bullets_root.add_child(e)
 	Sfx.play_at("summon_pop", global_position, -2.0, 1.1)

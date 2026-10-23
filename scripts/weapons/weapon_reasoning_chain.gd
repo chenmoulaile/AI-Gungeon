@@ -34,7 +34,7 @@ func fire(dir: Vector2) -> void:
 	_shoot_one(origin, dir)
 	for off in proj_offsets():
 		_shoot_one(origin, dir.rotated(off))
-	Sfx.play("shoot", -6.0, randf_range(0.95, 1.08))
+	Sfx.play("shoot", -6.0, SeedManager.randf_range(0.95, 1.08))
 
 
 func _shoot_one(origin: Vector2, dir: Vector2) -> void:

@@ -5,6 +5,7 @@ const SelectScene = preload("res://scenes/ui/character_select.tscn")
 const GameScene = preload("res://scenes/main/game.tscn")
 const ResultScene = preload("res://scenes/ui/result.tscn")
 const CollectionScene = preload("res://scenes/ui/collection_menu.tscn")
+const TrainingScene = preload("res://scenes/training/training_room.tscn")
 
 var current: Node = null
 
@@ -27,15 +28,23 @@ func show_select() -> void:
 	var s: Node = SelectScene.instantiate()
 	s.character_chosen.connect(_on_character_chosen)
 	s.open_collection.connect(show_collection)
+	s.open_training.connect(show_training)
 	_swap(s)
 
 
-func _on_character_chosen(id: String) -> void:
-	print("[pick] ", id)
-	GameState.start_run(id)
+func _on_character_chosen(id: String, seed_text: String = "", difficulty: int = 1) -> void:
+	print("[pick] ", id, " seed=", seed_text, " diff=", difficulty)
+	SeedManager.difficulty = difficulty
+	GameState.start_run(id, seed_text)
 	var g: Node = GameScene.instantiate()
 	g.run_over.connect(_on_run_over)
 	_swap(g)
+
+
+func show_training() -> void:
+	var t: Node = TrainingScene.instantiate()
+	t.exit_requested.connect(show_select)
+	_swap(t)
 
 
 func show_collection() -> void:

@@ -158,6 +158,9 @@ func _gui_input(event: InputEvent) -> void:
 			elif TAB_PAD.has_point(get_local_mouse_position()):
 				_tab = "pad"
 				_build_rows()
+			elif _seed_copy_rect().has_point(get_local_mouse_position()):
+				SeedManager.copy_seed()
+				Sfx.play("ui")
 			elif _hover >= 0:
 				_press_row(_hover)
 				_dragging = String(_rows[_hover]["id"]) if _rows[_hover]["kind"] == "slider" else ""
@@ -249,6 +252,10 @@ func _drag_to(mouse: Vector2) -> void:
 		Settings.save_settings()
 
 
+func _seed_copy_rect() -> Rect2:
+	return Rect2(PANEL.position.x + 120, PANEL.position.y + 12, 160, 16)
+
+
 func _close_rect() -> Rect2:
 	return Rect2(PANEL.end.x - 92.0, PANEL.end.y - 32.0, 74.0, 22.0)
 
@@ -266,6 +273,8 @@ func _draw() -> void:
 	if GameConfig.ui_font == null:
 		return
 	_text(Vector2(PANEL.position.x + 16, PANEL.position.y + 24), "设置", 16, GameConfig.COL_TEXT)
+	_text(Vector2(PANEL.position.x + 120, PANEL.position.y + 24),
+		"种子 %s（点击复制）" % SeedManager.seed_string, 8, Color(1.0, 0.85, 0.45))
 	# 分页
 	for t in [["key", "键盘", TAB_KEY], ["pad", "手柄", TAB_PAD]]:
 		var r: Rect2 = t[2]

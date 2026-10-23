@@ -57,7 +57,7 @@ func bullet_speed_mult() -> float:
 ## 返回 {dmg, crit}
 func calc_damage(base: float) -> Dictionary:
 	var dmg := base * damage_mult()
-	var crit := randf() < stat("crit", 0.0)
+	var crit := SeedManager.randf() < stat("crit", 0.0)
 	if crit:
 		dmg *= stat("crit_mult", 2.0)
 	return {"dmg": dmg, "crit": crit}

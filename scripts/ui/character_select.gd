@@ -3,10 +3,11 @@ extends Control
 
 signal character_chosen(id: String)
 signal open_collection
+signal open_training
 
 const IDS := ["deepseek", "gpt", "claude"]
 const CARD_W := 186.0
-const CARD_H := 262.0
+const CARD_H := 244.0
 const CARD_Y := 62.0
 
 var _data: Array = []
@@ -16,6 +17,9 @@ var _hover: int = -1
 var _t: float = 0.0
 var _intro: Array = []
 var _focus: int = 0
+var seed_text: String = ""
+var _difficulty: int = 1
+var _editing: bool = false
 
 
 func _ready() -> void:
@@ -28,6 +32,8 @@ func _ready() -> void:
 		var p := "res://assets/portraits/%s_full.png" % id
 		_tex.append(load(p) if ResourceLoader.exists(p) else null)
 		_intro.append(DialogueManager.pick(id, "intro"))
+	_difficulty = clampi(Settings.difficulty, 0, 2)
+	SeedManager.difficulty = _difficulty
 	_layout()
 
 
@@ -66,17 +72,54 @@ func _process(delta: float) -> void:
 
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var m := get_local_mouse_position()
+		if _seed_rect().has_point(m):
+			_editing = true
+			accept_event()
+			return
+		for i in 3:
+			if _diff_rect(i).has_point(m):
+				_difficulty = i
+				Settings.difficulty = i
+				Settings.save_settings()
+				SeedManager.difficulty = i
+				Sfx.play("ui")
+				accept_event()
+				return
 		if _hover >= 0:
 			_choose(_hover)
 			accept_event()
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if _editing:
+		if event is InputEventKey and event.pressed:
+			var k := event as InputEventKey
+			if k.physical_keycode in [KEY_ENTER, KEY_ESCAPE]:
+				_editing = false
+			elif k.physical_keycode == KEY_BACKSPACE:
+				seed_text = seed_text.substr(0, maxi(0, seed_text.length() - 1))
+			elif k.unicode >= 32 and seed_text.length() < 10:
+				seed_text += char(k.unicode)
+			get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.physical_keycode == KEY_C:
 			Sfx.play("ui")
 			open_collection.emit()
 			get_viewport().set_input_as_handled()
+		elif event.physical_keycode == KEY_T:
+			Sfx.play("ui")
+			open_training.emit()
+			get_viewport().set_input_as_handled()
+
+
+func _diff_rect(i: int) -> Rect2:
+	return Rect2(40 + i * 34, 312, 32, 14)
+
+
+func _seed_rect() -> Rect2:
+	return Rect2(150, 312, 96, 14)
 
 
 func _choose(index: int) -> void:
@@ -84,7 +127,7 @@ func _choose(index: int) -> void:
 		return
 	Sfx.play("ui")
 	set_process(false)
-	character_chosen.emit(IDS[index])
+	character_chosen.emit(IDS[index], seed_text, _difficulty)
 
 
 func _draw() -> void:
@@ -105,12 +148,33 @@ func _draw() -> void:
 		_draw_card(i, _rects[i])
 
 	if GameConfig.ui_font != null:
-		draw_string(GameConfig.ui_font, Vector2(0, GameConfig.BASE_H - 12),
-			"WASD 移动 · 鼠标瞄准 · 左键射击 · 空格翻滚 · E 技能 · R 切换模式 · C 图鉴",
-			HORIZONTAL_ALIGNMENT_CENTER, GameConfig.BASE_W, 9, GameConfig.COL_DIM)
-		draw_string(GameConfig.ui_font, Vector2(0, GameConfig.BASE_H - 26),
-			"非官方同人 · 角色形象基于 B站 UP 主 ZipZipPipe 的二创设计（CC BY-NC-SA 4.0）",
-			HORIZONTAL_ALIGNMENT_CENTER, GameConfig.BASE_W, 8, Color(0.5, 0.55, 0.65))
+		draw_string(GameConfig.ui_font, Vector2(0, GameConfig.BASE_H - 24),
+			"WASD 移动 · 左键射击 · 空格翻滚 · E 技能 · R 切换模式 · C 图鉴 · T 训练场",
+			HORIZONTAL_ALIGNMENT_CENTER, GameConfig.BASE_W, 8, GameConfig.COL_DIM)
+		draw_string(GameConfig.ui_font, Vector2(0, GameConfig.BASE_H - 11),
+			"非官方同人 · 角色形象基于 B站 UP 主 ZipZipPipe 的二创（CC BY-NC-SA 4.0）",
+			HORIZONTAL_ALIGNMENT_CENTER, GameConfig.BASE_W, 7, Color(0.5, 0.55, 0.65))
+
+	# 难度 + 种子
+	draw_string(GameConfig.ui_font, Vector2(14, 323), "难度", HORIZONTAL_ALIGNMENT_LEFT, -1, 9,
+		GameConfig.COL_DIM)
+	for i in 3:
+		var dr := _diff_rect(i)
+		var on := i == _difficulty
+		draw_rect(dr, Color(0.18, 0.3, 0.46) if on else Color(0.1, 0.12, 0.17))
+		draw_rect(dr, Color(0.55, 0.72, 1.0) if on else Color(0.3, 0.34, 0.42), false, 1.0)
+		draw_string(GameConfig.ui_font, Vector2(dr.position.x, dr.position.y + 11),
+			["简单", "普通", "困难"][i], HORIZONTAL_ALIGNMENT_CENTER, dr.size.x, 8,
+			GameConfig.COL_TEXT if on else GameConfig.COL_DIM)
+	var sr := _seed_rect()
+	draw_rect(sr, Color(0.06, 0.08, 0.12, 0.95))
+	draw_rect(sr, Color(1.0, 0.85, 0.4) if _editing else Color(0.3, 0.34, 0.42), false, 1.0)
+	draw_string(GameConfig.ui_font, Vector2(sr.position.x + 5, sr.position.y + 11),
+		("种子：" + seed_text + ("_" if _editing else "")) if seed_text != "" else "种子：随机",
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 8,
+		Color(1.0, 0.88, 0.5) if _editing else GameConfig.COL_DIM)
+	draw_string(GameConfig.ui_font, Vector2(GameConfig.BASE_W - 10, 323), "训练场 [T]",
+		HORIZONTAL_ALIGNMENT_RIGHT, -1, 9, Color(0.6, 0.8, 1.0))
 
 
 func _draw_card(i: int, r: Rect2) -> void:

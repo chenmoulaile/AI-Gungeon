@@ -18,7 +18,7 @@ func _setup() -> void:
 	contact_damage = 1
 	coin_value = 5
 	accent = Color("#c9c2a8")
-	melee_cd = randf_range(0.6, 1.2)
+	melee_cd = SeedManager.randf_range(0.6, 1.2)
 
 
 func _ai(delta: float) -> void:

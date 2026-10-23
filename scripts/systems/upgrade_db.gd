@@ -110,7 +110,7 @@ func roll_offers(n: int, owned: Array) -> Array:
 	var out: Array = []
 	# 先把至少一个"能凑组合"的塞进第一格
 	if hints.size() > 0:
-		var pick: String = hints[randi() % hints.size()]
+		var pick: String = hints[SeedManager.randi() % hints.size()]
 		out.append(upgrades[pick])
 		weighted = weighted.filter(func(e): return e["id"] != pick)
 	# 剩余按权重抽
@@ -118,7 +118,7 @@ func roll_offers(n: int, owned: Array) -> Array:
 		var total := 0
 		for e in weighted:
 			total += int(e["w"])
-		var roll := randi() % maxi(total, 1)
+		var roll := SeedManager.randi() % maxi(total, 1)
 		var acc := 0
 		var chosen := 0
 		for i in weighted.size():

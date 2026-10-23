@@ -16,6 +16,7 @@ func _ready() -> void:
 
 func on_switch_mode() -> void:
 	var old_mode := mode
+	ChallengeManager.on_mode_switch()
 	mode = (mode + 1) % 3
 	mode_name = MODE_NAMES[mode]
 	if player != null and is_instance_valid(player):
@@ -65,7 +66,7 @@ func _fire_text(dir: Vector2) -> void:
 	_shot(origin, dir, 4.2, 430.0, 2.7)
 	for off in proj_offsets():
 		_shot(origin, dir.rotated(off), 4.2, 430.0, 2.7)
-	Sfx.play("shoot", -8.0, randf_range(1.0, 1.15))
+	Sfx.play("shoot", -8.0, SeedManager.randf_range(1.0, 1.15))
 
 
 # ---------------- B 图像：5 发扇形 ----------------
@@ -114,7 +115,7 @@ func use_skill() -> bool:
 		player.tokens = 0
 		chosen = kinds.duplicate()
 	else:
-		chosen = [kinds[randi() % kinds.size()]]
+		chosen = [kinds[SeedManager.randi() % kinds.size()]]
 	for k in chosen:
 		player.add_buff(k, BUFF_VALUES[k], 5.0)
 	Sfx.play("skill")

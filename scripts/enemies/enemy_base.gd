@@ -42,6 +42,8 @@ func _ready() -> void:
 		coin_value += 2
 	if hp_scale != 1.0:
 		max_hp *= hp_scale
+	max_hp *= SeedManager.diff("hp")
+	contact_damage = maxi(1, int(round(float(contact_damage) * SeedManager.diff("dmg"))))
 	if mini:
 		max_hp = maxf(3.0, max_hp * 0.22)
 		radius *= 0.62
@@ -179,10 +181,11 @@ func _die() -> void:
 func _drop_coins() -> void:
 	if GameState.bullets_root == null:
 		return
-	for i in coin_value:
+	var n: int = maxi(1, int(round(float(coin_value) * SeedManager.diff("coin"))))
+	for i in n:
 		var c: Node2D = CoinScript.new()
 		c.value = 1
-		c.global_position = global_position + Vector2(randf_range(-6, 6), randf_range(-6, 6))
+		c.global_position = global_position + Vector2(SeedManager.randf_range(-6, 6), SeedManager.randf_range(-6, 6))
 		GameState.bullets_root.add_child(c)
 
 
@@ -196,7 +199,7 @@ func shoot_at(dir: Vector2, speed: float = 155.0, bullet_radius: float = 3.8,
 		return
 	b.friendly = false
 	b.dir = dir.normalized()
-	b.speed = speed
+	b.speed = speed * SeedManager.diff("bullet")
 	b.damage = 1.0
 	b.radius = bullet_radius
 	b.color = Color("#ff5d7a") if not Settings.high_contrast else Color("#ff2d55")

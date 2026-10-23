@@ -32,13 +32,13 @@ func _build_obstacles() -> void:
 	var r := GameConfig.room_rect()
 	var door_pt := Vector2(r.end.x - 30.0, r.size.y * 0.5)
 	var spawn_pt := Vector2(r.position.x + 90.0, r.size.y * 0.5)
-	var count := randi() % 4
+	var count := SeedManager.randi() % 4
 	var tries := 0
 	while _obstacles.size() < count and tries < 60:
 		tries += 1
-		var sz := Vector2(randf_range(44.0, 60.0), randf_range(44.0, 60.0))
-		var px := randf_range(r.position.x + 80.0, r.end.x - 80.0 - sz.x)
-		var py := randf_range(r.position.y + 80.0, r.end.y - 80.0 - sz.y)
+		var sz := Vector2(SeedManager.randf_range(44.0, 60.0), SeedManager.randf_range(44.0, 60.0))
+		var px := SeedManager.randf_range(r.position.x + 80.0, r.end.x - 80.0 - sz.x)
+		var py := SeedManager.randf_range(r.position.y + 80.0, r.end.y - 80.0 - sz.y)
 		var rect := Rect2(px, py, sz.x, sz.y)
 		# 不堵门、不压出生点、彼此留出通道
 		if rect.grow(80.0).has_point(door_pt):
@@ -55,10 +55,10 @@ func _build_obstacles() -> void:
 		_add_obstacle(rect)
 	GameState.obstacles = _obstacles.duplicate()
 
-	if randf() < 0.1:
+	if SeedManager.randf() < 0.1:
 		for i in 20:
-			var p := Vector2(randf_range(r.position.x + 120.0, r.end.x - 120.0),
-				randf_range(r.position.y + 120.0, r.end.y - 120.0))
+			var p := Vector2(SeedManager.randf_range(r.position.x + 120.0, r.end.x - 120.0),
+				SeedManager.randf_range(r.position.y + 120.0, r.end.y - 120.0))
 			if p.distance_to(door_pt) < 140.0 or p.distance_to(spawn_pt) < 140.0:
 				continue
 			var clear := true
@@ -211,7 +211,7 @@ func spawn_point(index: int) -> Vector2:
 
 func random_point(pad: float = 60.0) -> Vector2:
 	var r := GameConfig.room_rect().grow(-pad)
-	return Vector2(randf_range(r.position.x, r.end.x), randf_range(r.position.y, r.end.y))
+	return Vector2(SeedManager.randf_range(r.position.x, r.end.x), SeedManager.randf_range(r.position.y, r.end.y))
 
 
 # ---------------- 绘制 ----------------

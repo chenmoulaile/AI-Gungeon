@@ -30,14 +30,14 @@ func _break() -> void:
 	GameFeel.burst(global_position, Color(0.9, 0.7, 0.45), 12, 140.0, 0.35)
 	GameFeel.screen_shake(0.12)
 	Sfx.play("hit", 0.0, 0.6)
-	if randf() < 0.5:
+	if SeedManager.randf() < 0.5:
 		GameState.heal(1)
 	else:
 		var coin_scene = load("res://scripts/systems/coin.gd")
-		for i in randi_range(3, 5):
+		for i in SeedManager.randi_range(3, 5):
 			var c: Node2D = coin_scene.new()
 			c.value = 1
-			c.global_position = global_position + Vector2(randf_range(-8, 8), randf_range(-8, 8))
+			c.global_position = global_position + Vector2(SeedManager.randf_range(-8, 8), SeedManager.randf_range(-8, 8))
 			GameState.bullets_root.add_child(c)
 	queue_free()
 

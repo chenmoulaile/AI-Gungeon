@@ -13,6 +13,7 @@ var fullscreen: bool = false
 var high_contrast: bool = false
 var tutorial_done: bool = false
 var vibration: bool = true
+var difficulty: int = 1
 
 ## action -> {"device": "key" | "mouse" | "joy_button" | "joy_axis", "code": int, "dir": int}
 var bindings: Dictionary = {}
@@ -68,6 +69,7 @@ func load_settings() -> void:
 	fullscreen = bool(cfg.get_value("video", "fullscreen", fullscreen))
 	high_contrast = bool(cfg.get_value("video", "high_contrast", high_contrast))
 	vibration = bool(cfg.get_value("video", "vibration", vibration))
+	difficulty = int(cfg.get_value("game", "difficulty", difficulty))
 	tutorial_done = bool(cfg.get_value("misc", "tutorial_done", tutorial_done))
 	var saved = cfg.get_value("input", "bindings", null)
 	if saved is Dictionary:
@@ -85,6 +87,7 @@ func save_settings() -> void:
 	cfg.set_value("video", "fullscreen", fullscreen)
 	cfg.set_value("video", "high_contrast", high_contrast)
 	cfg.set_value("video", "vibration", vibration)
+	cfg.set_value("game", "difficulty", difficulty)
 	cfg.set_value("misc", "tutorial_done", tutorial_done)
 	cfg.set_value("input", "bindings", bindings)
 	cfg.save(PATH)

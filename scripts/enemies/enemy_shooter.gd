@@ -19,10 +19,10 @@ func _setup() -> void:
 	contact_damage = 1
 	coin_value = 3
 	accent = Color("#ff9f43")
-	fire_cd = randf_range(1.0, 1.8)
+	fire_cd = SeedManager.randf_range(1.0, 1.8)
 	if GameState.floor_index >= 2:
 		pattern = "spiral"
-		spin = randf() * TAU
+		spin = SeedManager.randf() * TAU
 
 
 func _ai(delta: float) -> void:
@@ -49,7 +49,7 @@ func _ai(delta: float) -> void:
 				shoot_at(dir, 190.0, 3.8)
 			Sfx.play_at("shoot", global_position, -6.0, 0.9)
 	if fire_cd <= 0.0:
-		fire_cd = randf_range(1.5, 2.2) if pattern == "aim" else randf_range(1.1, 1.6)
+		fire_cd = SeedManager.randf_range(1.5, 2.2) if pattern == "aim" else SeedManager.randf_range(1.1, 1.6)
 		telegraph = 0.35
 
 

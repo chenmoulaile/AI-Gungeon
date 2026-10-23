@@ -110,6 +110,12 @@ func damage_number(pos: Vector2, amount: float, crit: bool = false) -> void:
 		node.show_number(pos, amount, crit)
 
 
+func text_popup(pos: Vector2, s: String, color: Color = Color(1, 1, 1, 0.9)) -> void:
+	var node := _take_number()
+	if node != null:
+		node.show_text(pos, s)
+
+
 func release_number(node: Node2D) -> void:
 	if node != null and is_instance_valid(node):
 		PoolManager.recycle(node)

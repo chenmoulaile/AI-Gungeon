@@ -12,7 +12,7 @@ func _setup() -> void:
 	contact_damage = 1
 	coin_value = 2
 	accent = Color("#ff7a9c")
-	_wobble = randf() * TAU
+	_wobble = SeedManager.randf() * TAU
 
 
 func _ai(delta: float) -> void:

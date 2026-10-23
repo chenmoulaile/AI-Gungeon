@@ -117,8 +117,8 @@ func _check_hit() -> void:
 				c.hit(damage, dir)
 				_despawn()
 				return
-		# 玩家子弹可以击落追踪弹
-		if shoot_down:
+		# 玩家子弹可以击落追踪弹（组扫描降频到每 2 帧一次）
+		if shoot_down and Engine.get_physics_frames() % 2 == 0:
 			for b in get_tree().get_nodes_in_group("enemy_bullets"):
 				if b == self or not is_instance_valid(b) or not b.destructible:
 					continue
@@ -132,6 +132,10 @@ func _check_hit() -> void:
 		if p == null or not is_instance_valid(p) or not p.alive:
 			return
 		if global_position.distance_to(p.global_position) < radius + GameConfig.PLAYER_RADIUS:
+			if GameState.training:
+				GameFeel.text_popup(p.global_position + Vector2(0, -22), "MISS")
+				_despawn()
+				return
 			if p.try_absorb_bullet():
 				_despawn()
 				return
