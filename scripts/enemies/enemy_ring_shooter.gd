@@ -32,7 +32,7 @@ func _ai(delta: float) -> void:
 	if timer <= 0.0:
 		timer = CYCLE
 		warning = WARN
-		Sfx.play("skill", -12.0, 1.6)
+		Sfx.play_at("ring_warn", global_position, -4.0, 1.0)
 
 
 func _fire_ring() -> void:
@@ -40,7 +40,7 @@ func _fire_ring() -> void:
 	for i in BULLETS:
 		var a := TAU * float(i) / float(BULLETS) + spin
 		shoot_at(Vector2(cos(a), sin(a)), 120.0, 3.8)
-	Sfx.play("hit", -8.0, 0.75)
+	Sfx.play_at("hit", global_position, -6.0, 0.8)
 	GameFeel.screen_shake(0.08)
 
 

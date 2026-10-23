@@ -39,7 +39,7 @@ func _ai(delta: float) -> void:
 	if timer <= 0.0:
 		timer = CYCLE
 		warning = WARN
-		Sfx.play("skill", -10.0, 1.2)
+		Sfx.play_at("summon_cast", global_position, -2.0, 1.0)
 
 
 func _summon() -> void:
@@ -51,7 +51,7 @@ func _summon() -> void:
 		var ang := randf() * TAU
 		e.position = global_position + Vector2(cos(ang), sin(ang)) * 26.0
 		GameState.bullets_root.add_child(e)
-	Sfx.play("boss", -14.0, 1.8)
+	Sfx.play_at("summon_pop", global_position, -2.0, 1.1)
 	GameFeel.burst(global_position, Color(0.6, 0.95, 0.5), 8, 90.0, 0.3)
 
 

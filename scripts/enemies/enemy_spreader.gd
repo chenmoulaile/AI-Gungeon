@@ -47,7 +47,7 @@ func _ai(delta: float) -> void:
 				for i in 5:
 					var t2 := float(i) / 4.0 - 0.5
 					shoot_at(dir.rotated(deg_to_rad(30.0 * t2)), 165.0, 4.0)
-			Sfx.play("hit", -12.0, 0.9)
+			Sfx.play_at("hit", global_position, -8.0, 0.9)
 	if fire_cd <= 0.0:
 		fire_cd = randf_range(2.3, 3.0)
 		telegraph = 0.45

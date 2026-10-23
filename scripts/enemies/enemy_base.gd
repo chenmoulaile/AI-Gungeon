@@ -131,7 +131,7 @@ func blocks_hit(_bullet_dir: Vector2) -> bool:
 
 ## 子弹被挡下时的反馈（金属叮 + 火花 + light 硬直）
 func on_blocked(pos: Vector2, _dir: Vector2) -> void:
-	Sfx.play("hit", 0.0, 1.9)
+	Sfx.play_at("clang", pos, 0.0, 1.0)
 	GameFeel.burst(pos, Color(1.0, 0.95, 0.7), 6, 110.0, 0.22)
 	GameFeel.hit_stop(0.04, 0.08)
 

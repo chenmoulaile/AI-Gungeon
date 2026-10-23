@@ -9,6 +9,7 @@ const CARD_H := 186.0
 var offers: Array = []
 var _rects: Array = []
 var _hover: int = -1
+var _focus: int = 0
 var _msg: String = ""
 var _msg_t: float = 0.0
 var _cont_rect := Rect2(GameConfig.BASE_W * 0.5 - 70, GameConfig.BASE_H - 44, 140, 26)
@@ -35,6 +36,20 @@ func _process(delta: float) -> void:
 	for i in _rects.size():
 		if _rects[i].has_point(mouse):
 			_hover = i
+	# 手柄 / 方向键：卡片 0..n-1，最后一格是"继续"
+	if Input.is_action_just_pressed("ui_left"):
+		_focus = maxi(0, _focus - 1)
+	if Input.is_action_just_pressed("ui_right"):
+		_focus = mini(offers.size(), _focus + 1)
+	if Input.is_action_just_pressed("ui_accept"):
+		if _focus >= offers.size():
+			Sfx.play("ui")
+			closed.emit()
+			queue_free()
+		elif _focus < offers.size():
+			_buy(_focus)
+	if InputDevice.using_pad:
+		_hover = _focus if _focus < offers.size() else -1
 	queue_redraw()
 
 
@@ -88,7 +103,8 @@ func _draw() -> void:
 		_draw_card(i, _rects[i], offers[i])
 
 	# 继续按钮
-	var hovered := _cont_rect.has_point(get_local_mouse_position())
+	var hovered := _cont_rect.has_point(get_local_mouse_position()) \
+		or (_focus >= offers.size() and InputDevice.using_pad)
 	draw_rect(_cont_rect, Color(0.14, 0.18, 0.26) if not hovered else Color(0.2, 0.28, 0.4))
 	draw_rect(_cont_rect, Color(0.5, 0.6, 0.8), false, 1.0)
 	draw_string(GameConfig.ui_font, Vector2(_cont_rect.position.x, _cont_rect.position.y + 18),

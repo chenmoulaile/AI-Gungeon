@@ -35,13 +35,13 @@ func _ai(delta: float) -> void:
 				state = "windup"
 				timer = WINDUP
 				dash_dir = dir
-				Sfx.play("skill", -10.0, 0.7)
+				Sfx.play_at("charge_windup", global_position, -2.0, 0.9)
 		"windup":
 			if timer <= 0.0:
 				state = "dash"
 				timer = DASH_TIME
 				_hit_wall = false
-				Sfx.play("roll", -4.0, 0.7)
+				Sfx.play_at("dash", global_position, -2.0, 1.0)
 		"dash":
 			position += dash_dir * DASH_SPEED * delta
 			# 撞到墙或障碍就眩晕
@@ -53,7 +53,7 @@ func _ai(delta: float) -> void:
 				timer = STUN_TIME
 				knock_vel = -dash_dir * 90.0
 				GameFeel.screen_shake(0.2)
-				Sfx.play("hit", -2.0, 0.6)
+				Sfx.play_at("hit", global_position, -2.0, 0.6)
 		"stun":
 			if timer <= 0.0:
 				state = "idle"

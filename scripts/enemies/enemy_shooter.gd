@@ -47,7 +47,7 @@ func _ai(delta: float) -> void:
 					shoot_at(Vector2(cos(a), sin(a)), 165.0, 3.8)
 			else:
 				shoot_at(dir, 190.0, 3.8)
-			Sfx.play("hit", -14.0, 1.6)
+			Sfx.play_at("shoot", global_position, -6.0, 0.9)
 	if fire_cd <= 0.0:
 		fire_cd = randf_range(1.5, 2.2) if pattern == "aim" else randf_range(1.1, 1.6)
 		telegraph = 0.35

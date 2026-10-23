@@ -13,6 +13,7 @@ var _selected: String = ""
 var _hover: int = -1
 var _icon_cache: Dictionary = {}
 var _t: float = 0.0
+var _focus: int = 0
 
 
 func _ready() -> void:
@@ -43,6 +44,23 @@ func _process(delta: float) -> void:
 	for i in _rects.size():
 		if _rects[i].grow(2).has_point(mouse):
 			_hover = i
+	if Input.is_action_just_pressed("ui_left"):
+		_focus = maxi(0, _focus - 1)
+	if Input.is_action_just_pressed("ui_right"):
+		_focus = mini(_ids.size() - 1, _focus + 1)
+	if Input.is_action_just_pressed("ui_up"):
+		_focus = maxi(0, _focus - COLS)
+	if Input.is_action_just_pressed("ui_down"):
+		_focus = mini(_ids.size() - 1, _focus + COLS)
+	if Input.is_action_just_pressed("ui_accept") and _focus < _ids.size():
+		var uid: String = _ids[_focus]
+		if MetaProgress.seen_relics.has(uid):
+			_selected = uid
+			Sfx.play("ui")
+	if Input.is_action_just_pressed("ui_cancel"):
+		_close()
+	if InputDevice.using_pad:
+		_hover = _focus
 	queue_redraw()
 
 
@@ -107,7 +125,7 @@ func _draw() -> void:
 		else:
 			draw_rect(r, Color(0.05, 0.06, 0.09))
 			_text(Vector2(r.position.x + 12, r.position.y + 22), "?", 12, Color(0.3, 0.33, 0.4))
-		if _hover == i:
+		if _hover == i or (_focus == i and InputDevice.using_pad):
 			draw_rect(r, Color(1.0, 0.85, 0.4), false, 1.0)
 		if _selected == uid:
 			draw_rect(r.grow(1), Color(0.55, 0.75, 1.0), false, 2.0)

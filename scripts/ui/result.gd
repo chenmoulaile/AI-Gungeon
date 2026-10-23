@@ -14,6 +14,7 @@ var _btn_menu := Rect2(GameConfig.BASE_W * 0.5 + 12, GameConfig.BASE_H - 44, 138
 var _t: float = 0.0
 var _icon_cache: Dictionary = {}
 var _pop: float = 0.0
+var _focus: int = 0
 
 
 func _ready() -> void:
@@ -31,10 +32,21 @@ func _ready() -> void:
 	_is_record = GameState.floor_index >= MetaProgress.max_floor and GameState.floor_index > 0
 	_line = DialogueManager.pick(GameState.char_id,
 		"victory" if GameState.run_cleared else "death")
+	MusicManager.play("explore")
 	Sfx.play("die" if not GameState.run_cleared else "skill", -4.0, 0.8)
 
 
 func _process(delta: float) -> void:
+	if Input.is_action_just_pressed("ui_left"):
+		_focus = 0
+	if Input.is_action_just_pressed("ui_right"):
+		_focus = 1
+	if Input.is_action_just_pressed("ui_accept"):
+		Sfx.play("ui")
+		if _focus == 0:
+			restart.emit()
+		else:
+			to_menu.emit()
 	_t += delta
 	_pop = minf(1.0, _pop + delta * 2.2)
 	queue_redraw()
@@ -142,7 +154,8 @@ func _draw() -> void:
 
 
 func _button(r: Rect2, label: String) -> void:
-	var hovered := r.has_point(get_local_mouse_position())
+	var hovered := r.has_point(get_local_mouse_position()) \
+		or (InputDevice.using_pad and _focus == (0 if r == _btn_restart else 1))
 	draw_rect(r, Color(0.16, 0.2, 0.28) if not hovered else Color(0.24, 0.32, 0.44))
 	draw_rect(r, Color(0.55, 0.65, 0.85), false, 1.0)
 	draw_string(GameConfig.ui_font, Vector2(r.position.x, r.position.y + 18), label,

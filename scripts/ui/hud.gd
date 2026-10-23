@@ -170,7 +170,8 @@ func _draw_skill(p) -> void:
 		var pulse: float = 0.55 + 0.25 * sin(Time.get_ticks_msec() / 260.0)
 		draw_arc(c, 18.5, 0.0, TAU, 32, Color(col.r, col.g, col.b, pulse * 0.5), 1.0, true)
 	draw_circle(c, 2.6, Color(1, 1, 1, 0.85) if ready else Color(0.4, 0.43, 0.5))
-	_text(Vector2(50, GameConfig.BASE_H - 34), "%s [E]" % name, 9,
+	_text(Vector2(50, GameConfig.BASE_H - 34),
+		"%s %s" % [name, InputDevice.label("[E]", "[X]")], 9,
 		GameConfig.COL_TEXT if ready else GameConfig.COL_DIM)
 	_text(Vector2(50, GameConfig.BASE_H - 24),
 		"就绪" if ready else "%.1fs" % cd, 8,
@@ -181,7 +182,7 @@ func _draw_mode(p) -> void:
 	if p.char_id != "gpt" or p.weapon == null:
 		return
 	var w = p.weapon
-	var txt := "模式：%s  [R]" % w.mode_text()
+	var txt := "模式：%s  %s" % [w.mode_text(), InputDevice.label("[R]", "[Y]")]
 	_text(Vector2(GameConfig.BASE_W * 0.5, GameConfig.BASE_H - 10), txt, 10,
 		Color("#c9b6ff"), HORIZONTAL_ALIGNMENT_CENTER)
 	if w.has_method("buff_text"):

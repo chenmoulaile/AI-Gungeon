@@ -21,6 +21,7 @@ func _swap(node: Node) -> void:
 
 
 func show_select() -> void:
+	MusicManager.play("explore")
 	GameState.player = null
 	GameState.bullets_root = null
 	var s: Node = SelectScene.instantiate()

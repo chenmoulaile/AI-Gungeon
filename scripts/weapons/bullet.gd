@@ -30,6 +30,7 @@ var already_hit: Array = []
 var _trail_pts: Array = []
 var _t: float = 0.0
 var _locked: float = 0.0
+var _beep_t: float = 0.0
 
 
 func prepare() -> void:
@@ -55,6 +56,10 @@ func _physics_process(delta: float) -> void:
 	# 地雷：停下引信，最后 0.5s 闪得更快
 	if mine:
 		mine_fuse -= delta
+		_beep_t -= delta
+		if _beep_t <= 0.0:
+			_beep_t = 0.12 if mine_fuse <= 0.5 else 0.35
+			Sfx.play_at("mine_beep", global_position, -6.0, 1.0 + (0.5 - mine_fuse) * 0.6)
 		if mine_fuse <= 0.0:
 			_explode()
 			return
@@ -161,7 +166,7 @@ func _explode() -> void:
 			p.take_damage(1)
 	GameFeel.burst(global_position, Color(1.0, 0.55, 0.3), 14, 170.0, 0.4)
 	GameFeel.screen_shake(0.22)
-	Sfx.play("boss", -8.0, 1.5)
+	Sfx.play_at("boom", global_position, -2.0, 1.0)
 	_despawn()
 
 
@@ -173,6 +178,7 @@ func _check_bounds() -> void:
 			if bounce > 0:
 				bounce -= 1
 				_bounce_off(r)
+				Sfx.play_at("bounce", global_position, -4.0, 1.0 - 0.15 * float(2 - bounce))
 				return
 			GameFeel.burst(global_position, Color(0.8, 0.82, 0.9), 3, 60.0, 0.18)
 			_despawn()
@@ -192,7 +198,7 @@ func _check_bounds() -> void:
 			if global_position.y < inner.position.y or global_position.y > inner.end.y:
 				dir.y = -dir.y
 			rotation = dir.angle()
-			Sfx.play("ui", -6.0, 1.6)
+			Sfx.play_at("bounce", global_position, -4.0, 1.0 - 0.15 * float(2 - bounce))
 			GameFeel.burst(global_position, color, 3, 70.0, 0.2)
 
 

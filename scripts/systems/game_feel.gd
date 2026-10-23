@@ -18,6 +18,13 @@ const PRESETS := {
 
 const HITSTOP_COOLDOWN := 0.16
 
+## 手柄震动与三档对齐：duration / 强度
+const VIBRATION := {
+	"light": [0.05, 0.3],
+	"medium": [0.15, 0.6],
+	"heavy": [0.30, 1.0],
+}
+
 var trauma: float = 0.0
 var trauma_decay: float = 1.55
 var shake_strength: float = 7.5
@@ -68,6 +75,17 @@ func hit_stop(duration: float, scale: float = 0.05) -> void:
 
 func screen_shake(amount: float) -> void:
 	trauma = clampf(trauma + amount, 0.0, 1.0)
+
+
+## 手柄震动：统一走这里，强度跟随屏幕震动滑块
+func vibrate(tier: String) -> void:
+	if not Settings.vibration:
+		return
+	var v: Array = VIBRATION.get(tier, VIBRATION["light"])
+	var amp: float = float(v[1]) * Settings.shake_scale
+	if amp <= 0.02:
+		return
+	Input.start_joy_vibration(0, amp * 0.6, amp, float(v[0]))
 
 
 func flash(node: Node, color: Color = Color(2.6, 2.6, 2.6), duration: float = 0.09) -> void:
@@ -143,6 +161,7 @@ func impact(preset: String, world_pos: Vector2, node: Node, dir: Vector2,
 		damage_number(world_pos + Vector2(randf_range(-3, 3), -12), amount, crit)
 	# 命中音效与 hit-stop 在同一帧开始，听感与画面同步
 	Sfx.play_hit(crit)
+	vibrate(preset)
 	if float(p["hitstop"]) > 0.0:
 		hit_stop(float(p["hitstop"]))
 	if node != null and is_instance_valid(node) and dir != Vector2.ZERO:

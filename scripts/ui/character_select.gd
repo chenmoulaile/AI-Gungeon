@@ -15,6 +15,7 @@ var _rects: Array = []
 var _hover: int = -1
 var _t: float = 0.0
 var _intro: Array = []
+var _focus: int = 0
 
 
 func _ready() -> void:
@@ -47,6 +48,17 @@ func _process(delta: float) -> void:
 	for i in 3:
 		if Input.is_action_just_pressed("select_%d" % (i + 1)):
 			_choose(i)
+	# 手柄 / 方向键导航
+	if Input.is_action_just_pressed("ui_left"):
+		_focus = maxi(0, _focus - 1)
+	if Input.is_action_just_pressed("ui_right"):
+		_focus = mini(IDS.size() - 1, _focus + 1)
+	if Input.is_action_just_pressed("ui_accept"):
+		_choose(_focus)
+	if InputDevice.using_pad:
+		_hover = _focus
+	else:
+		_focus = _hover if _hover >= 0 else _focus
 	if Input.is_key_pressed(KEY_C):
 		pass
 	queue_redraw()
@@ -105,11 +117,14 @@ func _draw_card(i: int, r: Rect2) -> void:
 	var d: CharacterData = _data[i]
 	var accent: Color = d.accent
 	var hovered := (_hover == i)
+	var focused := (_focus == i and InputDevice.using_pad)
 	var border := accent if hovered else Color(0.28, 0.32, 0.42)
 	draw_rect(r, Color(0.08, 0.09, 0.13, 0.96))
 	if hovered:
 		draw_rect(r.grow(3), Color(accent.r, accent.g, accent.b, 0.16))
 	draw_rect(r, border, false, 2.0 if hovered else 1.0)
+	if focused:
+		draw_rect(r.grow(4), Color(1.0, 0.85, 0.4, 0.9), false, 2.0)
 
 	# 立绘区域
 	var bob := sin(_t * 1.6 + float(i) * 1.1) * 2.0

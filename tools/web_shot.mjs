@@ -81,6 +81,14 @@ await page.screenshot({ path: `${OUT}_shoot.png` });
 await page.mouse.up();
 console.log("shot shoot");
 
+// 设置菜单
+await page.keyboard.press("Escape");
+await page.waitForTimeout(700);
+await page.screenshot({ path: `${OUT}_settings.png` });
+console.log("shot settings");
+await page.keyboard.press("Escape");
+await page.waitForTimeout(400);
+
 const fps = await page.evaluate(() => {
   return new Promise((res) => {
     let n = 0;

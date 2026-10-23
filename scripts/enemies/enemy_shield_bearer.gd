@@ -31,7 +31,7 @@ func _ai(delta: float) -> void:
 		swing -= delta
 		if swing <= 0.0 and global_position.distance_to(player.global_position) < MELEE_RANGE:
 			player.take_damage(1)
-			Sfx.play("hit", -2.0, 0.7)
+			Sfx.play_at("hit", global_position, -2.0, 0.7)
 			GameFeel.screen_shake(0.15)
 		return
 	if to_player.length() > MELEE_RANGE * 0.8:

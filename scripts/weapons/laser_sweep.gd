@@ -25,7 +25,7 @@ func _physics_process(delta: float) -> void:
 	if not firing and timer <= 0.0:
 		firing = true
 		timer = FIRE
-		Sfx.play("boss", -6.0, 1.4)
+		Sfx.play("laser_fire", -2.0, 1.0)
 	if firing:
 		var k: float = 1.0 - clampf(timer / FIRE, 0.0, 1.0)
 		var ang := base_angle - SWEEP * 0.5 + SWEEP * k

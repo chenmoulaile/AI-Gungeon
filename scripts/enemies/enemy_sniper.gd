@@ -33,7 +33,7 @@ func _ai(delta: float) -> void:
 		warning -= delta
 		if warning <= 0.0:
 			shoot_at(aim_dir, 400.0, 3.4)
-			Sfx.play("shoot", -2.0, 0.7)
+			Sfx.play_at("shoot", global_position, -2.0, 0.65)
 			GameFeel.screen_shake(0.06)
 		return
 
@@ -49,7 +49,7 @@ func _ai(delta: float) -> void:
 	if timer <= 0.0:
 		timer = CYCLE
 		warning = WARN
-		Sfx.play("skill", -14.0, 2.0)
+		Sfx.play_at("warn_high", global_position, -6.0, 1.6)
 
 
 func _draw_body() -> void:

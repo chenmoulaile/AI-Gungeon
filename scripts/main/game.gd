@@ -160,8 +160,10 @@ func _start_room(index: int) -> void:
 	player.grant_invuln(1.0)
 
 	if is_boss_room:
+		MusicManager.play("boss")
 		_spawn_boss()
 	else:
+		MusicManager.play("combat")
 		wave_total = _wave_total_for(room_kind)
 		hud.show_toast("B%d · 房间 %d" % [GameState.floor_index, index], 1.4)
 		_spawn_wave()
@@ -372,6 +374,7 @@ func _advance() -> void:
 
 func _open_shop() -> void:
 	busy = true
+	MusicManager.play("explore")
 	var shop = ShopScene.instantiate()
 	shop.process_mode = Node.PROCESS_MODE_ALWAYS
 	ui_layer.add_child(shop)

@@ -167,7 +167,7 @@ func _do_move(dir: Vector2) -> void:
 		"charge":
 			charge_dir = dir
 			charge_t = 0.6
-			Sfx.play("roll", -4.0, 0.6)
+			Sfx.play("charge_windup", -2.0, 0.8)
 		"homing":
 			_attack_homing(dir)
 		"summon":
@@ -177,12 +177,13 @@ func _do_move(dir: Vector2) -> void:
 			l.origin = global_position
 			l.base_angle = dir.angle()
 			GameState.bullets_root.add_child(l)
-			Sfx.play("skill", -4.0, 1.3)
+			Sfx.play("laser_charge", -2.0, 1.0)
 		"spiral":
 			spiral_left = 15
 			spiral_t = 0.0
 			spiral_angle = dir.angle()
-			Sfx.play("skill", -6.0, 0.9)
+			Sfx.play("warn_high", -2.0, 0.9)
+			Sfx.play("spiral_fire", -6.0, 1.0)
 		"mine":
 			_drop_mines()
 		_:
@@ -199,10 +200,11 @@ func _attack_ring() -> void:
 
 
 func _attack_homing(dir: Vector2) -> void:
+	Sfx.play("lock_beep", -4.0, 1.0)
 	for i in 3:
 		var a := dir.rotated(deg_to_rad(-18.0 + 18.0 * i))
 		_spawn_homing(a)
-	Sfx.play("hit", -8.0, 1.1)
+	Sfx.play("whoosh", -4.0, 0.9)
 
 
 func _attack_fan(dir: Vector2) -> void:
@@ -259,7 +261,7 @@ func _drop_mines() -> void:
 		b.tier = "medium"
 		b.global_position = global_position + Vector2(cos(ang), sin(ang)) * dist
 		b.prepare()
-	Sfx.play("hit", -10.0, 0.5)
+	Sfx.play("mine_drop", -4.0, 0.9)
 
 
 func _do_summon() -> void:

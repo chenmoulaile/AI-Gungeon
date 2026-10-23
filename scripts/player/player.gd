@@ -134,8 +134,12 @@ func _physics_process(delta: float) -> void:
 
 	_tick_timers(delta)
 
-	var mouse := get_global_mouse_position()
-	aim = (mouse - global_position).normalized()
+	var stick := Input.get_vector("aim_left", "aim_right", "aim_up", "aim_down")
+	if stick.length() > 0.25:
+		aim = stick.normalized()
+	else:
+		var mouse := get_global_mouse_position()
+		aim = (mouse - global_position).normalized()
 	if aim == Vector2.ZERO:
 		aim = Vector2.RIGHT
 	facing = -1 if aim.x < 0.0 else 1
@@ -387,12 +391,14 @@ func take_damage(amount: int) -> void:
 	GameFeel.flash(anim, Color(2.6, 0.6, 0.7), 0.14)
 	GameFeel.screen_shake(0.45)
 	GameFeel.hit_stop(0.08, 0.06)
+	GameFeel.vibrate("light")
 	GameFeel.burst(global_position + Vector2(0, -14), Color(1.0, 0.35, 0.45), 8, 110.0, 0.3)
 	Sfx.play("hurt")
 	# 低血量：一次性台词 + HUD 边缘闪红，不暂停
 	if hp > 0 and hp <= 2 and not _low_hp_said:
 		_low_hp_said = true
 		GameState.low_health_triggered.emit()
+		GameFeel.vibrate("medium")
 		DialogueManager.say(char_id, "low_hp", 2.4)
 	if hp <= 0:
 		_die()

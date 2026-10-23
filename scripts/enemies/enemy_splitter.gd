@@ -41,7 +41,7 @@ func _split() -> void:
 		var ang := TAU * float(i) / 2.0 + randf() * 0.5
 		e.position = global_position + Vector2(cos(ang), sin(ang)) * 16.0
 		GameState.bullets_root.add_child(e)
-	Sfx.play("hit", -2.0, 0.55)
+	Sfx.play_at("crack", global_position, -2.0, 1.0)
 	GameFeel.burst(global_position, Color(0.55, 0.95, 0.8), 12, 130.0, 0.35)
 
 
