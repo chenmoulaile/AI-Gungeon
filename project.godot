@@ -15,10 +15,12 @@ boot_splash/bg_color=Color(0.043, 0.05, 0.075, 1)
 
 GameConfig="*res://scripts/systems/game_config.gd"
 Settings="*res://scripts/systems/settings.gd"
+MetaProgress="*res://scripts/systems/meta_progress.gd"
 InputBuffer="*res://scripts/systems/input_buffer.gd"
 GameState="*res://scripts/systems/game_state.gd"
 GameFeel="*res://scripts/systems/game_feel.gd"
 Sfx="*res://scripts/systems/audio_manager.gd"
+DialogueManager="*res://scripts/systems/dialogue_manager.gd"
 UpgradeDB="*res://scripts/systems/upgrade_db.gd"
 
 [display]

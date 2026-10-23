@@ -76,18 +76,24 @@ script = ExtResource("1_up")
 '''
 
 UPGRADES = [
-    ("sharp_round", "锋利弹头", "所有子弹伤害 +12%", 24, {"damage": 0.12}),
-    ("rapid_cycle", "急速循环", "射速 +18%", 26, {"fire_rate": 0.18}),
-    ("feather_boots", "轻羽长靴", "移动速度 +12%", 22, {"move_speed": 0.12}),
-    ("extra_heart", "备用心脏", "生命上限 +1 并立即回复 1 点", 30, {"max_hp_bonus": 1}),
-    ("magnet_coil", "磁力线圈", "金币拾取范围 +45", 20, {"magnet": 45.0}),
-    ("crit_lens", "暴击透镜", "暴击率 +10%（暴击 2 倍伤害）", 28, {"crit": 0.10}),
-    ("piercing_nail", "穿甲长钉", "子弹穿透 +1", 26, {"pierce": 1}),
-    ("vampire_chip", "吸血芯片", "每 8 次击杀回复 1 点生命", 30, {"lifesteal_every": 8}),
-    ("roll_core", "翻滚核心", "翻滚冷却 -25%", 24, {"roll_cd_mult": -0.25}),
-    ("cool_module", "冷却模块", "技能冷却 -20%", 26, {"skill_cd_mult": -0.20}),
-    ("split_prism", "分裂棱镜", "每次射击额外发射 1 发子弹", 32, {"proj": 1}),
-    ("scholar_page", "学者手记", "生命上限 +1，伤害 +5%", 32, {"max_hp_bonus": 1, "damage": 0.05}),
+    ("sharp_round", "锋利弹头", "同一目标连续命中 3 次后，之后的每一发都暴击", 24, {}, ""),
+    ("rapid_cycle", "急速循环", "连续命中 6 次后射速大涨，2 秒不命中就重置", 26, {}, ""),
+    ("feather_boots", "轻羽长靴", "翻滚之后的一小段路，跑得比平时快得多", 22, {}, ""),
+    ("extra_heart", "备用心脏", "生命上限 +1 并立即回复 1 点", 30, {"max_hp_bonus": 1}, ""),
+    ("magnet_coil", "磁力线圈", "金币拾取范围 +45", 20, {"magnet": 45.0}, ""),
+    ("crit_lens", "暴击透镜", "对满血敌人的第一击必定暴击", 28, {}, ""),
+    ("piercing_nail", "穿甲长钉", "子弹穿透 +1", 26, {"pierce": 1}, ""),
+    ("vampire_chip", "吸血芯片", "每 8 次击杀回复 1 点生命", 30, {"lifesteal_every": 8}, ""),
+    ("roll_core", "翻滚核心", "翻滚冷却 -25%", 24, {"roll_cd_mult": -0.25}, ""),
+    ("cool_module", "冷却模块", "技能冷却 -20%", 26, {"skill_cd_mult": -0.20}, ""),
+    ("split_prism", "分裂棱镜", "每次射击额外发射 1 发子弹", 32, {"proj": 1}, ""),
+    ("scholar_page", "学者手记", "生命上限 +1，伤害 +5%", 32, {"max_hp_bonus": 1, "damage": 0.05}, ""),
+    ("ds_homing_split", "回声追踪", "裂开的小弹会自己去找人", 34, {}, "deepseek"),
+    ("ds_burn_zone", "余温记录", "光束走过的地方，还会烧一会儿", 34, {}, "deepseek"),
+    ("gpt_echo_clone", "模态残响", "换模式的瞬间，留下一个影子替你打一下", 34, {}, "gpt"),
+    ("gpt_voice_haste", "回声加速", "喊完之后手会变快", 34, {}, "gpt"),
+    ("cl_break_burst", "碎盾礼赞", "护盾碎掉的时候，四面都会还手", 34, {}, "claude"),
+    ("cl_overload", "过载祷文", "举太久，光会烧过头", 34, {}, "claude"),
 ]
 
 
@@ -110,13 +116,15 @@ def main():
             body += '%s = "%s"\n' % (k, c[k]) if k not in ("skill_cd", "accent") else '%s = %s\n' % (k, c[k])
         open(os.path.join(CHAR_DIR, c["id"] + ".tres"), "w", encoding="utf-8").write(body)
 
-    for uid, title, desc, price, effects in UPGRADES:
+    for uid, title, desc, price, effects, tag in UPGRADES:
         body = UP_HEADER
         body += 'id = "%s"\n' % uid
         body += 'title = "%s"\n' % title
         body += 'desc = "%s"\n' % desc
         body += "price = %d\n" % price
         body += 'icon_path = "res://assets/icons/%s.png"\n' % uid
+        body += 'char_tag = "%s"\n' % tag
+        body += "mutation = %s\n" % ("true" if tag != "" else "false")
         body += fmt_effects(effects) + "\n"
         open(os.path.join(UP_DIR, uid + ".tres"), "w", encoding="utf-8").write(body)
 

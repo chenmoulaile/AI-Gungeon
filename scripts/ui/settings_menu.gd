@@ -192,6 +192,9 @@ func _draw() -> void:
 	_text(Vector2(btn.position.x, btn.position.y + 15), "返回", 10, GameConfig.COL_TEXT)
 	_text(Vector2(PANEL.position.x + 18, PANEL.end.y - 12), "ESC 打开/关闭 · 设置自动保存", 8,
 		GameConfig.COL_DIM)
+	_text(Vector2(0, GameConfig.BASE_H - 12),
+		"非官方同人 · 完全免费 · 角色形象基于 B站 UP 主 ZipZipPipe 的二创（CC BY-NC-SA 4.0）",
+		8, Color(0.45, 0.5, 0.6), HORIZONTAL_ALIGNMENT_CENTER)
 
 
 func _slider_value(id: String) -> float:

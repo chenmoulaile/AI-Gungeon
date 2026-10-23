@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="Upgrade" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/upgrade.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "ds_burn_zone"
+title = "余温记录"
+desc = "光束走过的地方，还会烧一会儿"
+price = 34
+icon_path = "res://assets/icons/ds_burn_zone.png"
+char_tag = "deepseek"
+mutation = true
+effects = {
+}

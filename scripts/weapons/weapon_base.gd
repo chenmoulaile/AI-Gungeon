@@ -40,6 +40,10 @@ func fire_rate_mult() -> float:
 	var m := stat("fire_rate", 1.0)
 	if player != null and is_instance_valid(player):
 		m *= 1.0 + float(player.get_buff("fire_rate", 0.0))
+		# 藏品：连续命中 6 次后射速大涨
+		var streak: float = float(GameState.mods.get("streak_rate", 0.0))
+		if streak > 0.0 and int(player.hit_chain) >= 6:
+			m *= 1.0 + streak
 	return maxf(0.15, m)
 
 

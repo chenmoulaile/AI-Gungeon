@@ -6,6 +6,7 @@ signal hp_changed(hp: int, max_hp: int)
 signal upgrades_changed()
 signal combo_activated(combo_name: String)
 signal synergy_activated(synergy_name: String)
+signal low_health_triggered
 signal run_ended()
 
 const PLAYER_MAX_HP := 6
@@ -20,6 +21,8 @@ var floor_index: int = 1
 var room_index: int = 1
 var kills: int = 0
 var run_time: float = 0.0
+var coins_earned: int = 0
+var run_cleared: bool = false
 
 var upgrades: Array = []      # 已持有藏品 id
 var combos: Array = []        # 已激活组合名
@@ -35,6 +38,11 @@ var enemies: Array = []
 
 func _ready() -> void:
 	recalc_stats()
+
+
+func _process(delta: float) -> void:
+	if player != null and is_instance_valid(player) and player.alive:
+		run_time += delta
 
 
 func start_run(id: String) -> void:
@@ -54,6 +62,10 @@ func start_run(id: String) -> void:
 	player = null
 	recalc_stats()
 	hp = max_hp
+	coins_earned = 0
+	run_time = 0.0
+	run_cleared = false
+	MetaProgress.start_run(id)
 	coins_changed.emit(coins)
 	hp_changed.emit(hp, max_hp)
 	upgrades_changed.emit()
@@ -115,6 +127,17 @@ func _recalc_mods() -> void:
 		"room_clear_heal": 0,
 		"voice_kill_cd": 0.0,
 		"shield_counter": false,
+		"split_homing": false,
+		"beam_burn": false,
+		"echo_clone": false,
+		"voice_haste": false,
+		"shield_break_burst": false,
+		"beam_overload": false,
+		"focus_crit_at": 0,
+		"streak_rate": 0.0,
+		"roll_speed": 0.0,
+		"first_hit_crit": false,
+		"specialty": "",
 	}
 	if char_id == "deepseek" and upgrades.has("split_prism"):
 		m["split_inherit_pierce"] = true
@@ -128,6 +151,37 @@ func _recalc_mods() -> void:
 		m["low_hp_damage"] = 0.25
 	if upgrades.has("scholar_page"):
 		m["room_clear_heal"] = 1
+	# 质变型藏品
+	if upgrades.has("ds_homing_split"):
+		m["split_homing"] = true
+	if upgrades.has("ds_burn_zone"):
+		m["beam_burn"] = true
+	if upgrades.has("gpt_echo_clone"):
+		m["echo_clone"] = true
+	if upgrades.has("gpt_voice_haste"):
+		m["voice_haste"] = true
+	if upgrades.has("cl_break_burst"):
+		m["shield_break_burst"] = true
+	if upgrades.has("cl_overload"):
+		m["beam_overload"] = true
+	# 由数值改为条件触发的四件
+	if upgrades.has("sharp_round"):
+		m["focus_crit_at"] = 3
+	if upgrades.has("rapid_cycle"):
+		m["streak_rate"] = 0.35
+	if upgrades.has("feather_boots"):
+		m["roll_speed"] = 0.30
+	if upgrades.has("crit_lens"):
+		m["first_hit_crit"] = true
+	# 专精：同一角色两件专属藏品
+	for cid in ["deepseek", "gpt", "claude"]:
+		var owned := 0
+		for uid in upgrades:
+			var up: Upgrade = UpgradeDB.get_upgrade(uid)
+			if up != null and up.char_tag == cid:
+				owned += 1
+		if owned >= 2 and char_id == cid:
+			m["specialty"] = cid
 	mods = m
 
 	var found: Array = []
@@ -176,6 +230,7 @@ func add_upgrade(uid: String) -> Array:
 	if upgrades.has(uid):
 		return []
 	upgrades.append(uid)
+	MetaProgress.see_relic(uid)
 	var new_combos: Array = []
 	var found: Array = UpgradeDB.detect_combos(upgrades)
 	for cname in found:
@@ -200,6 +255,7 @@ func try_buy(up: Upgrade) -> bool:
 
 func add_coins(n: int) -> void:
 	coins += n
+	coins_earned += n
 	coins_changed.emit(coins)
 
 
@@ -229,6 +285,11 @@ func unregister_enemy(e: Node) -> void:
 
 func on_enemy_killed(tag: String = "") -> void:
 	kills += 1
+	MetaProgress.note_kill()
+	# GPT 协同：语音击杀后短时间射速提升
+	if tag == "voice" and upgrades.has("gpt_voice_haste"):
+		if player != null and is_instance_valid(player):
+			player.add_buff("fire_rate", 0.3, 3.0)
 	# GPT 协同：语音冲击波击杀缩短「涌现」冷却
 	if tag == "voice" and float(mods.get("voice_kill_cd", 0.0)) > 0.0:
 		if player != null and is_instance_valid(player) and player.weapon != null:

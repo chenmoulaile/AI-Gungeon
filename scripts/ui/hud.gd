@@ -11,6 +11,7 @@ var _icon_cache: Dictionary = {}
 var _pop: Dictionary = {}          # uid -> 剩余弹跳时间
 var _desc_uid: String = ""
 var _desc_t: float = 0.0
+var _low_flash: float = 0.0
 
 
 func _ready() -> void:
@@ -21,6 +22,7 @@ func _ready() -> void:
 	GameState.combo_activated.connect(_on_combo_activated)
 	GameState.upgrades_changed.connect(_on_upgrades_changed)
 	GameState.synergy_activated.connect(_on_synergy)
+	GameState.low_health_triggered.connect(_on_low_health)
 
 
 func _process(delta: float) -> void:
@@ -29,6 +31,7 @@ func _process(delta: float) -> void:
 	for k in _pop.keys():
 		_pop[k] = maxf(0.0, float(_pop[k]) - delta)
 	_desc_t = maxf(0.0, _desc_t - delta)
+	_low_flash = maxf(0.0, _low_flash - delta)
 	queue_redraw()
 
 
@@ -41,6 +44,10 @@ func _on_combo_activated(combo_name: String) -> void:
 	combo_text = "组合效果激活：%s" % combo_name
 	combo_time = 3.0
 	Sfx.play("skill", -4.0, 1.3)
+
+
+func _on_low_health() -> void:
+	_low_flash = 0.7
 
 
 func _on_synergy(synergy_name: String) -> void:
@@ -61,6 +68,8 @@ func _on_upgrades_changed() -> void:
 func _draw() -> void:
 	var p = GameState.player
 	_draw_vignette()
+	if _low_flash > 0.0:
+		_draw_low_health_flash()
 	_draw_hearts()
 	_draw_coins()
 	_draw_room_info()
@@ -68,6 +77,7 @@ func _draw() -> void:
 		_draw_skill(p)
 		_draw_mode(p)
 	_draw_upgrades()
+	_draw_specialty()
 	_draw_relic_desc()
 	_draw_boss()
 	_draw_toasts()
@@ -86,6 +96,20 @@ func _draw_vignette() -> void:
 		draw_rect(Rect2(0, h - d, w, d), Color(0, 0, 0, a))
 		draw_rect(Rect2(0, 0, d, h), Color(0, 0, 0, a))
 		draw_rect(Rect2(w - d, 0, d, h), Color(0, 0, 0, a))
+
+
+## 低血量：屏幕边缘闪一次红（不遮挡中间战场）
+func _draw_low_health_flash() -> void:
+	var a: float = clampf(_low_flash / 0.7, 0.0, 1.0) * 0.5
+	for i in 5:
+		var d: float = 8.0 + i * 6.0
+		var aa: float = a * (1.0 - float(i) / 5.0)
+		draw_rect(Rect2(0, 0, GameConfig.BASE_W, d), Color(0.9, 0.1, 0.15, aa))
+		draw_rect(Rect2(0, GameConfig.BASE_H - d, GameConfig.BASE_W, d),
+			Color(0.9, 0.1, 0.15, aa))
+		draw_rect(Rect2(0, 0, d, GameConfig.BASE_H), Color(0.9, 0.1, 0.15, aa))
+		draw_rect(Rect2(GameConfig.BASE_W - d, 0, d, GameConfig.BASE_H),
+			Color(0.9, 0.1, 0.15, aa))
 
 
 # ---------------- 各区块 ----------------
@@ -210,6 +234,25 @@ func _draw_relic_desc() -> void:
 			HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.88, 0.5, a))
 		draw_multiline_string(GameConfig.ui_font, r.position + Vector2(6, 27), up.desc,
 			HORIZONTAL_ALIGNMENT_LEFT, w - 12, 8, 2, Color(0.88, 0.92, 1.0, a))
+
+
+## 专精：同一角色两件专属藏品时，右上角亮一个小徽章（不写效果）
+func _draw_specialty() -> void:
+	if String(GameState.mods.get("specialty", "")) == "":
+		return
+	var c := Vector2(GameConfig.BASE_W - 44, GameConfig.BASE_H - 34)
+	var col := GameConfig.char_color(GameState.char_id)
+	var pulse: float = 0.55 + 0.25 * sin(Time.get_ticks_msec() / 300.0)
+	draw_circle(c, 9.0, Color(0.06, 0.07, 0.11, 0.9))
+	draw_arc(c, 9.0, 0.0, TAU, 20, Color(col.r, col.g, col.b, pulse), 1.5, true)
+	for i in 5:
+		var ang := -PI / 2.0 + TAU * i / 5.0
+		var p1 := c + Vector2(cos(ang), sin(ang)) * 6.0
+		var ang2 := ang + TAU / 5.0 * 0.5
+		var p2 := c + Vector2(cos(ang2), sin(ang2)) * 2.6
+		var ang3 := ang + TAU / 5.0
+		var p3 := c + Vector2(cos(ang3), sin(ang3)) * 6.0
+		draw_colored_polygon(PackedVector2Array([p1, p2, p3]), col)
 
 
 func _icon(path: String) -> Texture2D:

@@ -9,6 +9,8 @@ title = "分裂棱镜"
 desc = "每次射击额外发射 1 发子弹"
 price = 32
 icon_path = "res://assets/icons/split_prism.png"
+char_tag = ""
+mutation = false
 effects = {
 "proj": 1,
 }

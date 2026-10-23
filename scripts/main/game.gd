@@ -223,7 +223,8 @@ func _show_boss_intro() -> void:
 	intro.finished.connect(func() -> void:
 		get_tree().paused = false
 		if is_instance_valid(intro):
-			intro.queue_free())
+			intro.queue_free()
+		DialogueManager.say(GameState.char_id, "boss", 2.8))
 
 
 # ---------------- 敌人死亡 / 清场 ----------------
@@ -276,6 +277,8 @@ func _on_boss_dead() -> void:
 		room.open_door()
 	hud.show_toast("回响聚合体已被击破！向右进入下一层", 3.0)
 	Sfx.play("skill", -2.0, 0.7)
+	GameState.run_cleared = true
+	DialogueManager.say(GameState.char_id, "victory", 2.6)
 
 
 # ---------------- 房间推进 ----------------
@@ -343,6 +346,14 @@ func _on_run_ended() -> void:
 	if busy:
 		return
 	busy = true
+	# 保留战场最后一帧给结算界面做背景（headless 下没有渲染，跳过）
+	if DisplayServer.get_name() != "headless":
+		await RenderingServer.frame_post_draw
+		var img := get_viewport().get_texture().get_image()
+		if img != null and img.get_width() > 0:
+			img.save_png("user://last_frame.png")
+	MetaProgress.finish_run(GameState.char_id, GameState.floor_index,
+		GameState.run_cleared, GameState.run_time)
 	await get_tree().create_timer(1.1).timeout
 	if not is_inside_tree():
 		return

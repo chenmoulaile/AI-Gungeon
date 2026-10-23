@@ -9,3 +9,5 @@ extends Resource
 @export var price: int = 25
 @export var icon_path: String = ""
 @export var effects: Dictionary = {}
+@export var char_tag: String = ""      # 专属角色（deepseek / gpt / claude / 空）
+@export var mutation: bool = false     # 是否为质变型藏品

@@ -39,6 +39,10 @@ var shield_t: float = 0.0
 var fire_anim: float = 0.0
 var charge_ratio: float = 0.0
 var roll_buff: float = 0.0
+var hit_chain: int = 0
+var hit_chain_t: float = 0.0
+var roll_speed_t: float = 0.0
+var _low_hp_said: bool = false
 
 var _blink: float = 0.0
 var _ghost_t: float = 0.0
@@ -143,6 +147,8 @@ func _physics_process(delta: float) -> void:
 	else:
 		var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 		var spd: float = GameConfig.PLAYER_SPEED * GameState.stat("move_speed", 1.0) * move_mult
+		if roll_speed_t > 0.0:
+			spd *= 1.0 + float(GameState.mods.get("roll_speed", 0.0))
 		var target := input * spd
 		var rate := ACCEL if input.length() > 0.1 else DECEL
 		velocity = velocity.move_toward(target, rate * delta)
@@ -162,6 +168,11 @@ func _tick_timers(delta: float) -> void:
 	fire_anim = maxf(0.0, fire_anim - delta)
 	shield_t = maxf(0.0, shield_t - delta)
 	hurt_stun = maxf(0.0, hurt_stun - delta)
+	roll_speed_t = maxf(0.0, roll_speed_t - delta)
+	if hit_chain_t > 0.0:
+		hit_chain_t -= delta
+		if hit_chain_t <= 0.0:
+			hit_chain = 0
 	_bump_cd = maxf(0.0, _bump_cd - delta)
 	_muzzle_cd = maxf(0.0, _muzzle_cd - delta)
 	if shield_t <= 0.0:
@@ -256,6 +267,8 @@ func _try_roll() -> void:
 		anim.play("roll")
 	_ghost_t = 0.0
 	roll_buff = float(GameState.mods.get("roll_shot_bonus", 0.0))
+	if float(GameState.mods.get("roll_speed", 0.0)) > 0.0:
+		roll_speed_t = 1.2
 	Sfx.play("roll")
 	anim.scale = Vector2(1.28, 0.76)
 	var tw := anim.create_tween()
@@ -298,7 +311,33 @@ func try_absorb_bullet() -> bool:
 	Sfx.play("coin", -8.0, 1.4)
 	if bool(GameState.mods.get("shield_counter", false)):
 		_counter_shot()
+	# 藏品：护盾碎掉时向四周还手
+	if shield_hits == 0 and bool(GameState.mods.get("shield_break_burst", false)):
+		_shield_break_burst()
 	return true
+
+
+func _shield_break_burst() -> void:
+	for i in 8:
+		var ang := TAU * float(i) / 8.0
+		var b = GameFeel.get_bullet()
+		if b == null:
+			return
+		b.friendly = true
+		b.dir = Vector2(cos(ang), sin(ang))
+		b.speed = 380.0
+		b.damage = 7.0
+		b.crit = false
+		b.radius = 3.0
+		b.life = 0.9
+		b.color = Color("#ffd166")
+		b.pierce = 0
+		b.gen = 0
+		b.tier = "light"
+		b.trail = true
+		b.tag = "counter"
+		b.global_position = global_position + Vector2(0, -14)
+		b.prepare()
 
 
 func _counter_shot() -> void:
@@ -350,6 +389,11 @@ func take_damage(amount: int) -> void:
 	GameFeel.hit_stop(0.08, 0.06)
 	GameFeel.burst(global_position + Vector2(0, -14), Color(1.0, 0.35, 0.45), 8, 110.0, 0.3)
 	Sfx.play("hurt")
+	# 低血量：一次性台词 + HUD 边缘闪红，不暂停
+	if hp > 0 and hp <= 2 and not _low_hp_said:
+		_low_hp_said = true
+		GameState.low_health_triggered.emit()
+		DialogueManager.say(char_id, "low_hp", 2.4)
 	if hp <= 0:
 		_die()
 
@@ -368,6 +412,8 @@ func _die() -> void:
 
 
 func record_hit(e: Node) -> void:
+	hit_chain += 1
+	hit_chain_t = 2.0
 	if focus_target == e:
 		focus_stacks = mini(10, focus_stacks + 1)
 	else:

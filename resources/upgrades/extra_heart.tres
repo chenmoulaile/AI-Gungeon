@@ -9,6 +9,8 @@ title = "备用心脏"
 desc = "生命上限 +1 并立即回复 1 点"
 price = 30
 icon_path = "res://assets/icons/extra_heart.png"
+char_tag = ""
+mutation = false
 effects = {
 "max_hp_bonus": 1,
 }

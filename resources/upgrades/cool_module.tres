@@ -9,6 +9,8 @@ title = "冷却模块"
 desc = "技能冷却 -20%"
 price = 26
 icon_path = "res://assets/icons/cool_module.png"
+char_tag = ""
+mutation = false
 effects = {
 "skill_cd_mult": -0.2,
 }

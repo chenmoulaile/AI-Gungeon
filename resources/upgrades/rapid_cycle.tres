@@ -6,9 +6,10 @@
 script = ExtResource("1_up")
 id = "rapid_cycle"
 title = "急速循环"
-desc = "射速 +18%"
+desc = "连续命中 6 次后射速大涨，2 秒不命中就重置"
 price = 26
 icon_path = "res://assets/icons/rapid_cycle.png"
+char_tag = ""
+mutation = false
 effects = {
-"fire_rate": 0.18,
 }

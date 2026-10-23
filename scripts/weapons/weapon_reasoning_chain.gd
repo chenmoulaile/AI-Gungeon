@@ -4,6 +4,7 @@ extends "res://scripts/weapons/weapon_base.gd"
 ## 主动技能「深度思考」：蓄力 1.5s（移速 -50%、额外无敌）后释放贯穿全屏光束
 
 const BeamScript = preload("res://scripts/weapons/beam.gd")
+const DamageZone = preload("res://scripts/weapons/damage_zone.gd")
 const CHARGE_TIME := 1.5
 const MAX_GEN := 2          # gen 0/1/2 共 3 代
 const SPLIT_DMG := 0.7      # 每代衰减 30%
@@ -51,13 +52,16 @@ func _on_bullet_hit(enemy: Node, bullet: Node) -> void:
 	var inherit_pierce: int = 0
 	if bool(GameState.mods.get("split_inherit_pierce", false)):
 		inherit_pierce = maxi(1, int(bullet.pierce) + 1)
+	# 藏品：分裂出的小弹会追踪
+	var homing: float = 2.4 if bool(GameState.mods.get("split_homing", false)) else 0.0
 	for i in 2:
 		var ang := deg_to_rad(38.0) * (1.0 if i == 0 else -1.0)
 		var d: Vector2 = bullet.dir.rotated(ang)
 		var nb: Node = spawn_bullet(bullet.global_position, d, base_dmg, 300.0,
 			Color("#a9f0ff"),
-			{"radius": 2.6, "gen": int(bullet.gen) + 1, "life": 0.85, "raw": true,
-			"pierce": inherit_pierce, "tier": "small"})
+			{"radius": 2.6, "gen": int(bullet.gen) + 1, "life": 1.0, "raw": true,
+			"pierce": inherit_pierce, "tier": "light", "homing": homing,
+			"homing_time": 0.8})
 		nb.hit_enemy.connect(_on_bullet_hit)
 
 
@@ -92,4 +96,12 @@ func _release_charge() -> void:
 	beam.color = Color("#7fb2ff")
 	beam.life = 0.16
 	_bullet_root().add_child(beam)
+	# 藏品：光束路径上留下持续伤害区域
+	if bool(GameState.mods.get("beam_burn", false)):
+		for d in [180.0, 340.0, 500.0]:
+			var zone := DamageZone.new()
+			zone.radius = 34.0
+			zone.dps = 26.0 * damage_mult()
+			zone.global_position = beam.origin + beam.dir * float(d)
+			_bullet_root().add_child(zone)
 	Sfx.play("boss", -6.0, 1.6)

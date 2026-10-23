@@ -2,6 +2,7 @@ extends Control
 ## 角色选择：三张立绘卡片，点击或按 1/2/3 选择
 
 signal character_chosen(id: String)
+signal open_collection
 
 const IDS := ["deepseek", "gpt", "claude"]
 const CARD_W := 186.0
@@ -13,6 +14,7 @@ var _tex: Array = []
 var _rects: Array = []
 var _hover: int = -1
 var _t: float = 0.0
+var _intro: Array = []
 
 
 func _ready() -> void:
@@ -24,6 +26,7 @@ func _ready() -> void:
 		_data.append(GameState.load_character(id))
 		var p := "res://assets/portraits/%s_full.png" % id
 		_tex.append(load(p) if ResourceLoader.exists(p) else null)
+		_intro.append(DialogueManager.pick(id, "intro"))
 	_layout()
 
 
@@ -44,6 +47,8 @@ func _process(delta: float) -> void:
 	for i in 3:
 		if Input.is_action_just_pressed("select_%d" % (i + 1)):
 			_choose(i)
+	if Input.is_key_pressed(KEY_C):
+		pass
 	queue_redraw()
 
 
@@ -52,6 +57,14 @@ func _gui_input(event: InputEvent) -> void:
 		if _hover >= 0:
 			_choose(_hover)
 			accept_event()
+
+
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.physical_keycode == KEY_C:
+			Sfx.play("ui")
+			open_collection.emit()
+			get_viewport().set_input_as_handled()
 
 
 func _choose(index: int) -> void:
@@ -81,8 +94,11 @@ func _draw() -> void:
 
 	if GameConfig.ui_font != null:
 		draw_string(GameConfig.ui_font, Vector2(0, GameConfig.BASE_H - 12),
-			"WASD 移动 · 鼠标瞄准 · 左键射击 · 空格翻滚 · E 技能 · R 切换模式",
+			"WASD 移动 · 鼠标瞄准 · 左键射击 · 空格翻滚 · E 技能 · R 切换模式 · C 图鉴",
 			HORIZONTAL_ALIGNMENT_CENTER, GameConfig.BASE_W, 9, GameConfig.COL_DIM)
+		draw_string(GameConfig.ui_font, Vector2(0, GameConfig.BASE_H - 26),
+			"非官方同人 · 角色形象基于 B站 UP 主 ZipZipPipe 的二创设计（CC BY-NC-SA 4.0）",
+			HORIZONTAL_ALIGNMENT_CENTER, GameConfig.BASE_W, 8, Color(0.5, 0.55, 0.65))
 
 
 func _draw_card(i: int, r: Rect2) -> void:
@@ -118,8 +134,8 @@ func _draw_card(i: int, r: Rect2) -> void:
 		HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 16, 9, GameConfig.COL_TEXT)
 	draw_string(GameConfig.ui_font, Vector2(tx, ty + 46), "技能 · " + d.skill_name,
 		HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 16, 9, GameConfig.COL_TEXT)
-	draw_string(GameConfig.ui_font, Vector2(tx, ty + 60), "被动 · " + d.passive_name,
-		HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 16, 9, GameConfig.COL_TEXT)
+	draw_string(GameConfig.ui_font, Vector2(tx, ty + 60), "「%s」" % str(_intro[i]),
+		HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 16, 9, Color(1.0, 0.86, 0.55))
 	draw_string(GameConfig.ui_font, Vector2(r.position.x, r.end.y - 8),
 		"[%d]" % (i + 1), HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 9,
 		accent if hovered else GameConfig.COL_DIM)

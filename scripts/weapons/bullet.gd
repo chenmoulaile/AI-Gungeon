@@ -93,11 +93,22 @@ func _check_hit() -> void:
 
 func _damage_enemy(e: Node) -> void:
 	var dmg := damage
+	var is_crit := crit
 	var p = GameState.player
 	# DeepSeek 被动「注意力聚焦」：对同一目标叠层加伤
 	if p != null and is_instance_valid(p) and p.focus_target == e and p.focus_stacks > 0:
 		dmg *= 1.0 + 0.05 * float(p.focus_stacks)
-	e.take_damage(dmg, dir, tier, crit, tag)
+	# 藏品：对满血敌人的第一击必定暴击
+	if bool(GameState.mods.get("first_hit_crit", false)) and float(e.hp) >= float(e.max_hp) - 0.01:
+		is_crit = true
+	# 藏品：对同一目标连续命中 3 次后必暴
+	var focus_at: int = int(GameState.mods.get("focus_crit_at", 0))
+	if focus_at > 0 and p != null and is_instance_valid(p) \
+			and p.focus_target == e and p.focus_stacks >= focus_at:
+		is_crit = true
+	if is_crit and not crit:
+		dmg *= float(GameState.stat("crit_mult", 2.0))
+	e.take_damage(dmg, dir, tier, is_crit, tag)
 	if p != null and is_instance_valid(p):
 		p.record_hit(e)
 	hit_enemy.emit(e, self)

@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="Upgrade" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/upgrade.gd" id="1_up"]
+
+[resource]
+script = ExtResource("1_up")
+id = "gpt_voice_haste"
+title = "回声加速"
+desc = "喊完之后手会变快"
+price = 34
+icon_path = "res://assets/icons/gpt_voice_haste.png"
+char_tag = "gpt"
+mutation = true
+effects = {
+}

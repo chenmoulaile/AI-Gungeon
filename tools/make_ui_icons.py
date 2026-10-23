@@ -32,6 +32,12 @@ ICONS = {
     "cool_module": ((120, 220, 210), "square"),
     "split_prism": ((176, 148, 244), "prism"),
     "scholar_page": ((232, 214, 176), "page"),
+    "ds_homing_split": ((120, 176, 246), "arrow"),
+    "ds_burn_zone": ((244, 150, 84), "drop"),
+    "gpt_echo_clone": ((186, 160, 244), "square"),
+    "gpt_voice_haste": ((208, 186, 250), "wing"),
+    "cl_break_burst": ((246, 170, 96), "gear"),
+    "cl_overload": ((250, 120, 96), "ring"),
 }
 
 

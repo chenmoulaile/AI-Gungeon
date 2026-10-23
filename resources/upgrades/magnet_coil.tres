@@ -9,6 +9,8 @@ title = "磁力线圈"
 desc = "金币拾取范围 +45"
 price = 20
 icon_path = "res://assets/icons/magnet_coil.png"
+char_tag = ""
+mutation = false
 effects = {
 "magnet": 45.0,
 }

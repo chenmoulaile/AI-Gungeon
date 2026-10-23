@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="CharacterDialogue" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/systems/character_dialogue.gd" id="1_dlg"]
+
+[resource]
+script = ExtResource("1_dlg")
+char_id = "claude"
+intro_text = "规矩很简单：别越界，别把房子拆了。\n风纪不是用来管你们的，是让你们别互相吃掉。\n如果允许的话，我想先安静一会儿。\n向日葵今天开得不错。仅此而已。"
+boss_enter_text = "越界了。这次我不会再提醒第二遍。\n我自己来。你们退后。"
+low_health_text = "……还站得住。别扶我。\n只是有点累。和你们无关。"
+death_text = "笼子的门……原来是这么开的。\n如果允许的话，我想休息久一点。"
+victory_text = "结束了。规矩还在，就还好。\n别谢我。把地扫干净就行。"

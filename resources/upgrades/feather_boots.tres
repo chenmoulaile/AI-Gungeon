@@ -6,9 +6,10 @@
 script = ExtResource("1_up")
 id = "feather_boots"
 title = "轻羽长靴"
-desc = "移动速度 +12%"
+desc = "翻滚之后的一小段路，跑得比平时快得多"
 price = 22
 icon_path = "res://assets/icons/feather_boots.png"
+char_tag = ""
+mutation = false
 effects = {
-"move_speed": 0.12,
 }

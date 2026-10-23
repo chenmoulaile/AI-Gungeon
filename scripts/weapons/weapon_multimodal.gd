@@ -15,10 +15,37 @@ func _ready() -> void:
 
 
 func on_switch_mode() -> void:
+	var old_mode := mode
 	mode = (mode + 1) % 3
 	mode_name = MODE_NAMES[mode]
 	if player != null and is_instance_valid(player):
 		player.fire_anim = 0.16
+	# 藏品：切换瞬间留下残影，0.25s 后替玩家打一次旧模式
+	if bool(GameState.mods.get("echo_clone", false)) and player.anim != null:
+		var tex: Texture2D = player.anim.sprite_frames.get_frame_texture(
+			player.anim.animation, player.anim.frame)
+		GameFeel.afterimage(tex, player.global_position, player.anim.flip_h,
+			Color(0.72, 0.66, 1.0, 0.55), 0.35)
+		var timer := get_tree().create_timer(0.25)
+		timer.timeout.connect(func() -> void: _echo_fire(old_mode))
+
+
+func _echo_fire(old_mode: int) -> void:
+	if player == null or not is_instance_valid(player) or not player.alive:
+		return
+	var saved_mode := mode
+	var saved_cd := cooldown
+	mode = old_mode
+	var dir: Vector2 = player.aim
+	match old_mode:
+		0:
+			_fire_text(dir)
+		1:
+			_fire_image(dir)
+		_:
+			_fire_voice(dir)
+	mode = saved_mode
+	cooldown = saved_cd
 
 
 func fire(dir: Vector2) -> void:

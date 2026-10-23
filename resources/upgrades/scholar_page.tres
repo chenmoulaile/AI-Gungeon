@@ -9,6 +9,8 @@ title = "学者手记"
 desc = "生命上限 +1，伤害 +5%"
 price = 32
 icon_path = "res://assets/icons/scholar_page.png"
+char_tag = ""
+mutation = false
 effects = {
 "max_hp_bonus": 1,
 "damage": 0.05,

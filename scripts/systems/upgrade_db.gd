@@ -38,24 +38,31 @@ func _ready() -> void:
 	_load_all()
 
 
+const FALLBACK_IDS := [
+	"sharp_round", "rapid_cycle", "feather_boots", "extra_heart", "magnet_coil",
+	"crit_lens", "piercing_nail", "vampire_chip", "roll_core", "cool_module",
+	"split_prism", "scholar_page", "ds_homing_split", "ds_burn_zone",
+	"gpt_echo_clone", "gpt_voice_haste", "cl_break_burst", "cl_overload",
+]
+
+
 func _load_all() -> void:
-	var files: PackedStringArray = []
+	var names: Array = []
 	if DirAccess.dir_exists_absolute(UPGRADE_DIR):
-		files = DirAccess.get_files_at(UPGRADE_DIR)
-	if files.is_empty():
-		# 导出包里 DirAccess 偶发拿不到，退化为固定清单
-		files = PackedStringArray([
-			"sharp_round.tres", "rapid_cycle.tres", "feather_boots.tres",
-			"extra_heart.tres", "magnet_coil.tres", "crit_lens.tres",
-			"piercing_nail.tres", "vampire_chip.tres", "roll_core.tres",
-			"cool_module.tres", "split_prism.tres", "scholar_page.tres",
-		])
-	for f in files:
-		if not f.ends_with(".tres"):
-			continue
-		var res: Resource = load("%s/%s" % [UPGRADE_DIR, f])
-		if res is Upgrade and res.id != "":
-			upgrades[res.id] = res
+		for f in DirAccess.get_files_at(UPGRADE_DIR):
+			var n := String(f)
+			if n.ends_with(".remap"):
+				n = n.trim_suffix(".remap")
+			if n.ends_with(".tres") or n.ends_with(".res"):
+				names.append(n)
+	# 兜底：导出包里目录列表可能拿不到，或文件名被重映射，固定清单保证 18 件都在
+	for id in FALLBACK_IDS:
+		if not names.has(id + ".tres"):
+			names.append(id + ".tres")
+	for n in names:
+		var res = load("%s/%s" % [UPGRADE_DIR, n])
+		if res != null and String(res.get("id")) != "":
+			upgrades[String(res.get("id"))] = res
 
 
 func get_upgrade(id: String) -> Upgrade:
@@ -82,6 +89,14 @@ func roll_offers(n: int, owned: Array) -> Array:
 			continue
 		var w := 1
 		var related := false
+		# 已持有某角色 1 件专属藏品时，该角色另一件权重 ×2
+		var up: Upgrade = upgrades[id]
+		if up != null and up.char_tag != "" and up.char_tag == GameState.char_id:
+			for owned_id in owned:
+				var ou: Upgrade = upgrades.get(owned_id, null)
+				if ou != null and ou.char_tag == up.char_tag:
+					w = maxi(w, 2)
+					break
 		for c in COMBOS:
 			if (c["a"] == id and owned.has(c["b"])) or (c["b"] == id and owned.has(c["a"])):
 				w = 3

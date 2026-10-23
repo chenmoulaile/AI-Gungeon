@@ -4,6 +4,7 @@ extends Node
 const SelectScene = preload("res://scenes/ui/character_select.tscn")
 const GameScene = preload("res://scenes/main/game.tscn")
 const ResultScene = preload("res://scenes/ui/result.tscn")
+const CollectionScene = preload("res://scenes/ui/collection_menu.tscn")
 
 var current: Node = null
 
@@ -24,6 +25,7 @@ func show_select() -> void:
 	GameState.bullets_root = null
 	var s: Node = SelectScene.instantiate()
 	s.character_chosen.connect(_on_character_chosen)
+	s.open_collection.connect(show_collection)
 	_swap(s)
 
 
@@ -35,7 +37,14 @@ func _on_character_chosen(id: String) -> void:
 	_swap(g)
 
 
+func show_collection() -> void:
+	var c: Node = CollectionScene.instantiate()
+	c.closed.connect(show_select)
+	_swap(c)
+
+
 func _on_run_over() -> void:
 	var r: Node = ResultScene.instantiate()
-	r.restart.connect(show_select)
+	r.restart.connect(func() -> void: _on_character_chosen(GameState.char_id))
+	r.to_menu.connect(show_select)
 	_swap(r)

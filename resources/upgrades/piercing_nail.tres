@@ -9,6 +9,8 @@ title = "穿甲长钉"
 desc = "子弹穿透 +1"
 price = 26
 icon_path = "res://assets/icons/piercing_nail.png"
+char_tag = ""
+mutation = false
 effects = {
 "pierce": 1,
 }

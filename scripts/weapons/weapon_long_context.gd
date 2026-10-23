@@ -13,6 +13,8 @@ const MAX_DPS := 78.0
 
 var beam: Node = null
 var grow: float = 0.0
+var hold_t: float = 0.0
+var overloaded: bool = false
 
 
 func _ready() -> void:
@@ -34,15 +36,20 @@ func _process(delta: float) -> void:
 			beam.tick_interval = 0.1
 			_bullet_root().add_child(beam)
 		grow = minf(GROW_TIME, grow + delta)
+		hold_t += delta
 		var ratio := grow / GROW_TIME
+		# 藏品：持续 3s 后过载，宽度翻倍、伤害提升，冷却变长
+		if bool(GameState.mods.get("beam_overload", false)) and hold_t >= 3.0:
+			overloaded = true
 		beam.length = 560.0
-		beam.width = lerpf(MIN_WIDTH, MAX_WIDTH, ratio)
-		beam.dps = lerpf(MIN_DPS, MAX_DPS, ratio) * damage_mult()
+		beam.width = lerpf(MIN_WIDTH, MAX_WIDTH, ratio) * (2.0 if overloaded else 1.0)
+		beam.dps = lerpf(MIN_DPS, MAX_DPS, ratio) * damage_mult() * (1.6 if overloaded else 1.0)
 		beam.set_beam(player.global_position + Vector2(0, -16), player.aim)
 		player.fire_anim = 0.1
 	elif beam != null:
+		var cd := RELEASE_CD * (1.5 if overloaded else 1.0)
 		_stop_beam()
-		cooldown = RELEASE_CD
+		cooldown = cd
 
 
 func _stop_beam() -> void:
@@ -50,6 +57,8 @@ func _stop_beam() -> void:
 		beam.queue_free()
 	beam = null
 	grow = 0.0
+	hold_t = 0.0
+	overloaded = false
 
 
 ## 光束走自己的 _process，fire() 只做占位

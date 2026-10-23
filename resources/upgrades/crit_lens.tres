@@ -6,9 +6,10 @@
 script = ExtResource("1_up")
 id = "crit_lens"
 title = "暴击透镜"
-desc = "暴击率 +10%（暴击 2 倍伤害）"
+desc = "对满血敌人的第一击必定暴击"
 price = 28
 icon_path = "res://assets/icons/crit_lens.png"
+char_tag = ""
+mutation = false
 effects = {
-"crit": 0.1,
 }

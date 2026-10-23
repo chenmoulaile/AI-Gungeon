@@ -6,12 +6,16 @@
 
 ---
 
-## 同人声明
+## 同人声明与署名
 
-> 非官方同人作品，相关角色名称与形象权利归各自权利方所有，本项目不用于任何商业用途，
-> 不包含付费或捐赠解锁内容。如有侵权请联系删除。
+本游戏为非官方同人作品，完全免费，不含任何付费、广告、内购或捐赠解锁内容。
 
-本项目完全免费发布，不含任何付费、广告、内购、捐赠解锁内容。
+DeepSeek 鲸鱼娘形象基于 B站 UP 主 ZipZipPipe 的二创设计；
+其原型为 B站 UP 主 上善无形 的原创角色「溟月」。
+GPT 龙娘、Claude 大小姐形象基于 B站 UP 主 ZipZipPipe 的 AI 娘系列二创。
+
+原角色形象以 CC BY-NC-SA 4.0 协议开放非商业二创。
+本项目遵循该协议：署名、非商业、相同方式共享。
 
 ---
 
@@ -38,11 +42,11 @@ E:\Projects\AiGungeon\build\AIGungeon.exe
 
 ```bat
 :: 1) 导出 Web 版
-set APPDATA=E://DevTools//cache//appdata
-E://DevTools//Godot//Godot_v4.4.1-stable_win64_console.exe --headless --path E://Projects//AiGungeon --export-release "Web" build/web/index.html
+set APPDATA=E:/DevTools/cache/appdata
+E:/DevTools/Godot/Godot_v4.4.1-stable_win64_console.exe --headless --path E:/Projects/AiGungeon --export-release "Web" build/web/index.html
 
 :: 2) 起本地服务器（带 wasm MIME 与 COOP/COEP 头）
-E://DevTools//Python//python.exe E://Projects//AiGungeon//tools//serve_web.py 8765
+E:/DevTools/Python/python.exe E:/Projects/AiGungeon/tools/serve_web.py 8765
 
 :: 3) 浏览器打开 http://127.0.0.1:8765/index.html
 ```

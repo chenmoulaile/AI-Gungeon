@@ -42,6 +42,15 @@ await page.waitForTimeout(6000);
 await page.screenshot({ path: `${OUT}_select.png` });
 console.log("shot select");
 
+// 图鉴
+await page.mouse.click(20, 20);
+await page.keyboard.press("c");
+await page.waitForTimeout(1200);
+await page.screenshot({ path: `${OUT}_collection.png` });
+console.log("shot collection");
+await page.keyboard.press("c");
+await page.waitForTimeout(800);
+
 // 先点画布拿焦点，再按 1 选 DeepSeek（比点卡片稳）
 await page.mouse.click(20, 20);
 await page.waitForTimeout(300);
