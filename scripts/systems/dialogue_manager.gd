@@ -31,7 +31,20 @@ func lines(char_id: String, key: String) -> PackedStringArray:
 	var d = get_dialogue(char_id)
 	if d == null:
 		return PackedStringArray()
-	var raw := String(d.get(key + "_text"))
+	const FIELDS := {
+		"intro": "intro_text",
+		"boss": "boss_enter_text",
+		"low_hp": "low_health_text",
+		"death": "death_text",
+		"victory": "victory_text",
+	}
+	var field: String = FIELDS.get(key, "")
+	if field == "":
+		return PackedStringArray()
+	var v = d.get(field)
+	if v == null:
+		return PackedStringArray()
+	var raw := String(v)
 	var out := PackedStringArray()
 	for line in raw.split("\n", false):
 		var t := line.strip_edges()
