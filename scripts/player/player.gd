@@ -1,12 +1,13 @@
 extends CharacterBody2D
 ## 玩家：移动 / 瞄准 / 射击 / 翻滚 / 主动技能 / 受击
-## 角色差异全部通过 weapon 脚本 + data 资源驱动；反馈统一走 GameFeel
+## 输入统一走 InputBuffer（0.10s 缓冲）：翻滚优先，射击在翻滚期间被缓冲
 
 signal died
 
-const ACCEL := 1500.0        # 起步加速度（px/s^2）
-const DECEL := 2100.0        # 松手减速度，制造轻微滑步
+const ACCEL := 1500.0
+const DECEL := 2100.0
 const ROLL_GHOST_GAP := 0.045
+const HURT_STUN := 0.12
 
 var char_id: String = "deepseek"
 var data: CharacterData = null
@@ -25,6 +26,7 @@ var roll_t: float = 0.0
 var roll_cd: float = 0.0
 var roll_dir: Vector2 = Vector2.ZERO
 var move_mult: float = 1.0
+var hurt_stun: float = 0.0
 
 var focus_target: Node = null
 var focus_stacks: int = 0
@@ -36,11 +38,11 @@ var shield_t: float = 0.0
 
 var fire_anim: float = 0.0
 var charge_ratio: float = 0.0
+var roll_buff: float = 0.0
 
 var _blink: float = 0.0
 var _ghost_t: float = 0.0
 var _bump_cd: float = 0.0
-var roll_buff: float = 0.0
 var _muzzle_cd: float = 0.0
 
 
@@ -53,6 +55,14 @@ func _ready() -> void:
 	_build_nodes()
 	_build_weapon()
 	GameState.player = self
+
+
+func _input(event: InputEvent) -> void:
+	# 只记录"按下"，实际消费在 _handle_actions，保证 0.10s 内不丢输入
+	if event.is_action_pressed("roll"):
+		InputBuffer.press("roll")
+	elif event.is_action_pressed("shoot"):
+		InputBuffer.press("shoot")
 
 
 func _build_nodes() -> void:
@@ -151,6 +161,7 @@ func _tick_timers(delta: float) -> void:
 	roll_cd = maxf(0.0, roll_cd - delta)
 	fire_anim = maxf(0.0, fire_anim - delta)
 	shield_t = maxf(0.0, shield_t - delta)
+	hurt_stun = maxf(0.0, hurt_stun - delta)
 	_bump_cd = maxf(0.0, _bump_cd - delta)
 	_muzzle_cd = maxf(0.0, _muzzle_cd - delta)
 	if shield_t <= 0.0:
@@ -160,7 +171,6 @@ func _tick_timers(delta: float) -> void:
 		if buff_timer <= 0.0:
 			buffs.clear()
 
-	# 无敌帧闪烁
 	_blink += delta
 	if invuln > 0.0 and fmod(_blink, 0.12) < 0.06:
 		anim.modulate.a = 0.35
@@ -181,7 +191,6 @@ func _update_anim(input: Vector2) -> void:
 			anim.play("idle")
 
 
-## 撞墙反馈：轻微震屏 + 脚边尘土，带冷却避免连发
 func _wall_bump() -> void:
 	if _bump_cd > 0.0 or roll_t > 0.0:
 		return
@@ -203,14 +212,24 @@ func _clamp_room() -> void:
 
 
 func _handle_actions() -> void:
-	if Input.is_action_just_pressed("roll"):
-		_try_roll()
+	# 1) 翻滚优先：受击硬直期间不接受翻滚，但移动照常
+	if InputBuffer.peek("roll"):
+		if hurt_stun <= 0.0 and roll_t <= 0.0 and roll_cd <= 0.0:
+			InputBuffer.consume("roll")
+			_try_roll()
+		elif hurt_stun > 0.0:
+			InputBuffer.clear("roll")
+
 	if Input.is_action_just_pressed("switch_mode") and weapon != null:
 		weapon.on_switch_mode()
 		Sfx.play("ui", -6.0)
 	if Input.is_action_just_pressed("skill"):
 		_try_skill()
-	if Input.is_action_pressed("shoot") and weapon != null and roll_t <= 0.0:
+
+	# 2) 射击：按住即射；翻滚期间的按下被缓冲，翻滚结束当帧释放
+	var want_fire: bool = Input.is_action_pressed("shoot") or InputBuffer.peek("shoot")
+	if want_fire and weapon != null and roll_t <= 0.0:
+		InputBuffer.clear("shoot")
 		weapon.try_fire(aim)
 		fire_anim = 0.12
 		_muzzle_flash()
@@ -238,7 +257,6 @@ func _try_roll() -> void:
 	_ghost_t = 0.0
 	roll_buff = float(GameState.mods.get("roll_shot_bonus", 0.0))
 	Sfx.play("roll")
-	# 起手挤压：横向拉伸 + 纵向压缩，0.16s 回弹
 	anim.scale = Vector2(1.28, 0.76)
 	var tw := anim.create_tween()
 	tw.tween_property(anim, "scale", Vector2.ONE, 0.16)\
@@ -276,15 +294,13 @@ func try_absorb_bullet() -> bool:
 	shield_hits -= 1
 	GameState.heal(2)
 	hp = GameState.hp
-	# Claude 协同：护盾吸弹时向最近的敌人回击
-	if bool(GameState.mods.get("shield_counter", false)):
-		_counter_shot()
 	GameFeel.burst(global_position + Vector2(0, -14), Color(1.0, 0.85, 0.45), 5, 90.0, 0.25)
 	Sfx.play("coin", -8.0, 1.4)
+	if bool(GameState.mods.get("shield_counter", false)):
+		_counter_shot()
 	return true
 
 
-## 护盾反伤：朝最近的敌人打一发小弹
 func _counter_shot() -> void:
 	var nearest = null
 	var best := 9999.0
@@ -311,7 +327,7 @@ func _counter_shot() -> void:
 	b.color = Color("#ffd166")
 	b.pierce = 0
 	b.gen = 0
-	b.tier = "small"
+	b.tier = "light"
 	b.trail = true
 	b.tag = "counter"
 	b.global_position = global_position + Vector2(0, -14)
@@ -325,11 +341,13 @@ func take_damage(amount: int) -> void:
 	hp -= amount
 	GameState.hp = maxi(0, hp)
 	GameState.hp_changed.emit(GameState.hp, GameState.max_hp)
+	# 受击硬直：不接受翻滚，但仍然可以移动
+	hurt_stun = HURT_STUN
+	InputBuffer.clear("roll")
 
-	# 受击：红闪 + 强震 + 短 hit-stop + 碎屑
 	GameFeel.flash(anim, Color(2.6, 0.6, 0.7), 0.14)
 	GameFeel.screen_shake(0.45)
-	GameFeel.hit_stop(0.05, 0.06)
+	GameFeel.hit_stop(0.08, 0.06)
 	GameFeel.burst(global_position + Vector2(0, -14), Color(1.0, 0.35, 0.45), 8, 110.0, 0.3)
 	Sfx.play("hurt")
 	if hp <= 0:
@@ -342,7 +360,7 @@ func _die() -> void:
 	GameState.hp = 0
 	anim.modulate = Color(1, 1, 1, 0.4)
 	GameFeel.screen_shake(0.8)
-	GameFeel.hit_stop(0.16, 0.05)
+	GameFeel.hit_stop(0.12, 0.05)
 	GameFeel.burst(global_position + Vector2(0, -14), Color(1.0, 0.4, 0.5), 14, 160.0, 0.5)
 	Sfx.play("die")
 	died.emit()
@@ -374,7 +392,6 @@ func get_buff(kind: String, default_value: float = 0.0) -> float:
 
 # ---------------- 绘制（护盾 / 蓄力） ----------------
 func _draw() -> void:
-	# 落地阴影（画在精灵下方，先绘制）
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.4))
 	draw_circle(Vector2(0, 2), 9.0, Color(0, 0, 0, 0.32))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

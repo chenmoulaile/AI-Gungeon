@@ -1,5 +1,6 @@
 extends Node2D
 ## 关卡循环：房间 -> 清场 -> 开门 -> 下一房间 -> 商店 -> Boss -> 下一层
+## 房间节奏：小怪 -> 混合/精英 -> 喘息 -> Boss 前小高潮；波次之间留 1.5~2s 走位窗口
 
 signal run_over
 
@@ -13,6 +14,10 @@ const HudScene = preload("res://scenes/ui/hud.tscn")
 const ShopScene = preload("res://scenes/ui/shop.tscn")
 const BossIntroScene = preload("res://scenes/ui/boss_intro.tscn")
 const PortraitDialogScene = preload("res://scenes/ui/portrait_dialog.tscn")
+const SettingsScene = preload("res://scenes/ui/settings_menu.tscn")
+const TutorialScript = preload("res://scripts/ui/tutorial_hint.gd")
+
+enum Kind {SMALL, MIXED, ELITE, BREATHER, CLIMAX, BOSS}
 
 var room = null
 var player = null
@@ -20,6 +25,7 @@ var hud = null
 var enemy_layer: Node2D
 var bullet_layer: Node2D
 var ui_layer: CanvasLayer
+var tutorial = null
 
 var wave_index: int = 0
 var wave_total: int = 2
@@ -29,6 +35,7 @@ var is_boss_room: bool = false
 var boss = null
 var busy: bool = false
 var intro_shown: bool = false
+var room_kind: int = Kind.SMALL
 
 
 func _ready() -> void:
@@ -58,6 +65,11 @@ func _build_layers() -> void:
 	hud = HudScene.instantiate()
 	ui_layer.add_child(hud)
 
+	if not Settings.tutorial_done:
+		tutorial = TutorialScript.new()
+		tutorial.name = "Tutorial"
+		ui_layer.add_child(tutorial)
+
 
 func _spawn_player() -> void:
 	player = PlayerScene.instantiate()
@@ -65,7 +77,50 @@ func _spawn_player() -> void:
 	move_child(player, 2)
 
 
-# ---------------- 房间 ----------------
+# ---------------- 房间节奏 ----------------
+func _kind_for(index: int) -> int:
+	if index >= 5:
+		return Kind.BOSS
+	match index:
+		1:
+			return Kind.SMALL
+		2:
+			return Kind.ELITE if GameState.floor_index >= 2 else Kind.MIXED
+		3:
+			return Kind.BREATHER
+		_:
+			return Kind.CLIMAX
+
+
+func _wave_total_for(kind: int) -> int:
+	match kind:
+		Kind.BREATHER:
+			return 1
+		Kind.CLIMAX:
+			return 3
+		Kind.ELITE:
+			return 2
+		_:
+			return 2
+
+
+func _count_for(kind: int) -> int:
+	var f: int = GameState.floor_index
+	match kind:
+		Kind.SMALL:
+			return 2 + f
+		Kind.MIXED:
+			return 3 + f
+		Kind.ELITE:
+			return 2 + f
+		Kind.BREATHER:
+			return 1 + int(f / 2.0)
+		Kind.CLIMAX:
+			return 4 + f
+		_:
+			return 3
+
+
 func _start_room(index: int) -> void:
 	GameState.room_index = index
 	busy = false
@@ -73,6 +128,7 @@ func _start_room(index: int) -> void:
 	wave_index = 0
 	alive_count = 0
 	is_boss_room = (index == 5)
+	room_kind = _kind_for(index)
 	boss = null
 	_clear_layer(enemy_layer)
 	_clear_layer(bullet_layer)
@@ -90,19 +146,25 @@ func _start_room(index: int) -> void:
 	if is_boss_room:
 		_spawn_boss()
 	else:
-		wave_total = 2 if GameState.floor_index < 2 else 3
+		wave_total = _wave_total_for(room_kind)
 		hud.show_toast("B%d · 房间 %d" % [GameState.floor_index, index], 1.4)
 		_spawn_wave()
+	if tutorial != null and is_instance_valid(tutorial):
+		tutorial.on_room_start(index)
 
 
 func _spawn_wave() -> void:
 	if busy or room == null or not is_instance_valid(room):
 		return
 	wave_index += 1
-	var count: int = 2 + GameState.floor_index + wave_index
+	var count: int = _count_for(room_kind)
 	for i in count:
 		var scene: PackedScene = _pick_enemy()
 		var e = scene.instantiate()
+		if room_kind == Kind.ELITE and randf() < 0.45:
+			e.elite = true
+		if room_kind == Kind.CLIMAX:
+			e.hp_scale = 0.85
 		var pos: Vector2 = room.random_point(80.0)
 		var guard := 0
 		while pos.distance_to(player.global_position) < 130.0 and guard < 12:
@@ -173,7 +235,8 @@ func _on_enemy_died(e: Node) -> void:
 	if alive_count > 0 or busy:
 		return
 	if wave_index < wave_total:
-		await get_tree().create_timer(0.75).timeout
+		# 波间隔 1.5~2s，给玩家走位空间
+		await get_tree().create_timer(randf_range(1.5, 2.0)).timeout
 		if not is_inside_tree() or busy:
 			return
 		_spawn_wave()
@@ -187,18 +250,22 @@ func _on_room_cleared() -> void:
 	room_cleared = true
 	if room != null and is_instance_valid(room):
 		room.open_door()
-	GameState.add_coins(4)
+	var bonus := 4
+	if room_kind == Kind.BREATHER:
+		bonus = 12
+	GameState.add_coins(bonus)
 	var heal: int = int(GameState.mods.get("room_clear_heal", 0))
 	if heal > 0:
 		GameState.heal(heal)
 		hud.show_toast("房间清空 · 回复 %d 点生命 · 向右离开" % heal, 2.4)
 	else:
 		hud.show_toast("房间清空 · 向右离开", 2.2)
+	if tutorial != null and is_instance_valid(tutorial):
+		tutorial.on_room_cleared()
 
 
 func _on_boss_dead() -> void:
 	boss = null
-	# 清掉 Boss 召唤出来的小怪
 	for e in enemy_layer.get_children():
 		if is_instance_valid(e):
 			e.queue_free()
@@ -247,6 +314,24 @@ func _open_shop() -> void:
 	shop.closed.connect(func() -> void:
 		get_tree().paused = false
 		_start_room(5))
+
+
+# ---------------- 设置 ----------------
+func _unhandled_input(event: InputEvent) -> void:
+	if event.is_action_pressed("pause") and not get_tree().paused:
+		open_settings()
+		get_viewport().set_input_as_handled()
+
+
+func open_settings() -> void:
+	var menu = SettingsScene.instantiate()
+	menu.process_mode = Node.PROCESS_MODE_ALWAYS
+	ui_layer.add_child(menu)
+	get_tree().paused = true
+	menu.closed.connect(func() -> void:
+		get_tree().paused = false
+		if is_instance_valid(menu):
+			menu.queue_free())
 
 
 func _clear_layer(layer: Node) -> void:

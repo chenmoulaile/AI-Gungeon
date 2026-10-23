@@ -1,27 +1,31 @@
 extends Node
 ## 全局手感系统（autoload）
 ##
-## 集中管理：hit-stop / 屏幕震动 / 受击闪白 / 击退 / 伤害数字 / 粒子 / 子弹对象池。
-## 武器与敌人只调用这里的三档预设（small / medium / large），不要各写一套。
+## 三档反馈：light 0.04s / medium 0.08s / heavy 0.12s（超过 0.12 会变成卡顿）
+## 普通命中用 light，且带 0.16s 冷却，避免高射速下变成永久慢动作；
+## 暴击/击杀用 medium，Boss 阶段与死亡用 heavy。
 
 const DamageNumberScript = preload("res://scripts/fx/damage_number.gd")
 const SparkScript = preload("res://scripts/fx/spark.gd")
 const AfterimageScript = preload("res://scripts/fx/afterimage.gd")
 const BulletScript = preload("res://scripts/weapons/bullet.gd")
 
-## 三档反馈预设：普通命中用 medium，禁止对每一次普通命中用 large
 const PRESETS := {
-	"small": {"hitstop": 0.0, "shake": 0.05, "flash": 0.07, "spark": 3, "number": true},
-	"medium": {"hitstop": 0.028, "shake": 0.16, "flash": 0.09, "spark": 6, "number": true},
-	"large": {"hitstop": 0.11, "shake": 0.55, "flash": 0.14, "spark": 14, "number": true},
+	"light": {"hitstop": 0.04, "shake": 0.05, "flash": 0.07, "spark": 4, "number": true},
+	"medium": {"hitstop": 0.08, "shake": 0.18, "flash": 0.09, "spark": 7, "number": true},
+	"heavy": {"hitstop": 0.12, "shake": 0.55, "flash": 0.14, "spark": 14, "number": true},
 }
+
+const HITSTOP_COOLDOWN := 0.16
 
 var trauma: float = 0.0
 var trauma_decay: float = 1.55
 var shake_strength: float = 7.5
+var shake_scale: float = 0.7
 var camera: Camera2D = null
 
 var _hitstop_token: int = 0
+var _hitstop_lock: float = 0.0
 var _bullet_pool: Array = []
 var _spark_pool: Array = []
 var _number_pool: Array = []
@@ -32,10 +36,11 @@ func _ready() -> void:
 
 
 func _process(delta: float) -> void:
+	_hitstop_lock = maxf(0.0, _hitstop_lock - delta)
 	if trauma > 0.0:
 		trauma = maxf(0.0, trauma - trauma_decay * delta)
 		if camera != null and is_instance_valid(camera):
-			var s: float = shake_strength * trauma * trauma
+			var s: float = shake_strength * shake_scale * trauma * trauma
 			camera.offset = Vector2(randf_range(-s, s), randf_range(-s, s))
 	elif camera != null and is_instance_valid(camera) and camera.offset != Vector2.ZERO:
 		camera.offset = Vector2.ZERO
@@ -46,10 +51,13 @@ func register_camera(cam: Camera2D) -> void:
 
 
 # ---------------------------------------------------------------- 基础通道
-## 时间缩放停顿；用真实时间计时，不会因为自身缩放而卡住，也不阻塞输入
-func hit_stop(duration: float, scale: float = 0.04) -> void:
+## 时间缩放停顿；第 4 个参数必须为 true（ignore_time_scale），否则冻结会被自己减速
+func hit_stop(duration: float, scale: float = 0.05) -> void:
 	if duration <= 0.0:
 		return
+	if duration < 0.1 and _hitstop_lock > 0.0:
+		return   # 轻击有冷却，防止高射速下持续冻结
+	_hitstop_lock = HITSTOP_COOLDOWN
 	_hitstop_token += 1
 	var token := _hitstop_token
 	Engine.time_scale = scale
@@ -58,12 +66,10 @@ func hit_stop(duration: float, scale: float = 0.04) -> void:
 		Engine.time_scale = 1.0
 
 
-## trauma 衰减式震屏：只改 Camera2D.offset，不影响任何碰撞体
 func screen_shake(amount: float) -> void:
 	trauma = clampf(trauma + amount, 0.0, 1.0)
 
 
-## 受击闪白/闪红（Tween 缓动回白）
 func flash(node: Node, color: Color = Color(2.6, 2.6, 2.6), duration: float = 0.09) -> void:
 	if node == null or not is_instance_valid(node):
 		return
@@ -73,7 +79,6 @@ func flash(node: Node, color: Color = Color(2.6, 2.6, 2.6), duration: float = 0.
 		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 
-## 缓动击退：写入节点自己的 knock_vel，由节点逐帧衰减
 func knockback(node: Node, direction: Vector2, strength: float) -> void:
 	if node == null or not is_instance_valid(node):
 		return
@@ -81,7 +86,6 @@ func knockback(node: Node, direction: Vector2, strength: float) -> void:
 		node.knock_vel = direction.normalized() * strength
 
 
-## 伤害数字：上浮 + 轻微下坠 + 淡出
 func damage_number(pos: Vector2, amount: float, crit: bool = false) -> void:
 	var node := _take_number()
 	if node != null:
@@ -90,11 +94,9 @@ func damage_number(pos: Vector2, amount: float, crit: bool = false) -> void:
 
 func release_number(node: Node2D) -> void:
 	if node != null and is_instance_valid(node):
-		node.visible = false
-		node.set_process(false)
+		PoolManager.recycle(node)
 
 
-## 粒子爆散（对象池）
 func burst(pos: Vector2, color: Color, count: int = 6, speed: float = 90.0,
 		life: float = 0.32) -> void:
 	var node := _take_spark()
@@ -104,11 +106,9 @@ func burst(pos: Vector2, color: Color, count: int = 6, speed: float = 90.0,
 
 func release_spark(node: Node2D) -> void:
 	if node != null and is_instance_valid(node):
-		node.visible = false
-		node.set_process(false)
+		PoolManager.recycle(node)
 
 
-## 翻滚残影
 func afterimage(texture: Texture2D, pos: Vector2, flip: bool, tint: Color,
 		duration: float = 0.15) -> void:
 	if texture == null:
@@ -132,20 +132,21 @@ func afterimage(texture: Texture2D, pos: Vector2, flip: bool, tint: Color,
 
 
 # ---------------------------------------------------------------- 组合预设
-## 一次调用打满一整档反馈
 func impact(preset: String, world_pos: Vector2, node: Node, dir: Vector2,
 		amount: float = 0.0, crit: bool = false, flash_color: Color = Color(2.6, 2.6, 2.6),
 		spark_color: Color = Color(1, 0.85, 0.6)) -> void:
-	var p: Dictionary = PRESETS.get(preset, PRESETS["medium"])
+	var p: Dictionary = PRESETS.get(preset, PRESETS["light"])
 	flash(node, flash_color, float(p["flash"]))
 	screen_shake(float(p["shake"]))
 	burst(world_pos, spark_color, int(p["spark"]), 70.0 + float(p["spark"]) * 9.0, 0.3)
 	if bool(p["number"]) and amount > 0.0:
 		damage_number(world_pos + Vector2(randf_range(-3, 3), -12), amount, crit)
+	# 命中音效与 hit-stop 在同一帧开始，听感与画面同步
+	Sfx.play_hit(crit)
 	if float(p["hitstop"]) > 0.0:
 		hit_stop(float(p["hitstop"]))
 	if node != null and is_instance_valid(node) and dir != Vector2.ZERO:
-		knockback(node, dir, 46.0 if preset == "medium" else 22.0)
+		knockback(node, dir, 46.0 if preset != "light" else 26.0)
 
 
 # ---------------------------------------------------------------- 对象池
@@ -157,16 +158,16 @@ func get_bullet() -> Node:
 			b = cand
 			break
 	var layer := _fx_root()
+	if layer == null:
+		return null
 	if b == null:
 		b = BulletScript.new()
-		if layer == null:
-			return null
 		layer.add_child(b)
-	elif b.get_parent() != layer and layer != null:
+	elif b.get_parent() != layer:
 		if b.get_parent() != null:
 			b.get_parent().remove_child(b)
 		layer.add_child(b)
-	b.set_physics_process(true)
+	PoolManager.revive(b)
 	b.visible = true
 	return b
 
@@ -176,10 +177,7 @@ func release_bullet(b: Node) -> void:
 		return
 	for conn in b.hit_enemy.get_connections():
 		b.hit_enemy.disconnect(conn["callable"])
-	b.visible = false
-	b.set_physics_process(false)
-	if b.get_parent() != null:
-		b.get_parent().remove_child(b)
+	PoolManager.recycle(b)
 	_bullet_pool.append(b)
 
 
@@ -190,6 +188,7 @@ func _take_number() -> Node2D:
 			_number_pool.remove_at(i)
 			continue
 		if not n.visible:
+			PoolManager.revive(n)
 			return n
 	var layer := _fx_root()
 	if layer == null:
@@ -207,6 +206,7 @@ func _take_spark() -> Node2D:
 			_spark_pool.remove_at(i)
 			continue
 		if not s.visible:
+			PoolManager.revive(s)
 			return s
 	var layer := _fx_root()
 	if layer == null:
@@ -229,6 +229,8 @@ func _fx_root() -> Node2D:
 func reset() -> void:
 	Engine.time_scale = 1.0
 	trauma = 0.0
+	_hitstop_token += 1
+	_hitstop_lock = 0.0
 	_bullet_pool.clear()
 	_spark_pool.clear()
 	_number_pool.clear()

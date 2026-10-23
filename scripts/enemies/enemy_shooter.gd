@@ -1,11 +1,14 @@
 extends EnemyBase
-## 远程敌人（直线弹）：保持距离，蓄力后朝玩家打一发直线弹
+## 远程敌人（直线弹）：保持距离，蓄力后攻击
+## 第 2 层起切换为旋转弹模式（新弹幕，不新增敌种）
 
 const KEEP_MIN := 150.0
 const KEEP_MAX := 220.0
 
 var fire_cd: float = 1.6
 var telegraph: float = 0.0
+var pattern: String = "aim"
+var spin: float = 0.0
 
 
 func _setup() -> void:
@@ -17,6 +20,9 @@ func _setup() -> void:
 	coin_value = 3
 	accent = Color("#ff9f43")
 	fire_cd = randf_range(1.0, 1.8)
+	if GameState.floor_index >= 2:
+		pattern = "spiral"
+		spin = randf() * TAU
 
 
 func _ai(delta: float) -> void:
@@ -34,15 +40,20 @@ func _ai(delta: float) -> void:
 	if telegraph > 0.0:
 		telegraph -= delta
 		if telegraph <= 0.0:
-			shoot_at(dir, 190.0, 3.8)
+			if pattern == "spiral":
+				spin += 0.7
+				for i in 2:
+					var a := spin + PI * i
+					shoot_at(Vector2(cos(a), sin(a)), 165.0, 3.8)
+			else:
+				shoot_at(dir, 190.0, 3.8)
 			Sfx.play("hit", -14.0, 1.6)
 	if fire_cd <= 0.0:
-		fire_cd = randf_range(1.5, 2.2)
+		fire_cd = randf_range(1.5, 2.2) if pattern == "aim" else randf_range(1.1, 1.6)
 		telegraph = 0.35
 
 
 func _draw_body() -> void:
-	# 方形核心 + 旋转外框
 	var s := radius
 	var pts := PackedVector2Array([
 		Vector2(-s, -s), Vector2(s, -s), Vector2(s, s), Vector2(-s, s),

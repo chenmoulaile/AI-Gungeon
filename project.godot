@@ -14,10 +14,12 @@ boot_splash/bg_color=Color(0.043, 0.05, 0.075, 1)
 [autoload]
 
 GameConfig="*res://scripts/systems/game_config.gd"
+Settings="*res://scripts/systems/settings.gd"
+InputBuffer="*res://scripts/systems/input_buffer.gd"
 GameState="*res://scripts/systems/game_state.gd"
 GameFeel="*res://scripts/systems/game_feel.gd"
+Sfx="*res://scripts/systems/audio_manager.gd"
 UpgradeDB="*res://scripts/systems/upgrade_db.gd"
-Sfx="*res://scripts/systems/sfx.gd"
 
 [display]
 
@@ -28,6 +30,10 @@ window/size/window_height_override=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="keep"
 window/stretch/scale_mode="integer"
+
+[audio]
+
+buses/default_bus_layout="res://resources/audio/bus_layout.tres"
 
 [rendering]
 

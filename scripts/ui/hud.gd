@@ -9,6 +9,8 @@ var combo_time: float = 0.0
 
 var _icon_cache: Dictionary = {}
 var _pop: Dictionary = {}          # uid -> 剩余弹跳时间
+var _desc_uid: String = ""
+var _desc_t: float = 0.0
 
 
 func _ready() -> void:
@@ -26,6 +28,7 @@ func _process(delta: float) -> void:
 	combo_time = maxf(0.0, combo_time - delta)
 	for k in _pop.keys():
 		_pop[k] = maxf(0.0, float(_pop[k]) - delta)
+	_desc_t = maxf(0.0, _desc_t - delta)
 	queue_redraw()
 
 
@@ -51,6 +54,8 @@ func _on_upgrades_changed() -> void:
 		return
 	var uid: String = GameState.upgrades[GameState.upgrades.size() - 1]
 	_pop[uid] = 0.45
+	_desc_uid = uid
+	_desc_t = 3.0
 
 
 func _draw() -> void:
@@ -63,6 +68,7 @@ func _draw() -> void:
 		_draw_skill(p)
 		_draw_mode(p)
 	_draw_upgrades()
+	_draw_relic_desc()
 	_draw_boss()
 	_draw_toasts()
 
@@ -184,6 +190,26 @@ func _draw_upgrades() -> void:
 		y += 24.0
 		if y > GameConfig.BASE_H - 60.0:
 			break
+
+
+## 首次/新获得藏品：右侧显示 3s 描述
+func _draw_relic_desc() -> void:
+	if _desc_t <= 0.0 or _desc_uid == "":
+		return
+	var up: Upgrade = UpgradeDB.get_upgrade(_desc_uid)
+	if up == null:
+		return
+	var a: float = clampf(_desc_t / 0.6, 0.0, 1.0)
+	var w := 150.0
+	var r := Rect2(Vector2(GameConfig.BASE_W - w - 10.0, 34.0 + minf(GameState.upgrades.size(), 8) * 24.0 + 6.0),
+		Vector2(w, 44))
+	draw_rect(r, Color(0.05, 0.07, 0.11, 0.86 * a))
+	draw_rect(r, Color(1.0, 0.82, 0.35, 0.7 * a), false, 1.0)
+	if GameConfig.ui_font != null:
+		draw_string(GameConfig.ui_font, r.position + Vector2(6, 13), up.title,
+			HORIZONTAL_ALIGNMENT_LEFT, -1, 10, Color(1.0, 0.88, 0.5, a))
+		draw_multiline_string(GameConfig.ui_font, r.position + Vector2(6, 27), up.desc,
+			HORIZONTAL_ALIGNMENT_LEFT, w - 12, 8, 2, Color(0.88, 0.92, 1.0, a))
 
 
 func _icon(path: String) -> Texture2D:

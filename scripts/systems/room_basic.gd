@@ -22,6 +22,17 @@ func _ready() -> void:
 	queue_redraw()
 
 
+## 光照采样吸附到像素网格，消除平滑插值造成的糊边
+func _apply_pixel_light() -> void:
+	var path := "res://shaders/pixel_light.gdshader"
+	if not ResourceLoader.exists(path):
+		return
+	var mat := ShaderMaterial.new()
+	mat.shader = load(path)
+	mat.set_shader_parameter("pixel_size", 2.0)
+	material = mat
+
+
 func _process(delta: float) -> void:
 	_t += delta
 	if door_open:

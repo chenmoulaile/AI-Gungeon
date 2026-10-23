@@ -1,12 +1,14 @@
 extends Node2D
 class_name EnemyBase
 ## 敌人基类：血量、受击反馈（闪白/击退/硬直）、死亡爆散、掉落
-## 具体行为由子类覆写 _setup() / _ai()
+## 精英怪：血量 ×1.55、体积略大，用外圈标出
 
 const BulletScript = preload("res://scripts/weapons/bullet.gd")
 const CoinScript = preload("res://scripts/systems/coin.gd")
 
 signal died(enemy: Node)
+
+static var _pixel_mat: ShaderMaterial = null
 
 var max_hp: float = 12.0
 var hp: float = 12.0
@@ -16,6 +18,8 @@ var contact_damage: int = 1
 var accent: Color = Color("#ff6b8b")
 var coin_value: int = 2
 var is_boss: bool = false
+var elite: bool = false
+var hp_scale: float = 1.0
 var dead: bool = false
 
 var player = null
@@ -30,8 +34,26 @@ func _ready() -> void:
 	add_to_group("enemies")
 	player = GameState.player
 	_setup()
+	if elite:
+		max_hp *= 1.55
+		radius *= 1.08
+		coin_value += 2
+	if hp_scale != 1.0:
+		max_hp *= hp_scale
+	hp = max_hp
 	GameState.register_enemy(self)
 	queue_redraw()
+
+
+func _apply_pixel_light() -> void:
+	if _pixel_mat == null:
+		var path := "res://shaders/pixel_light.gdshader"
+		if ResourceLoader.exists(path):
+			_pixel_mat = ShaderMaterial.new()
+			_pixel_mat.shader = load(path)
+			_pixel_mat.set_shader_parameter("pixel_size", 2.0)
+	if _pixel_mat != null:
+		material = _pixel_mat
 
 
 ## 子类初始化数值
@@ -49,7 +71,6 @@ func _physics_process(delta: float) -> void:
 	if player == null or not is_instance_valid(player):
 		player = GameState.player
 
-	# 受击硬直期间不行动，但仍会被击退
 	if stun <= 0.0:
 		_ai(delta)
 
@@ -88,7 +109,6 @@ func hp_ratio() -> float:
 	return clampf(hp / maxf(max_hp, 0.001), 0.0, 1.0)
 
 
-## dir / tier / crit 由子弹传入，决定反馈强度
 func take_damage(dmg: float, dir: Vector2 = Vector2.ZERO, tier: String = "medium",
 		crit: bool = false, tag: String = "") -> void:
 	if dead:
@@ -96,9 +116,14 @@ func take_damage(dmg: float, dir: Vector2 = Vector2.ZERO, tier: String = "medium
 	if tag != "":
 		last_hit_tag = tag
 	hp -= dmg
-	GameFeel.impact(tier, global_position + Vector2(0, -radius * 0.7), self, dir, dmg,
+	var preset := tier
+	if preset == "small":
+		preset = "light"
+	elif preset == "large":
+		preset = "heavy"
+	GameFeel.impact(preset, global_position + Vector2(0, -radius * 0.7), self, dir, dmg,
 		crit, Color(2.8, 2.8, 2.8), accent.lightened(0.45))
-	if tier != "small" and not is_boss:
+	if preset != "light" and not is_boss:
 		stun = 0.055
 	if hp <= 0.0:
 		_die()
@@ -112,9 +137,9 @@ func _die() -> void:
 	GameState.on_enemy_killed(last_hit_tag)
 	if GameState.player != null and is_instance_valid(GameState.player):
 		GameState.player.on_kill()
-	# 死亡爆散：一次大粒子 + 轻微震屏
-	GameFeel.burst(global_position + Vector2(0, -radius * 0.5), accent, 14, 150.0, 0.42)
-	GameFeel.screen_shake(0.12)
+	GameFeel.burst(global_position + Vector2(0, -radius * 0.5), accent,
+		20 if elite else 14, 150.0, 0.42)
+	GameFeel.screen_shake(0.18 if elite else 0.12)
 	_drop_coins()
 	died.emit(self)
 	queue_free()
@@ -143,7 +168,7 @@ func shoot_at(dir: Vector2, speed: float = 155.0, bullet_radius: float = 3.8,
 	b.speed = speed
 	b.damage = 1.0
 	b.radius = bullet_radius
-	b.color = Color("#ff5d7a")
+	b.color = Color("#ff5d7a") if not Settings.high_contrast else Color("#ff2d55")
 	b.life = 4.5
 	b.homing = homing
 	b.homing_time = homing_time
@@ -162,6 +187,10 @@ func _draw() -> void:
 	draw_circle(Vector2(0, radius * 0.7), radius * 1.05, Color(0, 0, 0, 0.28))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 	_draw_body()
+	if elite:
+		var pulse: float = 0.35 + 0.2 * sin(t * 4.0)
+		draw_arc(Vector2.ZERO, radius + 5.0, 0.0, TAU, 24,
+			Color(1.0, 0.82, 0.35, pulse), 1.5, true)
 
 
 func _draw_body() -> void:

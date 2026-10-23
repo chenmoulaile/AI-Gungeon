@@ -14,6 +14,13 @@ tests/_web_*
 tools/_dbg_*
 tools/_preview_sprites.*
 
+*.tmp
+
+# 本地存档（user:// 映射到用户目录，正常不会进仓库，双保险）
+run_save.cfg
+meta.cfg
+settings.cfg
+
 # Python
 __pycache__/
 *.pyc

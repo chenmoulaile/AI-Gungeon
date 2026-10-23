@@ -1,10 +1,13 @@
 extends EnemyBase
 ## 远程敌人（扇形弹）：靠近后打 5 发扇形
+## 第 3 层起每第 3 轮改为 10 发环形弹（新弹幕，不新增敌种）
 
 const KEEP := 165.0
 
 var fire_cd: float = 2.4
 var telegraph: float = 0.0
+var volley: int = 0
+var ring_mode: bool = false
 
 
 func _setup() -> void:
@@ -16,6 +19,7 @@ func _setup() -> void:
 	coin_value = 4
 	accent = Color("#c76bff")
 	fire_cd = randf_range(1.2, 2.0)
+	ring_mode = GameState.floor_index >= 3
 
 
 func _ai(delta: float) -> void:
@@ -28,16 +32,21 @@ func _ai(delta: float) -> void:
 		position += dir * speed * delta
 	elif dist < KEEP - 30.0:
 		position -= dir * speed * delta
-	# 缓慢环绕，弹幕更好看
 	position += dir.orthogonal() * sin(t * 1.4) * speed * 0.45 * delta
 
 	fire_cd -= delta
 	if telegraph > 0.0:
 		telegraph -= delta
 		if telegraph <= 0.0:
-			for i in 5:
-				var t2 := float(i) / 4.0 - 0.5
-				shoot_at(dir.rotated(deg_to_rad(30.0 * t2)), 165.0, 4.0)
+			volley += 1
+			if ring_mode and volley % 3 == 0:
+				for i in 10:
+					var a := TAU * i / 10.0 + t
+					shoot_at(Vector2(cos(a), sin(a)), 150.0, 3.6)
+			else:
+				for i in 5:
+					var t2 := float(i) / 4.0 - 0.5
+					shoot_at(dir.rotated(deg_to_rad(30.0 * t2)), 165.0, 4.0)
 			Sfx.play("hit", -12.0, 0.9)
 	if fire_cd <= 0.0:
 		fire_cd = randf_range(2.3, 3.0)
@@ -53,7 +62,6 @@ func _draw_body() -> void:
 	var outline := pts.duplicate()
 	outline.append(pts[0])
 	draw_polyline(outline, Color(0, 0, 0, 0.85), 1.6)
-	# 内部小三角，提示"散射"
 	var tri := PackedVector2Array([
 		Vector2(0, -radius * 0.5), Vector2(radius * 0.45, radius * 0.3),
 		Vector2(-radius * 0.45, radius * 0.3),

@@ -1,12 +1,14 @@
 extends EnemyBase
 ## Boss「回响聚合体」
 ## 三阶段：100%~60% 环形弹 / 60%~25% 追踪弹 / 25%~0% 扇形弹 + 召唤
+## 阶段转换：0.75s 预警，预警开始即停止召唤，并额外留 0.5s 喘息窗口
 
 const ChaserScene = preload("res://scenes/enemies/enemy_chaser.tscn")
 
 var phase: int = 1
 var atk_cd: float = 1.6
 var summon_cd: float = 5.0
+var summon_lock: float = 0.0
 var ring_angle: float = 0.0
 var telegraph: float = 0.0
 var pending_phase: int = 0
@@ -45,6 +47,8 @@ func _ai(delta: float) -> void:
 	else:
 		position += dir.orthogonal() * speed * 0.5 * delta
 
+	summon_lock = maxf(0.0, summon_lock - delta)
+
 	# 阶段转换预警：停止攻击、闪红、震屏，给玩家 0.75s 反应时间
 	if telegraph > 0.0:
 		telegraph -= delta
@@ -52,6 +56,7 @@ func _ai(delta: float) -> void:
 			phase = pending_phase
 			pending_phase = 0
 			atk_cd = 0.55
+			summon_lock = 0.5
 			GameFeel.screen_shake(0.3)
 		return
 
@@ -68,7 +73,7 @@ func _ai(delta: float) -> void:
 				_attack_fan(dir)
 				atk_cd = 1.05
 
-	if phase >= 3:
+	if phase >= 3 and summon_lock <= 0.0:
 		summon_cd -= delta
 		if summon_cd <= 0.0:
 			summon_cd = 6.0
@@ -92,7 +97,8 @@ func _update_phase() -> void:
 		pending_phase = new_phase
 		telegraph = 0.75
 		atk_cd = 1.2
-		GameFeel.hit_stop(0.1, 0.05)
+		summon_lock = 0.75 + 0.5   # 预警 + 转换后的 0.5s 喘息窗口内不再召唤
+		GameFeel.hit_stop(0.12, 0.05)
 		GameFeel.screen_shake(0.55)
 		GameFeel.burst(global_position, Color(1.0, 0.35, 0.45), 16, 190.0, 0.5)
 		Sfx.play("boss", -2.0, 1.1)
@@ -142,13 +148,11 @@ func _draw_body() -> void:
 			c = Color("#ff7ad9")
 		3:
 			c = Color("#ff5b5b")
-	# 外圈旋转环
 	for k in 3:
 		var rr := radius + 6.0 + k * 5.0
 		var a0 := t * (0.8 + k * 0.5)
 		draw_arc(Vector2.ZERO, rr, a0, a0 + PI * 1.3, 20,
 			Color(c.r, c.g, c.b, 0.45 - k * 0.1), 2.0, true)
-	# 核心多边形
 	var pts := PackedVector2Array()
 	for i in 8:
 		var a := TAU * i / 8.0 + t * 0.5
