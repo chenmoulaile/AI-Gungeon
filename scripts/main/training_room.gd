@@ -75,6 +75,8 @@ func _unhandled_input(event: InputEvent) -> void:
 				Sfx.play("ui")
 			KEY_R:
 				_reset()
+			KEY_1, KEY_2, KEY_3:
+				_switch_char(["deepseek", "gpt", "claude"][event.physical_keycode - KEY_1])
 	elif event is InputEventJoypadButton and event.pressed:
 		var b := (event as InputEventJoypadButton).button_index
 		if b == 1:
@@ -85,6 +87,20 @@ func _unhandled_input(event: InputEvent) -> void:
 			pattern = (pattern + PATTERN_NAMES.size() - 1) % PATTERN_NAMES.size()
 		elif b == 5:
 			pattern = (pattern + 1) % PATTERN_NAMES.size()
+
+
+## 训练场内切换角色：直接重建玩家节点
+func _switch_char(id: String) -> void:
+	if player != null and is_instance_valid(player):
+		player.queue_free()
+	GameState.char_id = id
+	GameState.char_data = GameState.load_character(id)
+	GameState.hp = GameState.max_hp
+	player = PlayerScene.instantiate()
+	add_child(player)
+	player.global_position = Vector2(GameConfig.ROOM_W * 0.28, GameConfig.ROOM_H * 0.5)
+	GameState.player = player
+	Sfx.play("ui")
 
 
 func _exit() -> void:
@@ -203,5 +219,5 @@ func _draw_ui() -> void:
 	ui.draw_string(f, Vector2(18, 25), "弹幕：%s" % PATTERN_NAMES[pattern],
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 11, Color(0.9, 0.95, 1.0))
 	ui.draw_string(f, Vector2(10, GameConfig.BASE_H - 12),
-		"← → / Q E 切换弹幕    R 重置    ESC 退出（训练场不计统计）",
+		"← → / Q E 切换弹幕    R 重置    1/2/3 换角色    ESC 退出（不计统计）",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(0.62, 0.68, 0.8))

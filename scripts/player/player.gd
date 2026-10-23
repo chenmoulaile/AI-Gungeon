@@ -15,6 +15,20 @@ var anim: AnimatedSprite2D
 var cam: Camera2D
 var weapon = null
 
+## 转向/动画分层：pivot 只做倾斜，bob 做待机与走路起伏，recoil 做后坐/受击位移，
+## breath 做呼吸缩放，anim 只负责帧与翻滚挤压
+var pivot: Node2D
+var bob: Node2D
+var recoil: Node2D
+var breath: Node2D
+var accent: Node2D
+var gun: Node2D
+
+var _move_tween: Tween = null
+var _breath_tween: Tween = null
+var _anim_state: String = "idle"
+var _walk_dur: float = -1.0
+
 var hp: int = 6
 var max_hp: int = 6
 var alive: bool = true
@@ -81,13 +95,47 @@ func _build_nodes() -> void:
 	shape.position = Vector2(0, -6)
 	add_child(shape)
 
+	pivot = Node2D.new()
+	pivot.name = "Pivot"
+	add_child(pivot)
+
+	bob = Node2D.new()
+	bob.name = "Bob"
+	pivot.add_child(bob)
+
+	recoil = Node2D.new()
+	recoil.name = "Recoil"
+	bob.add_child(recoil)
+
+	breath = Node2D.new()
+	breath.name = "Breath"
+	recoil.add_child(breath)
+
 	anim = AnimatedSprite2D.new()
 	anim.sprite_frames = GameConfig.build_sprite_frames(char_id)
 	anim.offset = Vector2(0, -29)
-	anim.self_modulate = Color(1.2, 1.2, 1.3)
+	anim.self_modulate = Color(1.42, 1.42, 1.5)
 	anim.light_mask = 0   # 角色不参与 2D 光照，避免被自己的点光源打爆成白色
 	anim.play("idle")
-	add_child(anim)
+	breath.add_child(anim)
+
+	# 配饰：鲸尾 / 龙翼 / 向日葵（程序化绘制，Tween 驱动）
+	accent = Node2D.new()
+	accent.name = "Accent"
+	accent.set_script(load("res://scripts/player/char_accent.gd"))
+	breath.add_child(accent)
+	breath.move_child(accent, 0)   # 画在角色身后
+	if accent.has_method("setup"):
+		accent.setup(char_id)
+
+	# 手持装置：精确指向瞄准方向
+	gun = Node2D.new()
+	gun.name = "Gun"
+	gun.z_index = 2
+	gun.set_script(load("res://scripts/player/hand_device.gd"))
+	add_child(gun)
+	gun.position = Vector2(0, -12)
+	gun.scale = Vector2(0.75, 0.75)
 
 	var light := PointLight2D.new()
 	if ResourceLoader.exists("res://assets/fx/light_radial.png"):
@@ -111,6 +159,7 @@ func _build_nodes() -> void:
 	add_child(cam)
 	cam.make_current()
 	GameFeel.register_camera(cam)
+	_start_idle_loop()
 
 
 func _build_weapon() -> void:
@@ -146,8 +195,10 @@ func _physics_process(delta: float) -> void:
 		aim = (mouse - global_position).normalized()
 	if aim == Vector2.ZERO:
 		aim = Vector2.RIGHT
-	facing = -1 if aim.x < 0.0 else 1
-	anim.flip_h = facing > 0
+	_update_facing()
+	_update_lean(delta)
+	gun.set_aim(aim)
+	gun.position = Vector2(0, -12) + aim * 7.0
 
 	if roll_t > 0.0:
 		velocity = roll_dir * GameConfig.ROLL_SPEED
@@ -203,16 +254,102 @@ func _tick_timers(delta: float) -> void:
 
 
 func _update_anim(input: Vector2) -> void:
+	if _anim_state == "roll":
+		_anim_state = ""
+	var next := "idle"
 	if fire_anim > 0.0 and anim.sprite_frames.has_animation("attack"):
-		if anim.animation != "attack":
-			anim.play("attack")
+		next = "attack"
+	elif input.length() > 0.1:
+		next = "walk"
+	if next == _anim_state:
 		return
-	if input.length() > 0.1:
-		if anim.animation != "walk":
-			anim.play("walk")
-	else:
-		if anim.animation != "idle":
-			anim.play("idle")
+	_anim_state = next
+	if anim.sprite_frames.has_animation(next):
+		anim.play(next)
+	if next == "idle":
+		_start_idle_loop()
+	elif next == "walk":
+		_start_walk_loop()
+
+
+## 待机：上下 1px 浮动 + 呼吸缩放 1.00→1.02，周期 1.7s
+func _start_idle_loop() -> void:
+	_kill_move_tween()
+	_move_tween = create_tween().set_loops()
+	_move_tween.tween_property(bob, "position:y", -1.0, 0.85)\
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_move_tween.tween_property(bob, "position:y", 0.0, 0.85)\
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_breath_tween = create_tween().set_loops()
+	_breath_tween.tween_property(breath, "scale", Vector2(1.02, 1.02), 0.85)\
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_breath_tween.tween_property(breath, "scale", Vector2.ONE, 0.85)\
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
+## 走路：左右摆 ±1px + 上下弹跳，频率随移速变化
+func _start_walk_loop() -> void:
+	var spd: float = maxf(40.0, velocity.length())
+	var dur: float = clampf(0.34 * (120.0 / spd), 0.15, 0.34)
+	if absf(dur - _walk_dur) < 0.02 and _move_tween != null and _move_tween.is_valid():
+		return
+	_walk_dur = dur
+	_kill_move_tween()
+	_move_tween = create_tween().set_loops()
+	_move_tween.tween_property(bob, "position", Vector2(-1.0, -1.5), dur * 0.5)\
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	_move_tween.tween_property(bob, "position", Vector2(1.0, 0.0), dur * 0.5)\
+		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+
+
+func _kill_move_tween() -> void:
+	if _move_tween != null and _move_tween.is_valid():
+		_move_tween.kill()
+	if _breath_tween != null and _breath_tween.is_valid():
+		_breath_tween.kill()
+	_move_tween = null
+	_breath_tween = null
+	_walk_dur = -1.0
+	if bob != null:
+		bob.position = Vector2.ZERO
+	if breath != null:
+		breath.scale = Vector2.ONE
+
+
+## 方向切换：短促挤压回弹，避免 2 方向翻转硬切
+func _update_facing() -> void:
+	var f := -1 if aim.x < 0.0 else 1
+	if f == facing:
+		return
+	facing = f
+	anim.flip_h = facing > 0
+	if accent != null:
+		accent.scale.x = -1.0 if anim.flip_h else 1.0
+	var tw := anim.create_tween()
+	anim.scale = Vector2(0.86, 1.08)
+	tw.tween_property(anim, "scale", Vector2.ONE, 0.08)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## 身体向瞄准方向轻微倾斜（平滑 14，差值 <2° 直接吸附）
+func _update_lean(delta: float) -> void:
+	var target := 0.0
+	if absf(aim.y) < 0.8:
+		target = aim.x * 0.055
+	pivot.rotation = lerp_angle(pivot.rotation, target, 1.0 - exp(-14.0 * delta))
+	if absf(pivot.rotation - target) < 0.02:
+		pivot.rotation = target
+
+
+## 射击后坐：向后 2px 再回弹（0.08s）
+func _recoil_kick() -> void:
+	if recoil == null:
+		return
+	recoil.position = -aim * 2.0
+	var tw := recoil.create_tween()
+	tw.tween_property(recoil, "position", Vector2.ZERO, 0.08)\
+		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
 
 
 func _wall_bump() -> void:
@@ -263,8 +400,9 @@ func _muzzle_flash() -> void:
 	if _muzzle_cd > 0.0:
 		return
 	_muzzle_cd = 0.05
-	var muzzle := global_position + Vector2(0, -16) + aim * 12.0
-	GameFeel.burst(muzzle, Color(1.0, 0.95, 0.75), 2, 55.0, 0.1)
+	var muzzle: Vector2 = gun.global_position + aim * 11.0
+	GameFeel.burst(muzzle, Color(1.0, 0.95, 0.75), 3, 60.0, 0.1)
+	_recoil_kick()
 
 
 # ---------------- 翻滚 ----------------
@@ -282,15 +420,17 @@ func _try_roll() -> void:
 	grant_invuln(GameConfig.ROLL_TIME + 0.02)
 	if anim.sprite_frames.has_animation("roll"):
 		anim.play("roll")
+	_anim_state = "roll"
+	_kill_move_tween()
 	_ghost_t = 0.0
 	ChallengeManager.on_roll()
 	roll_buff = float(GameState.mods.get("roll_shot_bonus", 0.0))
 	if float(GameState.mods.get("roll_speed", 0.0)) > 0.0:
 		roll_speed_t = 1.2
 	Sfx.play("roll")
-	anim.scale = Vector2(1.28, 0.76)
+	anim.scale = Vector2(1.15, 0.85)
 	var tw := anim.create_tween()
-	tw.tween_property(anim, "scale", Vector2.ONE, 0.16)\
+	tw.tween_property(anim, "scale", Vector2.ONE, 0.18)\
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
@@ -408,9 +548,9 @@ func take_damage(amount: int) -> void:
 
 	GameFeel.flash(anim, Color(2.6, 0.6, 0.7), 0.14)
 	# 后仰 3px 再回弹
-	anim.position = Vector2(-3.0 * float(facing), 0)
-	var tw := anim.create_tween()
-	tw.tween_property(anim, "position", Vector2.ZERO, 0.16)\
+	recoil.position = Vector2(-3.0 * float(facing), 0)
+	var tw := recoil.create_tween()
+	tw.tween_property(recoil, "position", Vector2.ZERO, 0.16)\
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 	GameFeel.screen_shake(0.45)
 	GameFeel.hit_stop(0.08, 0.06)
@@ -431,10 +571,17 @@ func _die() -> void:
 	alive = false
 	hp = 0
 	GameState.hp = 0
-	anim.modulate = Color(1, 1, 1, 0.4)
+	_kill_move_tween()
+	GameFeel.flash(anim, Color(3.0, 3.0, 3.0), 0.06)
+	var tw := anim.create_tween()
+	tw.tween_interval(0.06)
+	tw.tween_property(anim, "modulate:a", 0.0, 0.4)\
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	tw.parallel().tween_property(anim, "scale", Vector2(1.1, 0.9), 0.4)\
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 	GameFeel.screen_shake(0.8)
 	GameFeel.hit_stop(0.12, 0.05)
-	GameFeel.burst(global_position + Vector2(0, -14), Color(1.0, 0.4, 0.5), 14, 160.0, 0.5)
+	GameFeel.burst(global_position + Vector2(0, -14), Color(1.0, 0.4, 0.5), 8, 160.0, 0.4)
 	Sfx.play("die")
 	died.emit()
 	GameState.run_ended.emit()

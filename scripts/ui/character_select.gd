@@ -191,14 +191,11 @@ func _draw() -> void:
 		("种子：" + seed_text + ("_" if _editing else "")) if seed_text != "" else "种子：随机",
 		HORIZONTAL_ALIGNMENT_LEFT, -1, 8,
 		Color(1.0, 0.88, 0.5) if _editing else GameConfig.COL_DIM)
-	draw_string(GameConfig.ui_font, Vector2(GameConfig.BASE_W - 10, 323), "训练场 [T]",
-		HORIZONTAL_ALIGNMENT_RIGHT, -1, 9, Color(0.6, 0.8, 1.0))
+	_right_text(GameConfig.BASE_W - 10, 323, "训练场 [T]", 9, Color(0.6, 0.8, 1.0))
 	if _has_save:
-		draw_string(GameConfig.ui_font, Vector2(GameConfig.BASE_W - 10, 14),
-			"继续上一局 [V]", HORIZONTAL_ALIGNMENT_RIGHT, -1, 9, Color(0.7, 1.0, 0.75))
-		draw_string(GameConfig.ui_font, Vector2(GameConfig.BASE_W - 10, 26),
-			("再按一次 X 确认放弃" if _confirm_abandon > 0.0 else "放弃当前局 [X]"),
-			HORIZONTAL_ALIGNMENT_RIGHT, -1, 8,
+		_right_text(GameConfig.BASE_W - 10, 14, "继续上一局 [V]", 9, Color(0.7, 1.0, 0.75))
+		_right_text(GameConfig.BASE_W - 10, 26,
+			"再按一次 X 确认放弃" if _confirm_abandon > 0.0 else "放弃当前局 [X]", 8,
 			Color(1.0, 0.45, 0.45) if _confirm_abandon > 0.0 else Color(0.6, 0.5, 0.5))
 
 
@@ -221,10 +218,10 @@ func _draw_card(i: int, r: Rect2) -> void:
 	draw_rect(pr, Color(0.05, 0.06, 0.09))
 	if _tex[i] != null:
 		var tex: Texture2D = _tex[i]
-		# 等比裁切：取中间 1:1 区域铺满
-		var side: float = minf(tex.get_width(), tex.get_height())
-		var src := Rect2((tex.get_width() - side) * 0.5, 0, side, side)
-		draw_texture_rect_region(tex, pr, src)
+		# 透明底全身立绘：按高度等比缩放，水平居中，不再裁切
+		var side: float = pr.size.y
+		var dst := Rect2(pr.get_center().x - side * 0.5, pr.position.y, side, side)
+		draw_texture_rect(tex, dst, false)
 
 	if GameConfig.ui_font == null:
 		return
@@ -238,8 +235,35 @@ func _draw_card(i: int, r: Rect2) -> void:
 		HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 16, 9, GameConfig.COL_TEXT)
 	draw_string(GameConfig.ui_font, Vector2(tx, ty + 46), "技能 · " + d.skill_name,
 		HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 16, 9, GameConfig.COL_TEXT)
-	draw_string(GameConfig.ui_font, Vector2(tx, ty + 60), "「%s」" % str(_intro[i]),
-		HORIZONTAL_ALIGNMENT_LEFT, r.size.x - 16, 9, Color(1.0, 0.86, 0.55))
-	draw_string(GameConfig.ui_font, Vector2(r.position.x, r.end.y - 8),
-		"[%d]" % (i + 1), HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 9,
-		accent if hovered else GameConfig.COL_DIM)
+	draw_string(GameConfig.ui_font, Vector2(tx, ty + 60),
+		_fit("「%s」" % str(_intro[i]), r.size.x - 16, 9),
+		HORIZONTAL_ALIGNMENT_LEFT, -1, 9, Color(1.0, 0.86, 0.55))
+	# 序号放左上角，避免和底部台词叠在一起
+	draw_string(GameConfig.ui_font, Vector2(r.position.x + 8, r.position.y + 14),
+		"%d" % (i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 10,
+		accent if hovered else Color(0.55, 0.6, 0.72))
+
+
+## 右对齐文本（draw_string 的 width=-1 会忽略对齐参数，这里手算宽度）
+func _right_text(x_right: float, y: float, text: String, size: int, color: Color) -> void:
+	if GameConfig.ui_font == null:
+		return
+	var w: float = GameConfig.ui_font.get_string_size(
+		text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
+	draw_string(GameConfig.ui_font, Vector2(x_right - w, y), text,
+		HORIZONTAL_ALIGNMENT_LEFT, -1, size, color)
+
+
+## 超宽时截断并补省略号
+func _fit(text: String, max_w: float, size: int) -> String:
+	if GameConfig.ui_font == null:
+		return text
+	if GameConfig.ui_font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= max_w:
+		return text
+	var out := text
+	while out.length() > 1:
+		out = out.substr(0, out.length() - 1)
+		var probe := out + "…"
+		if GameConfig.ui_font.get_string_size(probe, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x <= max_w:
+			return probe
+	return out

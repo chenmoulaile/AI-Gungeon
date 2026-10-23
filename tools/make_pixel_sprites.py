@@ -54,8 +54,11 @@ CHARACTERS = {
         "eye_xy2": (0.38, 0.45),
         "hair_region": (0.0, 0.0, 1.0, 0.5),
         "cloth_region": (0.0, 0.48, 1.0, 1.0),
-        "outline": (48, 42, 70),
-        "lift": 22,
+        "outline": (20, 19, 38),
+        "lift": 10,
+        "contrast": 1.52,
+        "shade": (150, 148, 178),
+        "bottom_tint": (0.66, 0.69, 0.88),
     },
     "claude": {
         "ref": "claude_chibi.png",
@@ -202,14 +205,14 @@ def load_subject(name, cfg):
 
 
 # ---------------------------------------------------------------- 降采样与量化
-def to_pixel(subject, body_h=BODY_H):
+def to_pixel(subject, body_h=BODY_H, contrast=1.18):
     """等比缩放主体到 body_h 高度，返回 RGBA（未量化）。"""
     w, h = subject.size
     scale = body_h / float(h)
     nw = max(8, int(round(w * scale)))
     small = subject.resize((nw, body_h), Image.LANCZOS)
     # 小尺寸下细节会糊，先提一点对比度和饱和度，量化后轮廓更清楚
-    small = ImageEnhance.Contrast(small).enhance(1.18)
+    small = ImageEnhance.Contrast(small).enhance(contrast)
     small = ImageEnhance.Color(small).enhance(1.12)
     small = ImageEnhance.Sharpness(small).enhance(1.4)
     return small
@@ -315,6 +318,29 @@ def manual_fix(sprite, cfg, hair_rgb, cloth_rgb, eye_rgb):
     rim[2:, :] = body[2:, :] & (~body[:-2, :])
     rgb[rim] = np.clip(rgb[rim] + 26, 0, 255)
     log.append("rim_light")
+
+    bt = cfg.get("bottom_tint", None)
+    if bt is not None:
+        # 下半身整体压暗并偏冷，让白裙和白发之间有明确分界
+        for y in range(h):
+            k = 0.0
+            if y > int(h * 0.42):
+                k = min(1.0, (y - h * 0.42) / (h * 0.40))
+            if k <= 0.0:
+                continue
+            for i in range(3):
+                factor = 1.0 - (1.0 - bt[i]) * k
+                rgb[y, :, i] = np.where(body[y, :], rgb[y, :, i] * factor, rgb[y, :, i])
+        log.append("bottom_tint")
+
+    shade = cfg.get("shade", None)
+    if shade is not None:
+        lum2 = rgb.mean(axis=2)
+        dark = body & (lum2 < 150.0)
+        t = np.clip((150.0 - lum2) / 150.0, 0.0, 1.0) * 0.55
+        for i in range(3):
+            rgb[:, :, i] = np.where(dark, rgb[:, :, i] * (1.0 - t) + shade[i] * t, rgb[:, :, i])
+        log.append("shade_tint")
 
     out = np.dstack([np.clip(rgb, 0, 255), alpha]).astype(np.uint8)
     fixed = Image.fromarray(out, "RGBA")
@@ -430,7 +456,7 @@ def main():
         cloth_rgb = sample_color(subject, (0, int(bh * 0.55), bw, bh))
         eye_rgb = sample_eye_color(subject)
 
-        small = to_pixel(subject, BODY_H)
+        small = to_pixel(subject, BODY_H, float(cfg.get("contrast", 1.18)))
         quant = quantize24(small)
         fixed, log = manual_fix(quant, cfg, hair_rgb, cloth_rgb, eye_rgb)
         fixed = add_outline(fixed, cfg["outline"], size=2)

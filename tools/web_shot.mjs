@@ -48,8 +48,15 @@ await page.keyboard.press("t");
 await page.waitForTimeout(2500);
 await page.screenshot({ path: `${OUT}_training.png` });
 console.log("shot training");
+// 训练场：切三个角色各截一张，检查配饰/朝向/手持装置
+for (const [key, tag] of [["2", "gpt"], ["3", "claude"], ["1", "deepseek"]]) {
+  await page.keyboard.press(key);
+  await page.waitForTimeout(1100);
+  await page.screenshot({ path: `${OUT}_char_${tag}.png` });
+  console.log(`shot char_${tag}`);
+}
 await page.keyboard.press("Escape");
-await page.waitForTimeout(800);
+await page.waitForTimeout(900);
 
 // 图鉴
 await page.mouse.click(20, 20);
