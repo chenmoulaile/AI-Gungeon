@@ -34,6 +34,12 @@ var last_hit_tag: String = ""
 var hit_off: float = 0.0
 ## 深度检索标记：标记期间受到的所有伤害 +15%
 var mark_t: float = 0.0
+## GPT「贪婪权杖」财富标记层数（0~3）
+var wealth_stacks: int = 0
+## Claude「律令」区域：区域内移速降低、受到伤害 +12%
+var slow_mult: float = 1.0
+var slow_t: float = 0.0
+var law_t: float = 0.0
 
 
 func _ready() -> void:
@@ -81,6 +87,11 @@ func _physics_process(delta: float) -> void:
 	contact_cd = maxf(0.0, contact_cd - delta)
 	stun = maxf(0.0, stun - delta)
 	mark_t = maxf(0.0, mark_t - delta)
+	law_t = maxf(0.0, law_t - delta)
+	if slow_t > 0.0:
+		slow_t -= delta
+		if slow_t <= 0.0:
+			slow_mult = 1.0
 
 	if player == null or not is_instance_valid(player):
 		player = GameState.player
@@ -155,6 +166,8 @@ func take_damage(dmg: float, dir: Vector2 = Vector2.ZERO, tier: String = "medium
 		last_hit_tag = tag
 	if mark_t > 0.0:
 		dmg *= 1.15
+	if law_t > 0.0:
+		dmg *= 1.12
 	hp -= dmg
 	var preset := tier
 	if preset == "small":
@@ -245,6 +258,18 @@ func _draw() -> void:
 	draw_set_transform(Vector2(hit_off, 0), 0.0, Vector2.ONE)
 	_draw_body()
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	# 贪婪权杖：金币标记（最多 3 层）
+	if wealth_stacks > 0:
+		for i in wealth_stacks:
+			var wx: float = -6.0 + float(i) * 6.0
+			var wy: float = -radius - 6.0
+			draw_rect(Rect2(wx - 2.0, wy - 2.0, 4.0, 4.0), Color(1.0, 0.84, 0.30, 0.95))
+			draw_rect(Rect2(wx - 2.0, wy - 2.0, 4.0, 4.0), Color(0.42, 0.28, 0.04, 0.9), false, 1.0)
+	# 律令标记：头顶陶土色圆环
+	if law_t > 0.0:
+		var ly: float = -radius - 13.0
+		draw_arc(Vector2(0, ly), 4.2, 0.0, TAU, 12, Color(0.98, 0.74, 0.44, 0.9), 1.2, true)
+		draw_circle(Vector2(0, ly), 1.4, Color(1.0, 0.90, 0.72, 0.95))
 	if elite:
 		var pulse: float = 0.35 + 0.2 * sin(t * 4.0)
 		draw_arc(Vector2.ZERO, radius + 5.0, 0.0, TAU, 24,
@@ -260,6 +285,17 @@ func _draw() -> void:
 		draw_colored_polygon(tri, Color(0.42, 0.68, 1.0, a))
 		draw_polyline(PackedVector2Array([tri[0], tri[1], tri[2], tri[0]]),
 			Color(0.16, 0.32, 0.62, a * 0.9), 1.0)
+
+
+## 数据故障碎片：沿轮廓撒几个 2px 亮点，随时间闪烁
+func glitch_fragments(count: int, r: float, off: float = 0.0) -> void:
+	for i in count:
+		var a: float = TAU * float(i) / float(count) + t * 1.7 + off
+		var rr: float = r * (0.85 + 0.30 * sin(t * 3.0 + float(i)))
+		var p := Vector2(cos(a), sin(a)) * rr
+		if fmod(t * 6.0 + float(i) * 0.37, 3.0) < 1.2:
+			draw_rect(Rect2(p - Vector2(1.0, 1.0), Vector2(2.0, 2.0)),
+				Color(accent.r, accent.g, accent.b, 0.9))
 
 
 func _draw_body() -> void:

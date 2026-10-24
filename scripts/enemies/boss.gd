@@ -98,7 +98,7 @@ func _ai(delta: float) -> void:
 		return
 
 	if dist > 130.0:
-		position += dir * speed * delta
+		position += dir * speed * slow_mult * delta
 	else:
 		position += dir.orthogonal() * speed * 0.5 * delta
 

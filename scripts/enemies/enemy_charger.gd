@@ -31,7 +31,7 @@ func _ai(delta: float) -> void:
 	match state:
 		"idle":
 			var dir: Vector2 = (player.global_position - global_position).normalized()
-			position += dir * speed * delta
+			position += dir * speed * slow_mult * delta
 			if timer <= 0.0:
 				state = "windup"
 				timer = WINDUP
@@ -83,26 +83,29 @@ func _draw_body() -> void:
 		c = Color(1.0, 0.85, 0.4)
 	elif state == "stun":
 		c = Color(0.55, 0.5, 0.5)
-	# 冲锋方向箭头
-	if state == "windup" or state == "dash":
-		var ang := dash_dir.angle()
-		var tip := dash_dir * (radius + 26.0)
-		var left := Vector2(cos(ang + 2.5), sin(ang + 2.5)) * (radius + 10.0)
-		var right := Vector2(cos(ang - 2.5), sin(ang - 2.5)) * (radius + 10.0)
-		var col := Color(1.0, 0.25, 0.2, 0.35 if state == "dash" else 0.55)
-		draw_colored_polygon(PackedVector2Array([tip, left, right]), col)
-	var pts := PackedVector2Array()
+	var dir := dash_dir
+	if state == "idle" and player != null and is_instance_valid(player):
+		dir = (player.global_position - global_position).normalized()
+	draw_set_transform(Vector2.ZERO, dir.angle(), Vector2.ONE)
+	# 尾部碎片：冲锋前向尾部聚集
+	var gather := 1.0 if state == "windup" else 0.30
 	for i in 4:
-		var a := TAU * i / 4.0 + PI / 4.0
-		pts.append(Vector2(cos(a), sin(a)) * radius * (1.0 if i % 2 == 0 else 0.85))
-	draw_colored_polygon(pts, c)
-	var outline := pts.duplicate()
-	outline.append(pts[0])
-	draw_polyline(outline, Color(0, 0, 0, 0.85), 1.6)
-	draw_circle(Vector2(0, -1), radius * 0.34, Color(1, 1, 1, 0.95))
-	draw_circle(Vector2(0, -1), radius * 0.18, Color(0.15, 0.02, 0.02))
+		var d := -radius - 4.0 - float(i) * 6.0 * (1.0 - gather)
+		draw_rect(Rect2(d, -2.0 - float(i), 3.0, 3.0),
+			Color(1.0, 0.55, 0.30, 0.35 + 0.4 * gather))
+	# 尖锥数据冲撞体
+	var cone := PackedVector2Array([
+		Vector2(radius * 1.35, 0.0), Vector2(-radius * 0.45, -radius * 0.85),
+		Vector2(-radius * 0.95, 0.0), Vector2(-radius * 0.45, radius * 0.85)])
+	draw_colored_polygon(cone, c)
+	draw_polyline(cone + PackedVector2Array([cone[0]]), Color(0, 0, 0, 0.85), 1.6)
+	# 内部裂纹
+	draw_line(Vector2(-radius * 0.3, 0.0), Vector2(radius * 0.5, 0.0),
+		Color(0.1, 0.03, 0.02, 0.5), 1.0)
+	draw_circle(Vector2(radius * 0.35, 0.0), radius * 0.18, Color(1, 1, 1, 0.9))
 	if state == "stun":
 		for i in 3:
-			var a2 := t * 6.0 + TAU * i / 3.0
-			draw_circle(Vector2(cos(a2), sin(a2)) * (radius + 6.0) + Vector2(0, -8), 1.6,
+			var a2 := t * 6.0 + TAU * float(i) / 3.0
+			draw_circle(Vector2(cos(a2), sin(a2)) * (radius + 6.0), 1.6,
 				Color(1.0, 0.9, 0.5, 0.8))
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

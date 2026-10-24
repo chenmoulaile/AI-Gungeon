@@ -5,10 +5,17 @@ extends Node2D
 signal died(enemy: Node)
 
 var hp: float = 9999.0
+## 累计承伤（自动测试用）
+var damage_taken: float = 0.0
+var hits: int = 0
 var max_hp: float = 9999.0
 var radius: float = 13.0
 var dead: bool = false
 var mark_t: float = 0.0
+var wealth_stacks: int = 0
+var law_t: float = 0.0
+var slow_mult: float = 1.0
+var slow_t: float = 0.0
 var accent: Color = Color("#7fd0ff")
 var t: float = 0.0
 var _hit: float = 0.0
@@ -25,12 +32,15 @@ func _process(delta: float) -> void:
 	t += delta
 	_hit = maxf(0.0, _hit - delta)
 	mark_t = maxf(0.0, mark_t - delta)
+	law_t = maxf(0.0, law_t - delta)
 	queue_redraw()
 
 
 func take_damage(dmg: float, _dir: Vector2 = Vector2.ZERO, _tier: String = "light",
 		crit: bool = false, _tag: String = "") -> void:
 	_hit = 0.12
+	damage_taken += dmg
+	hits += 1
 	GameFeel.damage_number(global_position + Vector2(randf_range(-3, 3), -16), dmg, crit)
 	GameFeel.burst(global_position, Color(0.75, 0.9, 1.0), 4, 80.0, 0.2)
 	Sfx.play_hit(crit)

@@ -67,6 +67,38 @@ func _ready() -> void:
 	if not intro_shown and GameState.floor_index == 1 and GameState.room_index == 1:
 		intro_shown = true
 		_show_intro_dialog()
+	_check_debug_query()
+
+
+## 网页版验收用：URL 带 ?enemies=1 时在首房间摆满 9 种敌人（仅调试，不影响正常流程）
+func _check_debug_query() -> void:
+	var js = Engine.get_singleton("JavaScriptBridge")
+	if js == null:
+		return
+	var q := String(js.eval("window.location.search", true))
+	if q.contains("enemies"):
+		call_deferred("_debug_spawn_enemies")
+
+
+func _debug_spawn_enemies() -> void:
+	await get_tree().create_timer(1.2).timeout
+	if player == null or not is_instance_valid(player):
+		return
+	player.invuln = 99999.0
+	busy = true
+	for e in GameState.enemies.duplicate():
+		if is_instance_valid(e):
+			e.queue_free()
+	GameState.enemies.clear()
+	var keys := ["chaser", "shooter", "spreader", "charger", "ring",
+		"summoner", "shield", "splitter", "sniper"]
+	var i := 0
+	for k in keys:
+		var e = _scene_for(String(k)).instantiate()
+		e.position = Vector2(300 + (i % 3) * 120, 130 + int(i / 3) * 105)
+		e.died.connect(_on_enemy_died)
+		enemy_layer.add_child(e)
+		i += 1
 
 
 func _build_layers() -> void:

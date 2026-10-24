@@ -147,6 +147,11 @@ func _build_nodes() -> void:
 	add_child(gun)
 	gun.position = Vector2(0, -12)
 	gun.scale = Vector2(0.75, 0.75)
+	# GPT 用权杖外观；Claude 的法槌由武器自己生成，隐藏默认手持物
+	if char_id == "gpt":
+		gun.style = "staff"
+	elif char_id == "claude":
+		gun.visible = false
 
 	var light := PointLight2D.new()
 	if ResourceLoader.exists("res://assets/fx/light_radial.png"):

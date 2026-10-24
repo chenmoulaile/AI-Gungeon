@@ -24,20 +24,36 @@ func _ai(delta: float) -> void:
 	var dir := to_player.normalized()
 	# 轻微左右摆动，避免完全直线导致的"排队"观感
 	var side := dir.orthogonal() * sin(_wobble) * 0.28
-	position += (dir + side).normalized() * speed * delta
+	position += (dir + side).normalized() * speed * slow_mult * delta
 
 
 func _draw_body() -> void:
-	# 尖刺圆：四角带刺的菱形
-	var pts := PackedVector2Array()
-	var spikes := 8
-	for i in spikes:
-		var a := TAU * i / spikes + t * 1.2
-		var rr := radius * (1.25 if i % 2 == 0 else 0.82)
-		pts.append(Vector2(cos(a), sin(a)) * rr)
-	draw_colored_polygon(pts, accent)
-	var outline := pts.duplicate()
-	outline.append(pts[0])
-	draw_polyline(outline, Color(0, 0, 0, 0.85), 1.4)
-	draw_circle(Vector2(0, -1), radius * 0.42, Color(1, 1, 1, 0.92))
-	draw_circle(Vector2(0, -1), radius * 0.22, Color(0.15, 0.02, 0.05, 1.0))
+	var wob := sin(t * 6.0 + _wobble) * 0.10
+	# 拖尾碎片：移动时身后 3 个像素碎片
+	for i in 3:
+		var a := PI * 0.5 + float(i) * 0.42 - 0.42
+		var p := Vector2(cos(a), sin(a)) * (radius + 4.0 + float(i) * 2.0)
+		var fa := 0.42 - float(i) * 0.11
+		draw_rect(Rect2(p - Vector2(1.5, 1.5), Vector2(3, 3)),
+			Color(accent.r, accent.g, accent.b, fa))
+	# 三段锯齿椭圆
+	for seg in 3:
+		var y := -radius * 0.75 + float(seg) * radius * 0.72
+		var w := radius * (1.0 - 0.16 * float(seg)) * (1.0 + wob)
+		var pts := PackedVector2Array([
+			Vector2(-w, y), Vector2(-w * 0.55, y - radius * 0.42),
+			Vector2(w * 0.55, y - radius * 0.42), Vector2(w, y),
+			Vector2(w * 0.58, y + radius * 0.36), Vector2(-w * 0.58, y + radius * 0.36)])
+		draw_colored_polygon(pts, accent.darkened(0.07 * float(seg)))
+		draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0, 0, 0, 0.85), 1.2)
+	# 左右摆动短足
+	for side in [-1.0, 1.0]:
+		for i in 2:
+			var yy := radius * 0.28 + float(i) * 5.0
+			var xx: float = side * radius * 0.82
+			var kick := sin(t * 12.0 + float(i) + (0.0 if side > 0.0 else 1.5)) * 1.8
+			draw_line(Vector2(xx, yy), Vector2(xx + side * 4.0, yy + 4.0 + kick),
+				accent.darkened(0.35), 1.6)
+	# 眼
+	draw_circle(Vector2(0, -radius * 0.42), radius * 0.30, Color(1, 1, 1, 0.95))
+	draw_circle(Vector2(0, -radius * 0.42), radius * 0.14, Color(0.12, 0.02, 0.06))

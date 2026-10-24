@@ -21,6 +21,7 @@ var _win: bool = false
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	if ResourceLoader.exists("res://resources/ui/theme.tres"):
 		theme = load("res://resources/ui/theme.tres")
@@ -86,7 +87,7 @@ func _draw() -> void:
 	draw_style_box(UiKit.box(Color(UiKit.ACCENT.r, UiKit.ACCENT.g, UiKit.ACCENT.b, 0.12), 10,
 		Color(1, 1, 1, 0.7), 1, false), pr)
 	if _bust != null:
-		draw_texture_rect(_bust, pr.grow(-2), false)
+		UiKit.draw_tex_cover(self, _bust, pr.grow(-2))
 
 	var d = GameState.char_data
 	var x := 142.0

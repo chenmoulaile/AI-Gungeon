@@ -9,6 +9,7 @@ const TIP := Color("#7fe6ff")
 const ACCENT := Color("#9fb6e8")
 
 var flip: float = 1.0
+var style: String = "gun"
 
 
 func set_aim(dir: Vector2) -> void:
@@ -22,6 +23,9 @@ func muzzle_local() -> Vector2:
 
 
 func _draw() -> void:
+	if style == "staff":
+		_draw_staff()
+		return
 	# 握把
 	draw_rect(Rect2(-2, 1, 3, 4), GRIP)
 	# 机身
@@ -36,3 +40,24 @@ func _draw() -> void:
 	draw_polyline(PackedVector2Array([
 		Vector2(-5, 2), Vector2(4, 2), Vector2(4, 1), Vector2(13, 1)]), EDGE, 1.0)
 	draw_line(Vector2(-5, -2), Vector2(4, -2), EDGE, 1.0)
+
+
+## GPT：短权杖，顶端龙爪镶宝石
+func _draw_staff() -> void:
+	var wood := Color("#5a3a22")
+	var wood_hi := Color("#7d5533")
+	var gold := Color("#e8b64a")
+	var gem := Color("#8fe6c8")
+	# 杖身
+	draw_rect(Rect2(-2, -1.5, 13, 3), wood)
+	draw_rect(Rect2(-2, -1.5, 13, 1), wood_hi)
+	draw_line(Vector2(-2, 1.5), Vector2(11, 1.5), Color(0.16, 0.09, 0.05), 1.0)
+	# 龙爪托
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(11, -4.5), Vector2(15, -1.0), Vector2(11, 1.0)]), gold)
+	draw_colored_polygon(PackedVector2Array([
+		Vector2(11, 4.5), Vector2(15, 1.0), Vector2(11, -1.0)]), gold.darkened(0.15))
+	# 宝石
+	draw_circle(Vector2(14, 0), 2.6, gem)
+	draw_circle(Vector2(13.2, -0.8), 0.9, Color(1, 1, 1, 0.9))
+	draw_arc(Vector2(14, 0), 2.6, 0.0, TAU, 12, Color(0.35, 0.62, 0.52), 0.8, true)

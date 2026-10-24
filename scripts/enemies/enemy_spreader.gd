@@ -30,9 +30,9 @@ func _ai(delta: float) -> void:
 	var dist := to_player.length()
 	var dir := to_player.normalized()
 	if dist > KEEP + 20.0:
-		position += dir * speed * delta
+		position += dir * speed * slow_mult * delta
 	elif dist < KEEP - 30.0:
-		position -= dir * speed * delta
+		position -= dir * speed * slow_mult * delta
 	position += dir.orthogonal() * sin(t * 1.4) * speed * 0.45 * delta
 
 	fire_cd -= delta
@@ -55,18 +55,30 @@ func _ai(delta: float) -> void:
 
 
 func _draw_body() -> void:
-	var pts := PackedVector2Array()
-	for i in 5:
-		var a := TAU * i / 5.0 - PI / 2.0 + sin(t * 1.1) * 0.15
-		pts.append(Vector2(cos(a), sin(a)) * radius)
+	var ang := 0.0
+	if player != null and is_instance_valid(player):
+		ang = (player.global_position - global_position).angle()
+	draw_set_transform(Vector2.ZERO, ang, Vector2.ONE)
+	var open := 1.0 if telegraph > 0.0 else 0.55
+	# 三条能量触须
+	for i in 3:
+		var a := (-0.55 + float(i) * 0.55) * open + sin(t * 3.0 + float(i)) * 0.08
+		var ln := radius + 5.0 + (6.0 if telegraph > 0.0 else 0.0)
+		var tip := Vector2(cos(a), sin(a)) * ln
+		draw_line(Vector2(2.0, 0.0), tip, accent.lightened(0.25), 1.6)
+		draw_circle(tip, 1.9, accent.lightened(0.45))
+	# 扇形辐射核心
+	var pts := PackedVector2Array([Vector2(-2.0, 0.0)])
+	for i in 9:
+		var a2 := -0.95 * open + float(i) * (0.21 * open)
+		pts.append(Vector2(cos(a2), sin(a2)) * radius)
 	draw_colored_polygon(pts, accent)
-	var outline := pts.duplicate()
-	outline.append(pts[0])
-	draw_polyline(outline, Color(0, 0, 0, 0.85), 1.6)
-	var tri := PackedVector2Array([
-		Vector2(0, -radius * 0.5), Vector2(radius * 0.45, radius * 0.3),
-		Vector2(-radius * 0.45, radius * 0.3),
-	])
-	draw_colored_polygon(tri, Color(1, 1, 1, 0.92))
-	if telegraph > 0.0:
-		draw_circle(Vector2.ZERO, radius + 9.0, Color(0.8, 0.4, 1.0, 0.16))
+	draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0, 0, 0, 0.85), 1.4)
+	# 中心放射
+	for i in 3:
+		var a3 := -0.5 + float(i) * 0.5
+		draw_line(Vector2.ZERO, Vector2(cos(a3), sin(a3)) * radius * 0.7,
+			Color(1, 1, 1, 0.35), 1.0)
+	draw_circle(Vector2.ZERO, radius * 0.22, Color(1, 1, 1, 0.95))
+	glitch_fragments(3, radius + 3.0)
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

@@ -101,6 +101,8 @@ func _test_character(cid: String) -> void:
 	Input.action_release("shoot")
 	var bullets := get_tree().get_nodes_in_group("bullets")
 	var beams := get_tree().get_nodes_in_group("beams")
+	beams += get_tree().get_nodes_in_group("harness")
+	beams += get_tree().get_nodes_in_group("law_zone")
 	_check(bullets.size() > 0 or beams.size() > 0,
 		"%s: 开火产生弹体（子弹 %d / 光束 %d）" % [cid, bullets.size(), beams.size()])
 

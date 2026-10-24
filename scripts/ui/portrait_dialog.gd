@@ -25,6 +25,7 @@ var _auto_t: float = 0.0
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	mouse_filter = Control.MOUSE_FILTER_IGNORE if non_blocking else Control.MOUSE_FILTER_STOP
 	if non_blocking:
 		process_mode = Node.PROCESS_MODE_ALWAYS
@@ -102,7 +103,7 @@ func _draw() -> void:
 		# 立绘卡片
 		draw_style_box(UiKit.box(Color(1, 1, 1, 0.92), 12, Color(1, 1, 1, 0.85), 1, true), pr)
 		if _tex != null:
-			draw_texture_rect(_tex, pr.grow(-4), false)
+			UiKit.draw_tex_cover(self, _tex, pr.grow(-4))
 		var box := Rect2(236, 40, GameConfig.BASE_W - 262, 190)
 		draw_style_box(UiKit.box(Color(0.98, 0.99, 1.0, 0.97), 12, Color(1, 1, 1, 0.9), 1, true), box)
 		draw_style_box(UiKit.box(Color(0, 0, 0, 0), 12,

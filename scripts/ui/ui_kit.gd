@@ -203,3 +203,27 @@ static func draw_icon(ci: CanvasItem, path: String, r: Rect2) -> bool:
 		return false
 	ci.draw_texture_rect(tex, r, false)
 	return true
+
+
+## 保持宽高比铺满目标矩形（cover），超出部分裁掉 —— 立绘卡片用
+static func draw_tex_cover(ci: CanvasItem, tex: Texture2D, r: Rect2) -> void:
+	if tex == null:
+		return
+	var ts := tex.get_size()
+	if ts.x <= 0.0 or ts.y <= 0.0 or r.size.x <= 0.0 or r.size.y <= 0.0:
+		return
+	var k: float = maxf(r.size.x / ts.x, r.size.y / ts.y)
+	var src := Vector2(r.size.x / k, r.size.y / k)
+	ci.draw_texture_rect_region(tex, r, Rect2((ts - src) * 0.5, src))
+
+
+## 保持宽高比完整放入目标矩形（contain），四周留白 —— 全身立绘用
+static func draw_tex_contain(ci: CanvasItem, tex: Texture2D, r: Rect2) -> void:
+	if tex == null:
+		return
+	var ts := tex.get_size()
+	if ts.x <= 0.0 or ts.y <= 0.0:
+		return
+	var k: float = minf(r.size.x / ts.x, r.size.y / ts.y)
+	var dst := Vector2(ts.x * k, ts.y * k)
+	ci.draw_texture_rect(tex, Rect2(r.get_center() - dst * 0.5, dst), false)

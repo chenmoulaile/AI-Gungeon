@@ -113,11 +113,19 @@ func fire(_dir: Vector2) -> void:
 
 
 func try_fire(dir: Vector2) -> void:
-	if cooldown <= 0.0:
-		fire(dir)
-		# 翻滚后的首发射击消耗掉加成
-		if player != null and is_instance_valid(player) and player.roll_buff > 0.0:
-			player.roll_buff = 0.0
+	if cooldown > 0.0:
+		return
+	var before := cooldown
+	fire(dir)
+	# 兜底：子类没有真正开火（冷却未被设置）时补一颗基础弹，保证任何角色都能攻击
+	if is_equal_approx(cooldown, before):
+		cooldown = 0.22
+		if player != null and is_instance_valid(player):
+			spawn_bullet(player.global_position + Vector2(0, -16) + dir * 10.0, dir, 4.0, 420.0,
+				Color("#9fd8ff"), {"radius": 3.0, "life": 1.8})
+	# 翻滚后的首发射击消耗掉加成
+	if player != null and is_instance_valid(player) and player.roll_buff > 0.0:
+		player.roll_buff = 0.0
 
 
 func use_skill() -> bool:

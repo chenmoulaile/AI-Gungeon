@@ -36,7 +36,7 @@ func _ai(delta: float) -> void:
 			GameFeel.screen_shake(0.15)
 		return
 	if to_player.length() > MELEE_RANGE * 0.8:
-		position += shield_normal * speed * delta
+		position += shield_normal * speed * slow_mult * delta
 	elif melee_cd <= 0.0:
 		melee_cd = 1.6
 		swing = WINDUP
@@ -60,20 +60,28 @@ func _draw_body() -> void:
 	var c := accent
 	if swing > 0.0:
 		c = Color(1.0, 0.75, 0.55)
-	var pts := PackedVector2Array()
-	for i in 6:
-		var a := TAU * i / 6.0 + PI / 6.0
-		pts.append(Vector2(cos(a), sin(a)) * radius)
-	draw_colored_polygon(pts, c)
-	var outline := pts.duplicate()
-	outline.append(pts[0])
-	draw_polyline(outline, Color(0, 0, 0, 0.85), 1.6)
-	# 正面盾牌（半圆）
+	# 后方发光核心
+	draw_circle(Vector2.ZERO, radius * 0.46, Color(c.r, c.g, c.b, 0.85))
+	draw_circle(Vector2.ZERO, radius * 0.24, Color(1, 1, 1, 0.95))
+	# 厚重破碎盾面：正面朝向玩家
 	var base := shield_normal.angle()
-	draw_arc(Vector2.ZERO, radius + 5.0, base - 1.35, base + 1.35, 20,
-		Color(0.92, 0.96, 1.0, 0.85), 3.0, true)
-	draw_arc(Vector2.ZERO, radius + 5.0, base - 1.35, base + 1.35, 20,
-		Color(0.55, 0.62, 0.75, 0.55), 1.0, true)
-	draw_circle(Vector2.ZERO, radius * 0.34, Color(1, 1, 1, 0.9))
+	var pts := PackedVector2Array()
+	for i in 7:
+		var a := base - 1.25 + float(i) * 0.42
+		var rr := radius + 7.0 + (2.0 if i % 2 == 0 else 0.0)
+		pts.append(Vector2(cos(a), sin(a)) * rr)
+	pts.append(Vector2(cos(base + 1.25), sin(base + 1.25)) * (radius * 0.72))
+	pts.append(Vector2(cos(base - 1.25), sin(base - 1.25)) * (radius * 0.72))
+	draw_colored_polygon(pts, Color(0.55, 0.60, 0.70))
+	draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0, 0, 0, 0.85), 1.6)
+	# 金属裂纹
+	for i in 2:
+		var a2 := base - 0.6 + float(i) * 1.1
+		var p1 := Vector2(cos(a2), sin(a2)) * (radius + 2.0)
+		var p2 := Vector2(cos(a2 + 0.15), sin(a2 + 0.15)) * (radius * 0.55)
+		draw_line(p1, p2, Color(0.15, 0.18, 0.24, 0.85), 1.2)
+	# 正面边缘高光
+	draw_arc(Vector2.ZERO, radius + 6.0, base - 1.2, base + 1.2, 16,
+		Color(0.92, 0.96, 1.0, 0.9), 1.4, true)
 	if swing > 0.0:
 		draw_arc(Vector2.ZERO, MELEE_RANGE, 0.0, TAU, 24, Color(1.0, 0.5, 0.35, 0.5), 2.0, true)

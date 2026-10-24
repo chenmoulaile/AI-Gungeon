@@ -1,122 +1,80 @@
 extends "res://scripts/weapons/weapon_base.gd"
-## GPT —— 多模态切换
-## R 键循环：A 文本（高射速单发）/ B 图像（5 发扇形）/ C 语音（短距锥形冲击波）
+## GPT —— 贪婪权杖
+## 左键：挥动短权杖发射金色财宝弹
+##   命中无标记目标：造成基础伤害并 +1 层「财富标记」（最多 3 层）
+##   命中已有标记目标：消耗 1 层，本次伤害额外 +20%
 ## 主动技能「涌现」：随机获得 伤害+40% / 射速+50% / 弹速+60%，持续 5s
 
-const BeamScript = preload("res://scripts/weapons/beam.gd")
-const MODE_NAMES := ["文本", "图像", "语音"]
 const BUFF_VALUES := {"damage": 0.4, "fire_rate": 0.5, "bullet_speed": 0.6}
+const MAX_STACKS := 3
+const BONUS := 0.2
 
-var mode: int = 0
+var _swing: float = 0.0
+var _hit_flash: float = 0.0
 
 
 func _ready() -> void:
-	mode_name = MODE_NAMES[mode]
+	mode_name = "贪婪权杖"
 
 
+func _process(delta: float) -> void:
+	super._process(delta)
+	_swing = maxf(0.0, _swing - delta)
+	_hit_flash = maxf(0.0, _hit_flash - delta)
+
+
+## R 键：权杖在手里转一圈（无战斗效果，纯动作反馈）
 func on_switch_mode() -> void:
-	var old_mode := mode
-	ChallengeManager.on_mode_switch()
-	mode = (mode + 1) % 3
-	mode_name = MODE_NAMES[mode]
-	if player != null and is_instance_valid(player):
-		player.fire_anim = 0.16
-		var cols := [Color("#6fa8ff"), Color("#c9a6ff"), Color("#ffb066")]
-		GameFeel.flash(player.anim, cols[mode], 0.14)
-		# 切换瞬间向四周爆发一圈对应颜色的粒子
-		for i in 10:
-			var ang := TAU * float(i) / 10.0
-			GameFeel.burst(player.global_position + Vector2(0, -16) + Vector2(cos(ang), sin(ang)) * 6.0,
-				cols[mode], 1, 120.0, 0.26)
-	# 藏品：切换瞬间留下残影，0.25s 后替玩家打一次旧模式
-	if bool(GameState.mods.get("echo_clone", false)) and player.anim != null:
-		var tex: Texture2D = player.anim.sprite_frames.get_frame_texture(
-			player.anim.animation, player.anim.frame)
-		GameFeel.afterimage(tex, player.global_position, player.anim.flip_h,
-			Color(0.72, 0.66, 1.0, 0.55), 0.35)
-		var timer := get_tree().create_timer(0.25)
-		timer.timeout.connect(func() -> void: _echo_fire(old_mode))
-
-
-func _echo_fire(old_mode: int) -> void:
-	if player == null or not is_instance_valid(player) or not player.alive:
+	if player == null or not is_instance_valid(player):
 		return
-	var saved_mode := mode
-	var saved_cd := cooldown
-	mode = old_mode
-	var dir: Vector2 = player.aim
-	match old_mode:
-		0:
-			_fire_text(dir)
-		1:
-			_fire_image(dir)
-		_:
-			_fire_voice(dir)
-	mode = saved_mode
-	cooldown = saved_cd
+	_swing = 0.25
+	player.fire_anim = 0.14
 
 
 func fire(dir: Vector2) -> void:
-	match mode:
-		0:
-			_fire_text(dir)
-		1:
-			_fire_image(dir)
-		_:
-			_fire_voice(dir)
-
-
-# ---------------- A 文本：高射速单发 ----------------
-func _fire_text(dir: Vector2) -> void:
+	if player == null or not is_instance_valid(player):
+		return
 	var ws: WeaponStats = Stats.weapon("multimodal")
-	var rate: float = ws.fire_rate if ws != null else 8.5
+	var rate: float = ws.fire_rate if ws != null else 7.5
 	var dmg: float = ws.damage if ws != null else 4.2
 	var spd: float = ws.bullet_speed if ws != null else 430.0
-	cooldown = 1.0 / (rate * fire_rate_mult())
+	cooldown = 1.0 / maxf(0.3, rate * fire_rate_mult())
+	_swing = 0.12
+
 	var origin: Vector2 = player.global_position + Vector2(0, -16) + dir * 10.0
-	_shot(origin, dir, dmg, spd, 2.7)
+	_shoot(origin, dir, dmg, spd)
 	for off in proj_offsets():
-		_shot(origin, dir.rotated(off), dmg, spd, 2.7)
-	Sfx.play("shoot", -8.0, SeedManager.randf_range(1.0, 1.15))
+		_shoot(origin, dir.rotated(off), dmg, spd)
+	Sfx.play("shoot", -8.0, SeedManager.randf_range(0.92, 1.02))
+	GameFeel.burst(origin, Color(1.0, 0.85, 0.35), 2, 50.0, 0.12)
 
 
-# ---------------- B 图像：5 发扇形 ----------------
-func _fire_image(dir: Vector2) -> void:
-	var ws: WeaponStats = Stats.weapon("multimodal")
-	var rate: float = ws.mode2_rate if ws != null else 2.4
-	var dmg: float = ws.mode2_damage if ws != null else 3.6
-	cooldown = 1.0 / (rate * fire_rate_mult())
-	var origin: Vector2 = player.global_position + Vector2(0, -16) + dir * 10.0
-	var spread := 34.0
-	for i in 5:
-		var t := float(i) / 4.0 - 0.5
-		_shot(origin, dir.rotated(deg_to_rad(spread * t)), dmg, 340.0, 3.0)
-	for off in proj_offsets():
-		_shot(origin, dir.rotated(off), dmg, 340.0, 3.0)
-	Sfx.play("shoot", -6.0, 0.9)
+func _shoot(origin: Vector2, dir: Vector2, dmg: float, spd: float) -> void:
+	var b: Node = spawn_bullet(origin, dir, dmg, spd, Color("#ffcf5c"),
+		{"radius": 3.0, "life": 1.7, "tier": "light", "trail": true})
+	if b != null:
+		b.tag = "wealth"
+		b.hit_enemy.connect(_on_hit)
 
 
-# ---------------- C 语音：短距锥形冲击波 ----------------
-func _fire_voice(dir: Vector2) -> void:
-	cooldown = 0.6
-	var beam: Node = BeamScript.new()
-	beam.instant = true
-	beam.origin = player.global_position + Vector2(0, -16)
-	beam.dir = dir
-	beam.length = 104.0
-	beam.width = 34.0
-	var wsv: WeaponStats = Stats.weapon("multimodal")
-	beam.dps = (wsv.mode3_damage if wsv != null else 11.0) * damage_mult()
-	beam.color = Color("#c9b6ff")
-	beam.tag = "voice"
-	beam.life = 0.14
-	_bullet_root().add_child(beam)
-	Sfx.play("skill", -12.0, 1.8)
-
-
-func _shot(origin: Vector2, dir: Vector2, dmg: float, spd: float, radius: float) -> void:
-	spawn_bullet(origin, dir, dmg, spd, Color("#c9b6ff"),
-		{"radius": radius, "life": 1.6})
+## 播种 / 收割
+func _on_hit(enemy: Node, bullet: Node) -> void:
+	if enemy == null or not is_instance_valid(enemy) or not ("wealth_stacks" in enemy):
+		return
+	var stacks: int = int(enemy.wealth_stacks)
+	if stacks < MAX_STACKS:
+		enemy.wealth_stacks = stacks + 1
+		GameFeel.burst(enemy.global_position + Vector2(0, -12), Color(1.0, 0.84, 0.30),
+			3, 60.0, 0.2)
+		Sfx.play("coin", -16.0, 1.5)
+	else:
+		# 满层：收割，消耗 1 层并追加 20% 伤害
+		enemy.wealth_stacks = stacks - 1
+		enemy.take_damage(float(bullet.damage) * BONUS, bullet.dir, "light", false, "wealth_bonus")
+		GameFeel.burst(enemy.global_position + Vector2(0, -12), Color(1.0, 0.72, 0.20),
+			6, 110.0, 0.26)
+		_hit_flash = 0.12
+		Sfx.play("coin", -8.0, 0.9)
 
 
 # ---------------- 技能：涌现 ----------------
@@ -145,3 +103,7 @@ func buff_text() -> String:
 		var label := {"damage": "伤害", "fire_rate": "射速", "bullet_speed": "弹速"}
 		parts.append("%s+%d%%" % [label.get(k, k), int(round(float(player.buffs[k]) * 100.0))])
 	return " ".join(parts)
+
+
+func mode_text() -> String:
+	return "贪婪权杖"

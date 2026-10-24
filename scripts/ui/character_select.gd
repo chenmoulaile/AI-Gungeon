@@ -38,6 +38,7 @@ var _btns: Array = []
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	if ResourceLoader.exists("res://resources/ui/theme.tres"):
 		theme = load("res://resources/ui/theme.tres")
 	mouse_filter = Control.MOUSE_FILTER_STOP
@@ -316,7 +317,7 @@ func _draw_card(i: int, r: Rect2) -> void:
 		var sc: float = 1.0 + 0.04 * hk
 		var size := pr.size * sc
 		var dst := Rect2(pr.get_center() - size * 0.5, size)
-		draw_texture_rect(_tex[i], dst, false)
+		UiKit.draw_tex_cover(self, _tex[i], dst)
 
 	var tx := rr.position.x + 8.0
 	var base := rr.end.y - 54.0
