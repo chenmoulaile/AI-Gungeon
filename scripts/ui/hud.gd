@@ -253,7 +253,7 @@ func _draw_mode(p) -> void:
 	if p.char_id != "gpt" or p.weapon == null:
 		return
 	var w = p.weapon
-	var txt := "模式 %s" % w.mode_text()
+	var txt := String(w.mode_text())
 	var b: String = w.buff_text() if w.has_method("buff_text") else ""
 	if b != "":
 		txt += "  ·  " + b
