@@ -195,6 +195,7 @@ func _die() -> void:
 	if dead:
 		return
 	dead = true
+	set_physics_process(false)
 	GameState.unregister_enemy(self)
 	GameState.on_enemy_killed(last_hit_tag)
 	if GameState.player != null and is_instance_valid(GameState.player):
@@ -205,7 +206,12 @@ func _die() -> void:
 	GameFeel.screen_shake(0.18 if elite else 0.12)
 	_drop_coins()
 	died.emit(self)
-	queue_free()
+	# 0.1s 闪白后淡出，避免"瞬间消失"
+	GameFeel.flash(self, Color(3.0, 3.0, 3.0), 0.1)
+	var tw := create_tween()
+	tw.tween_interval(0.05)
+	tw.tween_property(self, "modulate:a", 0.0, 0.07)
+	tw.tween_callback(queue_free)
 
 
 func _drop_coins() -> void:

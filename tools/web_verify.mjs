@@ -97,7 +97,7 @@ async function boot(url) {
 // 1) 主菜单 + 角色选择
 await boot(`${BASE}?enemies=1`);
 await shot("01_menu");
-await click(320, 211);
+await click(320, 144);
 await sleep(1600);
 await shot("02_select");
 
@@ -115,7 +115,7 @@ for (const [cx, name] of cards) {
   await fireShot(450, 150, `04_${name}_fire`);
   // 回主菜单：ESC 打开设置再退出太绕，直接重载
   await boot(`${BASE}?enemies=1`);
-  await click(320, 211);
+  await click(320, 144);
   await sleep(1500);
 }
 

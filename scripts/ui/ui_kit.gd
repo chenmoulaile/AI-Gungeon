@@ -227,3 +227,70 @@ static func draw_tex_contain(ci: CanvasItem, tex: Texture2D, r: Rect2) -> void:
 	var k: float = minf(r.size.x / ts.x, r.size.y / ts.y)
 	var dst := Vector2(ts.x * k, ts.y * k)
 	ci.draw_texture_rect(tex, Rect2(r.get_center() - dst * 0.5, dst), false)
+
+
+# ---------------- 容器版样式（Button / PanelContainer 用） ----------------
+## BA 面板：圆角 12、白底 0.85、1px 浅蓝描边、4px 柔和阴影
+static func panel_style(alpha: float = 0.85) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(1, 1, 1, alpha)
+	sb.set_corner_radius_all(12)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(0.72, 0.84, 1.0, 0.9)
+	sb.shadow_size = 6
+	sb.shadow_offset = Vector2(0, 4)
+	sb.shadow_color = Color(0.18, 0.30, 0.52, 0.18)
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 10
+	sb.content_margin_bottom = 10
+	return sb
+
+
+static func _btn_style(bg: Color, border: Color) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = bg
+	sb.set_corner_radius_all(10)
+	sb.set_border_width_all(1)
+	sb.border_color = border
+	sb.content_margin_left = 14
+	sb.content_margin_right = 14
+	sb.content_margin_top = 8
+	sb.content_margin_bottom = 8
+	return sb
+
+
+## 容器按钮：hover 放大 1.05、pressed 缩到 0.95，全程 Tween
+static func style_button(b: Button, kind: String = "ghost") -> void:
+	var base := Color(0.90, 0.94, 1.0)
+	var hover := Color(0.80, 0.90, 1.0)
+	var border := Color(0.70, 0.82, 0.98)
+	if kind == "primary":
+		base = Color(0.44, 0.70, 0.98)
+		hover = Color(0.55, 0.79, 1.0)
+		border = Color(0.30, 0.56, 0.92)
+	b.add_theme_stylebox_override("normal", _btn_style(base, border))
+	b.add_theme_stylebox_override("hover", _btn_style(hover, ACCENT))
+	b.add_theme_stylebox_override("pressed", _btn_style(hover.darkened(0.08), ACCENT_DEEP))
+	b.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	b.add_theme_stylebox_override("disabled", _btn_style(Color(0.88, 0.89, 0.92),
+		Color(0.80, 0.82, 0.86)))
+	b.add_theme_font_size_override("font_size", 9)
+	b.add_theme_color_override("font_color", TEXT_LIGHT if kind == "primary" else TEXT)
+	b.add_theme_color_override("font_hover_color", TEXT_LIGHT if kind == "primary" else TEXT)
+	b.add_theme_color_override("font_pressed_color", TEXT_LIGHT if kind == "primary" else TEXT)
+	b.add_theme_color_override("font_disabled_color", Color(0.55, 0.58, 0.64))
+	b.pivot_offset = b.custom_minimum_size * 0.5
+	b.resized.connect(func() -> void: b.pivot_offset = b.size * 0.5)
+	b.mouse_entered.connect(func() -> void: _btn_scale(b, 1.05))
+	b.mouse_exited.connect(func() -> void: _btn_scale(b, 1.0))
+	b.button_down.connect(func() -> void: _btn_scale(b, 0.95))
+	b.button_up.connect(func() -> void: _btn_scale(b, 1.05))
+
+
+static func _btn_scale(b: Button, k: float) -> void:
+	if not is_instance_valid(b):
+		return
+	var tw := b.create_tween()
+	tw.tween_property(b, "scale", Vector2(k, k), 0.09)\
+		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)

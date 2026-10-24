@@ -11,12 +11,60 @@ const CollectionScene = preload("res://scenes/ui/collection_menu.tscn")
 const TrainingScene = preload("res://scenes/training/training_room.tscn")
 const SettingsScene = preload("res://scenes/ui/settings_menu.tscn")
 
+const PauseScript = preload("res://scripts/ui/pause_menu.gd")
+
 var current: Node = null
 var _settings: Node = null
+var _pause_menu: Node = null
 
 
 func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	# Web：浏览器里点一下画面就把焦点交给 canvas，键鼠才会立刻响应
+	get_window().grab_focus()
 	show_splash()
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		get_window().grab_focus()
+
+
+## ESC：游戏中暂停 / 暂停中继续；菜单里不响应
+func _unhandled_input(event: InputEvent) -> void:
+	if not event.is_action_pressed("pause"):
+		return
+	if _pause_menu != null and is_instance_valid(_pause_menu):
+		_close_pause()
+		get_viewport().set_input_as_handled()
+		return
+	if current != null and is_instance_valid(current) and current.get("is_gameplay") == true:
+		_open_pause()
+		get_viewport().set_input_as_handled()
+
+
+func _open_pause() -> void:
+	if _pause_menu != null and is_instance_valid(_pause_menu):
+		return
+	_pause_menu = PauseScript.new()
+	_pause_menu.name = "PauseMenu"
+	add_child(_pause_menu)
+	_pause_menu.resume_pressed.connect(_close_pause)
+	_pause_menu.menu_pressed.connect(func() -> void:
+		_close_pause()
+		Transition.play("fade", show_menu))
+	_pause_menu.quit_pressed.connect(func() -> void: get_tree().quit())
+	DialogueManager.clear()
+	get_tree().paused = true
+	BaCursor.set_battle(false)
+
+
+func _close_pause() -> void:
+	get_tree().paused = false
+	if _pause_menu != null and is_instance_valid(_pause_menu):
+		_pause_menu.queue_free()
+	_pause_menu = null
+	InputBuffer.clear_all()
 
 
 func _swap(node: Node) -> void:

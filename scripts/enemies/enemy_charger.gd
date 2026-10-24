@@ -1,7 +1,7 @@
 extends EnemyBase
 ## 冲锋兵：蓄力 0.6s（闪白 + 地面红色箭头）→ 300px/s 直线冲锋 0.8s → 撞墙眩晕 1.0s
 
-const WINDUP := 0.6
+const WINDUP := 0.5
 const DASH_TIME := 0.8
 const DASH_SPEED := 300.0
 const STUN_TIME := 1.0
@@ -80,7 +80,9 @@ func take_damage(dmg: float, dir: Vector2 = Vector2.ZERO, tier: String = "medium
 func _draw_body() -> void:
 	var c := accent
 	if state == "windup":
-		c = Color(1.0, 0.85, 0.4)
+		# 原地停顿 + 闪烁
+		var blink: bool = fmod(t, 0.12) < 0.06
+		c = Color(1.0, 0.85, 0.4) if blink else Color(1.0, 0.55, 0.30)
 	elif state == "stun":
 		c = Color(0.55, 0.5, 0.5)
 	var dir := dash_dir

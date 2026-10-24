@@ -54,6 +54,8 @@ var busy: bool = false
 var intro_shown: bool = false
 var room_kind: int = Kind.SMALL
 var _dense_tick: int = 0
+## 标记：允许主控在这里触发暂停菜单
+var is_gameplay: bool = true
 
 
 func _ready() -> void:
@@ -106,7 +108,9 @@ func _debug_spawn_enemies() -> void:
 
 func _build_layers() -> void:
 	enemy_layer = Node2D.new()
-	enemy_layer.name = "Enemies"
+	enemy_layer.name = "Actors"
+	# Y-Sort：脚底作为排序点，走到箱子下方会被遮挡
+	enemy_layer.y_sort_enabled = true
 	add_child(enemy_layer)
 
 	bullet_layer = Node2D.new()
@@ -129,8 +133,7 @@ func _build_layers() -> void:
 
 func _spawn_player() -> void:
 	player = PlayerScene.instantiate()
-	add_child(player)
-	move_child(player, 2)
+	enemy_layer.add_child(player)
 
 
 # ---------------- 房间节奏 ----------------
@@ -194,6 +197,7 @@ func _start_room(index: int) -> void:
 		room.queue_free()
 	room = RoomScene.instantiate()
 	room.is_boss = is_boss_room
+	room.visual_parent = enemy_layer
 	add_child(room)
 	move_child(room, 0)
 
@@ -206,6 +210,7 @@ func _start_room(index: int) -> void:
 		var lum := float(th.get("sprite_lum", 1.2))
 		player.anim.self_modulate = Color(lum, lum, lum * 1.04)
 
+	Sfx.play_ambience("f%d" % clampi(GameState.floor_index, 1, 3))
 	if is_boss_room:
 		MusicManager.play("boss")
 		_spawn_boss()
@@ -475,10 +480,7 @@ func _open_shop() -> void:
 
 
 # ---------------- 设置 ----------------
-func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed("pause") and not get_tree().paused:
-		open_settings()
-		get_viewport().set_input_as_handled()
+
 
 
 func open_settings() -> void:
@@ -494,6 +496,8 @@ func open_settings() -> void:
 
 func _clear_layer(layer: Node) -> void:
 	for c in layer.get_children():
+		if c == player:
+			continue
 		c.queue_free()
 
 

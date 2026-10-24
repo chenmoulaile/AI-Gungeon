@@ -18,10 +18,17 @@ var _next := 0
 var _next_s := 0
 var _ends: Dictionary = {}
 var _merge: Dictionary = {}
+var _amb: AudioStreamPlayer = null
+var _amb_kind: String = ""
 
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_amb = AudioStreamPlayer.new()
+	_amb.bus = "Music"
+	_amb.volume_db = -26.0
+	_amb.process_mode = Node.PROCESS_MODE_ALWAYS
+	add_child(_amb)
 	_ensure_buses()
 	_build_streams()
 	for i in PLAYER_POOL:
@@ -291,3 +298,55 @@ func stop_all() -> void:
 		p.stop()
 	for s in _spatial:
 		s.stop()
+
+
+# ---------------- 环境底噪（按楼层） ----------------
+## 生成可无缝循环的底噪：整数周期正弦 + 低通噪声
+func _loop_noise(dur: float, hz: float, noise_amt: float, tone_amt: float) -> AudioStreamWAV:
+	var n := int(dur * SR)
+	var data := PackedByteArray()
+	data.resize(n * 2)
+	var lp := 0.0
+	var cycles := maxf(1.0, round(hz * dur))
+	for i in n:
+		var t := float(i) / float(SR)
+		var s1 := sin(TAU * cycles * float(i) / float(n))
+		lp = lerpf(lp, randf_range(-1.0, 1.0), 0.05)
+		var v := s1 * tone_amt + lp * noise_amt
+		data.encode_s16(i * 2, int(clampf(v, -1.0, 1.0) * 32767.0))
+	var st := AudioStreamWAV.new()
+	st.format = AudioStreamWAV.FORMAT_16_BITS
+	st.mix_rate = SR
+	st.stereo = false
+	st.data = data
+	st.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	st.loop_begin = 0
+	st.loop_end = n
+	return st
+
+
+func play_ambience(kind: String) -> void:
+	if _amb == null:
+		return
+	if _amb_kind == kind and _amb.playing:
+		return
+	_amb_kind = kind
+	var key := "amb_" + kind
+	if not _streams.has(key):
+		match kind:
+			"f1":
+				_streams[key] = _loop_noise(2.0, 60.0, 0.05, 0.05)
+			"f2":
+				_streams[key] = _loop_noise(2.0, 90.0, 0.10, 0.06)
+			"f3":
+				_streams[key] = _loop_noise(2.0, 45.0, 0.13, 0.07)
+			_:
+				_streams[key] = _loop_noise(2.0, 70.0, 0.04, 0.04)
+	_amb.stream = _streams[key]
+	_amb.play()
+
+
+func stop_ambience() -> void:
+	if _amb != null:
+		_amb.stop()
+	_amb_kind = ""

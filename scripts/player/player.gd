@@ -6,7 +6,7 @@ signal died
 
 const ACCEL := 1500.0
 const DECEL := 2100.0
-const ROLL_GHOST_GAP := 0.045
+const ROLL_GHOST_GAP := 0.04
 const HURT_STUN := 0.12
 
 var char_id: String = "deepseek"
@@ -71,6 +71,11 @@ var _muzzle_cd: float = 0.0
 ## 脱战回血：受击 3s 后每 0.5s 回 2 点
 var _regen_delay: float = 0.0
 var _regen_acc: float = 0.0
+## 弹簧骨骼：尾巴 / 头发 / 裙摆的滞后摆动
+var _jiggle: float = 0.0
+var _jiggle_v: float = 0.0
+var _prev_vel: Vector2 = Vector2.ZERO
+var _dust_t: float = 0.0
 const REGEN_DELAY := 3.0
 
 
@@ -150,7 +155,7 @@ func _build_nodes() -> void:
 	gun.set_script(load("res://scripts/player/hand_device.gd"))
 	add_child(gun)
 	gun.position = Vector2(0, -12)
-	gun.draw_size = 24.0
+	gun.draw_size = 20.0
 
 	var light := PointLight2D.new()
 	if ResourceLoader.exists("res://assets/fx/light_radial.png"):
@@ -264,7 +269,7 @@ func _physics_process(delta: float) -> void:
 	_update_facing()
 	_update_lean(delta)
 	gun.set_aim(aim)
-	gun.position = Vector2(0, -14) + aim * 12.0
+	gun.position = Vector2(0, -16) + aim * 17.0
 
 	if roll_t > 0.0:
 		velocity = roll_dir * GameConfig.ROLL_SPEED
@@ -284,6 +289,13 @@ func _physics_process(delta: float) -> void:
 		_update_anim(input)
 
 	move_and_slide()
+	_update_jiggle(delta)
+	# 移动扬尘
+	_dust_t -= delta
+	if _dust_t <= 0.0 and velocity.length() > 70.0:
+		_dust_t = 0.09
+		GameFeel.burst(global_position + Vector2(randf_range(-4, 4), 0),
+			Color(0.82, 0.86, 0.94, 0.5), 1, 16.0, 0.32)
 	_wall_bump()
 	_clamp_room()
 	_handle_actions()
@@ -325,7 +337,10 @@ func _tick_timers(delta: float) -> void:
 				GameState.hp_changed.emit(GameState.hp, GameState.max_hp)
 
 	_blink += delta
-	if invuln > 0.0 and fmod(_blink, 0.12) < 0.06:
+	if roll_t > 0.0:
+		# 翻滚中高频闪烁
+		anim.modulate.a = 1.0 if fmod(_blink, 0.08) < 0.04 else 0.3
+	elif invuln > 0.0 and fmod(_blink, 0.12) < 0.06:
 		anim.modulate.a = 0.35
 	else:
 		anim.modulate.a = 1.0
@@ -437,6 +452,24 @@ func _recoil_kick() -> void:
 
 
 
+## 弹簧跟随：加速度驱动，急停/翻滚时甩动
+func _update_jiggle(delta: float) -> void:
+	if accent == null or not is_instance_valid(accent):
+		return
+	var acc := (velocity - _prev_vel) / maxf(delta, 0.001)
+	_prev_vel = velocity
+	# 目标偏角由横向加速度决定，阻尼弹簧回正
+	var target: float = clampf(-acc.x * 0.0016, -0.55, 0.55)
+	_jiggle_v += (target - _jiggle) * 90.0 * delta
+	_jiggle_v *= maxf(0.0, 1.0 - 9.0 * delta)
+	_jiggle += _jiggle_v * delta
+	accent.rotation = _jiggle * 0.6
+	accent.position = Vector2(_jiggle * 3.0, absf(_jiggle) * 2.0)
+	if absf(_jiggle) < 0.002 and absf(_jiggle_v) < 0.01:
+		_jiggle = 0.0
+		_jiggle_v = 0.0
+
+
 func _wall_bump() -> void:
 	if _bump_cd > 0.0 or roll_t > 0.0:
 		return
@@ -504,7 +537,7 @@ func _try_roll() -> void:
 	if cs3 != null:
 		rcd = cs3.roll_cd
 	roll_cd = rcd * GameState.stat("roll_cd_mult", 1.0)
-	grant_invuln(GameConfig.ROLL_TIME + 0.02)
+	grant_invuln(0.22)
 	if anim.sprite_frames.has_animation("roll"):
 		anim.play("roll")
 	_anim_state = "roll"
@@ -515,9 +548,14 @@ func _try_roll() -> void:
 	if float(GameState.mods.get("roll_speed", 0.0)) > 0.0:
 		roll_speed_t = 1.2
 	Sfx.play("roll")
-	anim.scale = Vector2(1.15, 0.85)
+	# 弹簧骨骼受冲击
+	_jiggle_v += 3.4 * float(facing)
+	# 前摇 0.05s 压扁 -> 后摇 0.1s 拉伸 -> 回弹
+	anim.scale = Vector2(1.2, 0.8)
 	var tw := anim.create_tween()
-	tw.tween_property(anim, "scale", Vector2.ONE, 0.18)\
+	tw.tween_property(anim, "scale", Vector2(0.9, 1.1), 0.05)\
+		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tw.tween_property(anim, "scale", Vector2.ONE, 0.1)\
 		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 

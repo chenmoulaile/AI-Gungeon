@@ -26,6 +26,9 @@ var _traces: Array = []
 var _pads: Array = []
 var _decor: Array = []
 var _ambient: Node2D = null
+## Y-Sort 层：障碍物视觉挂到这里，才能和角色互相遮挡
+var visual_parent: Node2D = null
+var _obstacle_nodes: Array = []
 
 
 func _ready() -> void:
@@ -219,6 +222,7 @@ func _build_obstacles() -> void:
 			continue
 		_obstacles.append(rect)
 		_add_obstacle(rect)
+		_add_obstacle_visual(rect)
 	GameState.obstacles = _obstacles.duplicate()
 
 	if SeedManager.randf() < 0.1:
@@ -237,6 +241,20 @@ func _build_obstacles() -> void:
 				add_child(crate)
 				GameState.crates.append(crate)
 				break
+
+
+## 障碍物视觉：节点原点放在底边中点，配合 Y-Sort 实现遮挡
+func _add_obstacle_visual(rect: Rect2) -> void:
+	if visual_parent == null or not is_instance_valid(visual_parent):
+		return
+	var n := Node2D.new()
+	n.name = "Obstacle"
+	n.position = Vector2(rect.get_center().x, rect.end.y)
+	n.set_script(load("res://scripts/systems/obstacle_visual.gd"))
+	n.set("size", rect.size)
+	n.set("theme", _theme)
+	visual_parent.add_child(n)
+	_obstacle_nodes.append(n)
 
 
 func _add_obstacle(rect: Rect2) -> void:
@@ -386,7 +404,6 @@ func _draw() -> void:
 	_draw_floor(r)
 	_draw_floor_details()
 	_draw_decor()
-	_draw_obstacles()
 	_draw_walls(r)
 	_draw_door(r)
 	if is_boss:

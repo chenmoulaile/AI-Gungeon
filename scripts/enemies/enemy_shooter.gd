@@ -51,18 +51,23 @@ func _ai(delta: float) -> void:
 			Sfx.play_at("shoot", global_position, -6.0, 0.9)
 	if fire_cd <= 0.0:
 		fire_cd = SeedManager.randf_range(1.5, 2.2) if pattern == "aim" else SeedManager.randf_range(1.1, 1.6)
-		telegraph = 0.35
+		telegraph = 0.5
 
 
 func _draw_body() -> void:
 	var ang := 0.0
 	if player != null and is_instance_valid(player):
 		ang = (player.global_position - global_position).angle()
+	# 预警：红色瞄准线，越接近发射越亮
+	if telegraph > 0.0:
+		var kk := 1.0 - telegraph / 0.5
+		var c := Color(1.0, 0.22, 0.26, 0.25 + 0.55 * kk)
+		draw_line(Vector2.ZERO, Vector2(cos(ang), sin(ang)) * 320.0, c, 1.0 + 1.5 * kk)
 	draw_set_transform(Vector2.ZERO, ang, Vector2.ONE)
 	var s := radius
 	var rec := 0.0
 	if telegraph > 0.0:
-		rec = -2.5 * (1.0 - telegraph / 0.35)
+		rec = -2.5 * (1.0 - telegraph / 0.5)
 	# 断裂柱状炮台
 	for i in 3:
 		var y := -s + float(i) * s * 0.70
@@ -75,7 +80,7 @@ func _draw_body() -> void:
 	draw_rect(Rect2(mz.x - 2.0, mz.y - 3.0, 6.0, 6.0), Color(0.24, 0.17, 0.12))
 	draw_rect(Rect2(mz.x + 2.0, mz.y - 2.0, 3.0, 4.0), Color(1.0, 0.75, 0.35))
 	if telegraph > 0.0:
-		var k := 1.0 - telegraph / 0.35
+		var k := 1.0 - telegraph / 0.5
 		draw_arc(mz, 4.0 + 7.0 * k, 0.0, TAU, 16,
 			Color(1.0, 0.55 + 0.35 * k, 0.20, 0.85), 1.6, true)
 		draw_circle(mz, 1.6 + 2.4 * k, Color(1.0, 0.85, 0.5, 0.55))

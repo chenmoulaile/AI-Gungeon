@@ -104,6 +104,16 @@ func _run() -> void:
 	await _frames(30)
 	await _shot("boss_fight")
 
+	# 暂停菜单
+	var pm = load("res://scripts/ui/pause_menu.gd").new()
+	pm.process_mode = Node.PROCESS_MODE_ALWAYS
+	g.ui_layer.add_child(pm)
+	get_tree().paused = true
+	await _wait(0.3)
+	await _shot("pause")
+	get_tree().paused = false
+	pm.queue_free()
+
 	# 商店
 	GameState.add_coins(300)
 	g._open_shop()

@@ -17,6 +17,7 @@ var ui: Control = null
 var pattern: int = 0
 var timer: float = 1.2
 var t: float = 0.0
+var is_gameplay: bool = true
 var gen_pos := Vector2(GameConfig.ROOM_W * 0.5, GameConfig.ROOM_H * 0.5)
 var _beeps: float = 0.0
 

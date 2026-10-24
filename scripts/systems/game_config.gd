@@ -117,6 +117,8 @@ func _build_theme() -> void:
 	var t := Theme.new()
 	if ui_font != null:
 		t.default_font = ui_font
+		# 全局兜底字体：容器 UI（Label/Button）也能显示中文，Web 端同样有效
+		ThemeDB.fallback_font = ui_font
 	t.default_font_size = 12
 	ui_theme = t
 
