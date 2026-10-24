@@ -26,3 +26,5 @@ settings.cfg
 # Python
 __pycache__/
 *.pyc
+
+tests/_dbg_*
