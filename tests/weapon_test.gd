@@ -58,7 +58,7 @@ func _test(cid: String) -> void:
 	await _frames(2)
 
 	var targets: Array = []
-	for off in [Vector2(100, -16), Vector2(100, -40), Vector2(100, 20)]:
+	for off in [Vector2(150, -16), Vector2(150, -40), Vector2(150, 20)]:
 		var t = TargetScript.new()
 		t.position = p.global_position + off
 		g.add_child(t)

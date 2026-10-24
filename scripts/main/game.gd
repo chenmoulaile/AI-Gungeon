@@ -75,7 +75,10 @@ func _check_debug_query() -> void:
 	var js = Engine.get_singleton("JavaScriptBridge")
 	if js == null:
 		return
-	var q := String(js.eval("window.location.search", true))
+	var raw = js.eval("window.location.search", true)
+	if raw == null:
+		return
+	var q := str(raw)
 	if q.contains("enemies"):
 		call_deferred("_debug_spawn_enemies")
 
@@ -422,6 +425,9 @@ func _advance() -> void:
 	busy = true
 	var idx := GameState.room_index
 	if is_boss_room:
+		if GameState.floor_clean:
+			GameState.excl_clean_floor = true
+		GameState.floor_clean = true
 		GameState.floor_index += 1
 		GameState.add_coins(10)
 		await get_tree().create_timer(0.9).timeout

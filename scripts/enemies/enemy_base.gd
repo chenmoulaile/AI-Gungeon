@@ -167,7 +167,7 @@ func take_damage(dmg: float, dir: Vector2 = Vector2.ZERO, tier: String = "medium
 	if mark_t > 0.0:
 		dmg *= 1.15
 	if law_t > 0.0:
-		dmg *= 1.12
+		dmg *= 1.15
 	hp -= dmg
 	var preset := tier
 	if preset == "small":

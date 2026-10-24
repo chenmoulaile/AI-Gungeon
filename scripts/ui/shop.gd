@@ -29,6 +29,7 @@ func _ready() -> void:
 		theme = load("res://resources/ui/theme.tres")
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	offers = UpgradeDB.roll_offers(3, GameState.upgrades)
+	_maybe_add_exclusive()
 	_show_tip = not MetaProgress.tutorial_flag("seen_shop_tip")
 	_coins_shown = float(GameState.coins)
 	_relayout()
@@ -41,6 +42,28 @@ func _ready() -> void:
 	var tw := create_tween()
 	tw.tween_property(self, "_enter", 0.0, 0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	Sfx.play("ui")
+
+
+## 达成局内任务后，商店出现专属武器
+func _maybe_add_exclusive() -> void:
+	var d = GameState.char_data
+	if d == null or d.exclusive_path == "":
+		return
+	if not GameState.exclusive_ready() or GameState.exclusive_equipped:
+		return
+	var up := Upgrade.new()
+	up.id = "excl_weapon"
+	up.title = d.exclusive_name
+	up.desc = d.exclusive_desc
+	up.price = 30
+	match GameState.char_id:
+		"deepseek":
+			up.icon_path = "res://assets/weapons/icons/harness.svg"
+		"gpt":
+			up.icon_path = "res://assets/weapons/icons/codex.svg"
+		_:
+			up.icon_path = "res://assets/weapons/claude_starter.png"
+	offers.insert(0, up)
 
 
 func _relayout() -> void:
@@ -123,6 +146,9 @@ func _buy(index: int) -> void:
 		_msg_t = 1.6
 		Sfx.play("hurt", -12.0, 1.5)
 		return
+	if up.id == "excl_weapon":
+		_buy_exclusive(index)
+		return
 	if GameState.try_buy(up):
 		_msg = "已获得 · %s" % up.title
 		_msg_t = 1.8
@@ -132,6 +158,27 @@ func _buy(index: int) -> void:
 		offers.remove_at(index)
 		_relayout()
 		_hover = -1
+
+
+func _buy_exclusive(index: int) -> void:
+	var up: Upgrade = offers[index]
+	var d = GameState.char_data
+	if GameState.coins < up.price:
+		_msg = "金币不足（需要 %d）" % up.price
+		_msg_t = 1.6
+		Sfx.play("hurt", -12.0, 1.5)
+		return
+	GameState.coins -= up.price
+	GameState.coins_changed.emit(GameState.coins)
+	GameState.exclusive_equipped = true
+	if GameState.player != null and is_instance_valid(GameState.player):
+		GameState.player.equip_weapon(d.exclusive_path)
+	_msg = "已装备专武 · %s" % d.exclusive_name
+	_msg_t = 2.2
+	Sfx.play("relic", -2.0, 1.1)
+	offers.remove_at(index)
+	_relayout()
+	_hover = -1
 
 
 func _close() -> void:

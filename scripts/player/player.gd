@@ -68,6 +68,10 @@ var _blink: float = 0.0
 var _ghost_t: float = 0.0
 var _bump_cd: float = 0.0
 var _muzzle_cd: float = 0.0
+## 脱战回血：受击 3s 后每 0.5s 回 2 点
+var _regen_delay: float = 0.0
+var _regen_acc: float = 0.0
+const REGEN_DELAY := 3.0
 
 
 func _ready() -> void:
@@ -146,12 +150,7 @@ func _build_nodes() -> void:
 	gun.set_script(load("res://scripts/player/hand_device.gd"))
 	add_child(gun)
 	gun.position = Vector2(0, -12)
-	gun.scale = Vector2(0.75, 0.75)
-	# GPT 用权杖外观；Claude 的法槌由武器自己生成，隐藏默认手持物
-	if char_id == "gpt":
-		gun.style = "staff"
-	elif char_id == "claude":
-		gun.visible = false
+	gun.draw_size = 24.0
 
 	var light := PointLight2D.new()
 	if ResourceLoader.exists("res://assets/fx/light_radial.png"):
@@ -196,6 +195,36 @@ func _build_weapon() -> void:
 		weapon.setup(self)
 
 
+## 武器外观：贴图武器或程序化外观
+func set_held(tex_path: String, rot_deg: float = 0.0, col: Color = Color(1, 1, 1, 1),
+		proc: String = "", glow: Color = Color(0, 0, 0, 0)) -> void:
+	if gun == null or not is_instance_valid(gun):
+		return
+	gun.set_visual(tex_path, rot_deg, col, proc)
+	gun.set_glow(glow)
+	gun.visible = true
+
+
+## 专武换装：销毁旧武器节点，挂上新武器脚本
+func equip_weapon(path: String) -> bool:
+	if path == "" or not ResourceLoader.exists(path):
+		return false
+	if weapon != null and is_instance_valid(weapon):
+		weapon.queue_free()
+		weapon = null
+	var script: Script = load(path)
+	if script == null:
+		return false
+	weapon = Node2D.new()
+	weapon.set_script(script)
+	weapon.name = "Weapon"
+	add_child(weapon)
+	if weapon.has_method("setup"):
+		weapon.setup(self)
+	GameState.exclusive_equipped = true
+	return true
+
+
 ## 专属副武器：每个角色一把，只有对应角色能用
 func _build_subweapon() -> void:
 	var path := ""
@@ -235,7 +264,7 @@ func _physics_process(delta: float) -> void:
 	_update_facing()
 	_update_lean(delta)
 	gun.set_aim(aim)
-	gun.position = Vector2(0, -12) + aim * 7.0
+	gun.position = Vector2(0, -14) + aim * 12.0
 
 	if roll_t > 0.0:
 		velocity = roll_dir * GameConfig.ROLL_SPEED
@@ -282,6 +311,18 @@ func _tick_timers(delta: float) -> void:
 		buff_timer -= delta
 		if buff_timer <= 0.0:
 			buffs.clear()
+
+	# 脱战 3s 后缓慢回血（每 0.5s +2）
+	if alive and hp > 0 and hp < GameState.max_hp:
+		if _regen_delay > 0.0:
+			_regen_delay = maxf(0.0, _regen_delay - delta)
+		else:
+			_regen_acc += delta
+			if _regen_acc >= 0.5:
+				_regen_acc = 0.0
+				hp = mini(GameState.max_hp, hp + 2)
+				GameState.hp = hp
+				GameState.hp_changed.emit(GameState.hp, GameState.max_hp)
 
 	_blink += delta
 	if invuln > 0.0 and fmod(_blink, 0.12) < 0.06:
@@ -511,7 +552,7 @@ func try_absorb_bullet() -> bool:
 		return false
 	shield_hits -= 1
 	_shield_flash = 0.12
-	GameState.heal(2)
+	GameState.heal(20)
 	hp = GameState.hp
 	GameFeel.burst(global_position + Vector2(0, -14), Color(1.0, 0.85, 0.45), 5, 90.0, 0.25)
 	Sfx.play("coin", -8.0, 1.4)
@@ -579,11 +620,16 @@ func _counter_shot() -> void:
 	b.prepare()
 
 
+## 敌人伤害按"次数"记账（1~2），这里换算成 100 点生命制下的实际掉血
+const DMG_PER_HIT := 12
+
 func take_damage(amount: int) -> void:
 	if invuln > 0.0 or not alive:
 		return
 	invuln = GameConfig.INVULN_TIME
-	hp -= amount
+	hp -= amount * DMG_PER_HIT
+	_regen_delay = REGEN_DELAY
+	GameState.floor_clean = false
 	GameState.hp = maxi(0, hp)
 	GameState.hp_changed.emit(GameState.hp, GameState.max_hp)
 	RunSave.note_hp(GameState.hp)
@@ -604,7 +650,7 @@ func take_damage(amount: int) -> void:
 	GameFeel.burst(global_position + Vector2(0, -14), Color(1.0, 0.35, 0.45), 8, 110.0, 0.3)
 	Sfx.play("hurt")
 	# 低血量：一次性台词 + HUD 边缘闪红，不暂停
-	if hp > 0 and hp <= 2 and not _low_hp_said:
+	if hp > 0 and hp <= 30 and not _low_hp_said:
 		_low_hp_said = true
 		GameState.low_health_triggered.emit()
 		GameFeel.vibrate("medium")

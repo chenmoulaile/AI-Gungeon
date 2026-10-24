@@ -31,7 +31,7 @@ func damage_mult() -> float:
 		m *= 1.0 + float(player.roll_buff)
 		# 低血量协同：越接近极限越不肯放手
 		var low: float = float(GameState.mods.get("low_hp_damage", 0.0))
-		if low > 0.0 and player.hp <= 3:
+		if low > 0.0 and player.hp <= 35:
 			m *= 1.0 + low
 	return m
 

@@ -9,7 +9,7 @@ signal synergy_activated(synergy_name: String)
 signal low_health_triggered
 signal run_ended()
 
-const PLAYER_MAX_HP := 6
+const PLAYER_MAX_HP := 100
 
 var char_id: String = "deepseek"
 var char_data: CharacterData = null
@@ -23,6 +23,12 @@ var kills: int = 0
 var run_time: float = 0.0
 var coins_earned: int = 0
 var run_cleared: bool = false
+## 专武解锁进度（局内）
+var excl_kills: int = 0
+var excl_max_coins: int = 0
+var floor_clean: bool = true
+var excl_clean_floor: bool = false
+var exclusive_equipped: bool = false
 var training: bool = false
 
 var upgrades: Array = []      # 已持有藏品 id
@@ -72,6 +78,11 @@ func start_run(id: String, seed_text: String = "") -> void:
 	coins_earned = 0
 	run_time = 0.0
 	run_cleared = false
+	excl_kills = 0
+	excl_max_coins = 0
+	floor_clean = true
+	excl_clean_floor = false
+	exclusive_equipped = false
 	MetaProgress.start_run(id)
 	coins_changed.emit(coins)
 	hp_changed.emit(hp, max_hp)
@@ -319,9 +330,44 @@ func on_enemy_killed(tag: String = "") -> void:
 				float(player.weapon.skill_cd_left) - float(mods["voice_kill_cd"]))
 	var every := int(stat("lifesteal_every", 0))
 	if every > 0 and kills % every == 0:
-		heal(1)
+		heal(10)
 
 
 func enemy_scale() -> float:
 	# 每层敌人血量 +20%
 	return pow(1.2, float(floor_index - 1))
+
+
+## 专武是否已达成解锁条件
+func exclusive_ready() -> bool:
+	match char_id:
+		"deepseek":
+			return excl_kills >= 30
+		"gpt":
+			return excl_max_coins >= 50
+		"claude":
+			return excl_clean_floor
+	return false
+
+
+## HUD 进度文本
+func exclusive_progress() -> String:
+	match char_id:
+		"deepseek":
+			return "击杀 %d/30" % mini(excl_kills, 30)
+		"gpt":
+			return "金币 %d/50" % mini(excl_max_coins, 50)
+		"claude":
+			return "无伤过层 %s" % ("达成" if excl_clean_floor else "未达成")
+	return ""
+
+
+func exclusive_ratio() -> float:
+	match char_id:
+		"deepseek":
+			return clampf(float(excl_kills) / 30.0, 0.0, 1.0)
+		"gpt":
+			return clampf(float(excl_max_coins) / 50.0, 0.0, 1.0)
+		"claude":
+			return 1.0 if excl_clean_floor else 0.0
+	return 0.0

@@ -70,10 +70,16 @@ func _physics_process(delta: float) -> void:
 		_despawn()
 		return
 
-	if homing > 0.0 and homing_time > 0.0 and GameState.player != null:
+	if homing > 0.0 and homing_time > 0.0:
 		homing_time -= delta
-		var want: Vector2 = (GameState.player.global_position - global_position).normalized()
-		dir = dir.slerp(want, clampf(homing * delta, 0.0, 1.0)).normalized()
+		var target: Node = null
+		if friendly:
+			target = _nearest_enemy(320.0)
+		elif GameState.player != null and is_instance_valid(GameState.player):
+			target = GameState.player
+		if target != null and is_instance_valid(target):
+			var want: Vector2 = (target.global_position - global_position).normalized()
+			dir = dir.slerp(want, clampf(homing * delta, 0.0, 1.0)).normalized()
 
 	var spd := speed
 	# Claude 被动「细致阅读」：120 像素内敌弹速度 -25%
@@ -141,6 +147,19 @@ func _check_hit() -> void:
 				return
 			p.take_damage(1)
 			_despawn()
+
+
+func _nearest_enemy(max_dist: float) -> Node:
+	var best = null
+	var bd := max_dist
+	for e in GameState.enemies:
+		if not is_instance_valid(e) or e.dead:
+			continue
+		var d: float = global_position.distance_to(e.global_position)
+		if d < bd:
+			bd = d
+			best = e
+	return best
 
 
 func _damage_enemy(e: Node) -> void:
