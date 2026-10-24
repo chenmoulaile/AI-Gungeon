@@ -1,6 +1,6 @@
 name: Release
 
-# tag 触发（v*）或手动触发：自动导出 Windows / Linux / Web 并发布到 GitHub Release
+# tag 触发（v*）或手动触发：下载 Godot 4.7.2 -> 导出 Windows / Linux / Web -> 发布 Release
 on:
   push:
     tags:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "手动发布时使用的 tag（例如 v0.4.0）"
+        description: "手动发布时使用的 tag（例如 v0.5.0）"
         required: false
         default: ""
 
@@ -16,111 +16,98 @@ permissions:
   contents: write
 
 env:
-  GODOT_VERSION: 4.4.1
-  EXPORT_NAME: AIGungeon
+  GODOT_VERSION: 4.7.2
 
 jobs:
   export:
-    name: Export (${{ matrix.preset }})
+    name: Export ${{ matrix.artifact }}
     runs-on: ubuntu-latest
-    container:
-      image: barichello/godot-ci:4.4.1
     strategy:
       fail-fast: false
       matrix:
         include:
           - preset: "Windows Desktop"
             artifact: windows
+            out: build/windows/AIGungeon.exe
           - preset: "Linux"
             artifact: linux
+            out: build/linux/AIGungeon.x86_64
           - preset: "Web"
             artifact: web
+            out: build/web/index.html
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup export templates
+      - name: Install Godot and export templates
         run: |
-          mkdir -v -p ~/.local/share/godot/export_templates/
-          mv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable \
-             ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable 2>/dev/null || true
-          mkdir -v -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
-          cp -rv /root/.local/share/godot/export_templates/${GODOT_VERSION}.stable/* \
-             ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/ 2>/dev/null || true
+          set -e
+          BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q "Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          chmod +x "Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          unzip -q "Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -d /tmp/tpl
+          cp -r /tmp/tpl/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
 
       - name: Import project
-        run: godot --headless --path . --import || godot --headless --path . --editor --quit
+        run: ./Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path . --import || true
 
       - name: Export ${{ matrix.preset }}
         run: |
-          mkdir -v -p build/${{ matrix.artifact }}
-          if [ "${{ matrix.preset }}" = "Windows Desktop" ]; then
-            godot --headless --path . --export-release "${{ matrix.preset }}" "build/${{ matrix.artifact }}/AIGungeon.exe"
-            cd build/${{ matrix.artifact }} && zip -r ../AIGungeon-windows.zip . && cd -
-          elif [ "${{ matrix.preset }}" = "Linux" ]; then
-            godot --headless --path . --export-release "${{ matrix.preset }}" "build/${{ matrix.artifact }}/AIGungeon.x86_64"
-            cd build/${{ matrix.artifact }} && tar -czf ../AIGungeon-linux.tar.gz . && cd -
-          else
-            godot --headless --path . --export-release "${{ matrix.preset }}" "build/${{ matrix.artifact }}/index.html"
-            cd build/${{ matrix.artifact }} && zip -r ../AIGungeon-web.zip . && cd -
-          fi
+          set -e
+          mkdir -p "$(dirname '${{ matrix.out }}')"
+          ./Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path . \
+            --export-release "${{ matrix.preset }}" "${{ matrix.out }}"
+          ls -la "$(dirname '${{ matrix.out }}')"
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Package
+        run: |
+          set -e
+          cd "build/${{ matrix.artifact }}"
+          case "${{ matrix.artifact }}" in
+            windows) zip -q -r ../../AIGungeon-windows.zip . ;;
+            linux)   tar -czf ../../AIGungeon-linux.tar.gz . ;;
+            web)     zip -q -r ../../AIGungeon-web.zip . ;;
+          esac
+          ls -la ../../AIGungeon-*
+
+      - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: |
-            build/AIGungeon-*.zip
-            build/AIGungeon-*.tar.gz
-          if-no-files-found: warn
+          path: AIGungeon-*
+          if-no-files-found: error
 
   release:
     name: Publish Release
     needs: export
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           path: dist
 
-      - name: Collect packages
-        run: |
-          mkdir -p out
-          find dist -type f \( -name "*.zip" -o -name "*.tar.gz" \) -exec cp {} out/ \;
-          ls -la out
-
       - name: Write release notes
         run: |
-          VERSION="${GITHUB_REF_NAME}"
-          if [ -z "$VERSION" ] || [ "$VERSION" = "main" ]; then VERSION="${{ github.event.inputs.tag }}"; fi
-          if [ -z "$VERSION" ]; then VERSION="v0.4.0"; fi
-          DATE=$(date -u +%Y-%m-%d)
           {
-            echo "## AI Gungeon ${VERSION}"
+            echo "## AI Gungeon ${{ github.ref_name }}"
             echo ""
-            echo "发布日期：${DATE}"
+            echo "- 三层场景主题化：档案库 / 数据中心 / 核心区，层间转场"
+            echo "- 三把 ZipZipPipe 特色主武器：DeepSeek Harness / 贪婪权杖 / 圣女法槌"
+            echo "- 9 种敌人像素形象改造（数据故障碎片风格）"
+            echo "- 修复角色选择立绘清晰度、GPT/Claude 攻击异常"
             echo ""
-            echo "- 蔚蓝档案风格 UI 全面重做：浅蓝白主题、圆角面板、按钮悬停/按下 Tween 反馈、自定义光标"
-            echo "- 角色视觉与转向重构：正视图立绘裁切、武器精确指向、左右翻转过渡、程序化 idle/walk/attack/roll/hit/death"
-            echo "- 战斗反馈升级：方向性震屏、分级 hit-stop、暗角/色差/全屏闪、粒子对象池、子弹拖尾与预警"
-            echo "- 三个角色专属副武器（Q）：DeepSeek 深度检索 / GPT 思维链 / Claude 对齐协议，接入 HUD 冷却环"
-            echo "- 完整流程与新手引导：启动画面 → 主菜单 → 角色选择 → 战斗 → 结算，统一转场与训练场分步引导"
-            echo ""
-            echo "包说明：Windows zip / Linux tar.gz / Web zip（解压后用本地 HTTP 服务器打开 index.html）"
+            echo "Windows zip / Linux tar.gz / Web zip（解压后用本地 HTTP 服务器打开 index.html）"
           } > release_notes.md
           cat release_notes.md
 
       - name: Publish
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}
-          name: AI Gungeon ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}
+          tag_name: ${{ github.ref_name }}
+          name: AI Gungeon ${{ github.ref_name }}
           body_path: release_notes.md
-          files: out/*
+          files: dist/*/*
           draft: false
           prerelease: false
         env:
