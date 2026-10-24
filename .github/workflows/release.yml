@@ -1,0 +1,114 @@
+name: Release
+
+# tag 触发（v*）或手动触发：下载 Godot 4.7.2 -> 导出 Windows / Linux / Web -> 发布 Release
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "手动发布时使用的 tag（例如 v0.5.0）"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+env:
+  GODOT_VERSION: 4.7.2
+
+jobs:
+  export:
+    name: Export ${{ matrix.artifact }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - preset: "Windows Desktop"
+            artifact: windows
+            out: build/windows/AIGungeon.exe
+          - preset: "Linux"
+            artifact: linux
+            out: build/linux/AIGungeon.x86_64
+          - preset: "Web"
+            artifact: web
+            out: build/web/index.html
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Godot and export templates
+        run: |
+          set -e
+          BASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          unzip -q "Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          chmod +x "Godot_v${GODOT_VERSION}-stable_linux.x86_64"
+          wget -q "$BASE/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          mkdir -p ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable
+          unzip -q "Godot_v${GODOT_VERSION}-stable_export_templates.tpz" -d /tmp/tpl
+          cp -r /tmp/tpl/templates/* ~/.local/share/godot/export_templates/${GODOT_VERSION}.stable/
+
+      - name: Import project
+        run: ./Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path . --import || true
+
+      - name: Export ${{ matrix.preset }}
+        run: |
+          set -e
+          mkdir -p "$(dirname '${{ matrix.out }}')"
+          ./Godot_v${GODOT_VERSION}-stable_linux.x86_64 --headless --path . \
+            --export-release "${{ matrix.preset }}" "${{ matrix.out }}"
+          ls -la "$(dirname '${{ matrix.out }}')"
+
+      - name: Package
+        run: |
+          set -e
+          cd "build/${{ matrix.artifact }}"
+          case "${{ matrix.artifact }}" in
+            windows) zip -q -r ../../AIGungeon-windows.zip . ;;
+            linux)   tar -czf ../../AIGungeon-linux.tar.gz . ;;
+            web)     zip -q -r ../../AIGungeon-web.zip . ;;
+          esac
+          ls -la ../../AIGungeon-*
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: AIGungeon-*
+          if-no-files-found: error
+
+  release:
+    name: Publish Release
+    needs: export
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Write release notes
+        run: |
+          {
+            echo "## AI Gungeon ${{ github.ref_name }}"
+            echo ""
+            echo "- 三层场景主题化：档案库 / 数据中心 / 核心区，层间转场"
+            echo "- 三把 ZipZipPipe 特色主武器：DeepSeek Harness / 贪婪权杖 / 圣女法槌"
+            echo "- 9 种敌人像素形象改造（数据故障碎片风格）"
+            echo "- 修复角色选择立绘清晰度、GPT/Claude 攻击异常"
+            echo ""
+            echo "Windows zip / Linux tar.gz / Web zip（解压后用本地 HTTP 服务器打开 index.html）"
+          } > release_notes.md
+          cat release_notes.md
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: AI Gungeon ${{ github.ref_name }}
+          body_path: release_notes.md
+          files: dist/*/*
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
