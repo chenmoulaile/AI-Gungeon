@@ -64,3 +64,17 @@ func _stop() -> void:
 		beam.queue_free()
 	beam = null
 	grow = 0.0
+
+
+# ---------------- 技能「宪法规避」：护盾 ----------------
+func use_skill() -> bool:
+	if player == null or not is_instance_valid(player):
+		return false
+	player.shield_hits = 6
+	player.shield_t = 3.0
+	for i in 6:
+		var ang := TAU * float(i) / 6.0 - PI / 2.0
+		GameFeel.burst(player.global_position + Vector2(0, -14)
+			+ Vector2(cos(ang), sin(ang)) * 26.0, Color(1.0, 0.88, 0.55), 2, 34.0, 0.28)
+	Sfx.play("skill")
+	return true
