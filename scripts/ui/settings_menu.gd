@@ -4,6 +4,8 @@ extends Control
 
 signal closed
 
+var _panel: Control = null
+
 const MARGIN := 32
 
 var _tabs: TabContainer = null
@@ -20,6 +22,9 @@ func _ready() -> void:
 	await get_tree().process_frame
 	if not is_inside_tree():
 		return
+	# 强制以 640x360 设计画布为基准，避免 Web 端按窗口像素计算导致偏移
+	position = Vector2.ZERO
+	size = Vector2(GameConfig.BASE_W, GameConfig.BASE_H)
 	_build()
 	var tw := create_tween()
 	tw.tween_property(self, "modulate:a", 1.0, 0.16)
@@ -32,13 +37,25 @@ func _build() -> void:
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
 
-	var center := CenterContainer.new()
-	center.set_anchors_preset(Control.PRESET_FULL_RECT)
-	add_child(center)
+	var holder := Control.new()
+	holder.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(holder)
 
 	var panel := PanelContainer.new()
 	panel.add_theme_stylebox_override("panel", UiKit.panel_style(0.92))
-	center.add_child(panel)
+	# 以画布中心为锚点，向四周对称生长 —— 不依赖父容器尺寸
+	panel.anchor_left = 0.5
+	panel.anchor_right = 0.5
+	panel.anchor_top = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left = 0.0
+	panel.offset_top = 0.0
+	panel.offset_right = 0.0
+	panel.offset_bottom = 0.0
+	panel.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	panel.grow_vertical = Control.GROW_DIRECTION_BOTH
+	holder.add_child(panel)
+	_panel = panel
 
 	var margin := MarginContainer.new()
 	for side in ["left", "right", "top", "bottom"]:
@@ -235,7 +252,21 @@ func _close() -> void:
 		queue_free()
 
 
+func _process(_delta: float) -> void:
+	if _panel != null and is_instance_valid(_panel):
+		var canvas := Vector2(GameConfig.BASE_W, GameConfig.BASE_H)
+		_panel.position = ((canvas - _panel.size) * 0.5).round()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed("pause"):
 		_close()
 		get_viewport().set_input_as_handled()
+
+## 手动居中：不依赖 CenterContainer 在 Web 端的尺寸计算
+func _center_panel(panel: Control) -> void:
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if not is_instance_valid(panel):
+		return
+	panel.position = ((size - panel.size) * 0.5).round()

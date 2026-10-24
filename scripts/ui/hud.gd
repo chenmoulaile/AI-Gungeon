@@ -11,6 +11,8 @@ var _pop: Dictionary = {}
 var _desc_uid: String = ""
 var _desc_t: float = 0.0
 var _low_flash: float = 0.0
+var _excl_last: int = -1
+var _excl_flash: float = 0.0
 var _challenge_title: String = ""
 var _challenge_desc: String = ""
 var _challenge_done: bool = false
@@ -127,41 +129,53 @@ func _draw() -> void:
 # ---------------- 生命 ----------------
 func _draw_hearts() -> void:
 	var ratio: float = clampf(float(GameState.hp) / maxf(1.0, float(GameState.max_hp)), 0.0, 1.0)
-	var w := 88.0
-	var panel := Rect2(8, 6, w + 62, 22)
-	draw_style_box(UiKit.box(Color(1, 1, 1, 0.30), 8, Color(1, 1, 1, 0.35), 1, false), panel)
-	UiKit.text(self, Vector2(panel.position.x + 6, panel.position.y + 15), "HP", UiKit.F_TINY,
-		Color(0.92, 0.94, 1.0, 0.85))
-	var bar := Rect2(panel.position.x + 24, panel.position.y + 6, w, 10)
-	draw_style_box(UiKit.box(Color(0.30, 0.16, 0.20, 0.55), 5, Color(0, 0, 0, 0), 0, false), bar)
-	var col := Color(0.35, 0.82, 0.45)
+	var panel := Rect2(8, 6, 156, 42)
+	draw_style_box(UiKit.hud_panel(12), panel)
+	# 圆形头像
+	var av := UiKit.icon("res://assets/portraits/%s_avatar.png" % GameState.char_id)
+	var ar := Rect2(panel.position + Vector2(6, 6), Vector2(30, 30))
+	if av != null:
+		draw_texture_rect(av, ar, false)
+	draw_arc(ar.get_center(), 15.4, 0.0, TAU, 26, Color(0.55, 0.78, 1.0, 0.85), 1.2, true)
+	# 名字 + 血条 + 数值
+	var name_txt: String = String(GameState.char_data.display_name) if GameState.char_data != null else "AI"
+	UiKit.text(self, Vector2(panel.position.x + 42, panel.position.y + 13), name_txt,
+		UiKit.F_TINY, Color(0.92, 0.96, 1.0, 0.95))
+	var bar := Rect2(panel.position.x + 42, panel.position.y + 17, 104, 8)
+	draw_style_box(UiKit.box(Color(0.06, 0.10, 0.20, 0.65), 3, Color(0.40, 0.58, 0.85, 0.5), 1, false), bar)
+	var col := Color(0.36, 0.86, 0.72)
 	if ratio <= 0.3:
-		col = Color(0.95, 0.32, 0.34)
+		col = Color(1.0, 0.36, 0.42)
 	elif ratio <= 0.6:
-		col = Color(0.95, 0.72, 0.28)
-	var fill := Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y))
+		col = Color(1.0, 0.76, 0.32)
+	var fill := Rect2(bar.position + Vector2(1, 1), Vector2(maxf(0.0, (bar.size.x - 2.0) * ratio), bar.size.y - 2.0))
 	if fill.size.x > 1.0:
-		draw_style_box(UiKit.box(col, 5, Color(0, 0, 0, 0), 0, false), fill)
-		draw_rect(Rect2(fill.position + Vector2(1, 1), Vector2(fill.size.x - 2, 2)),
-			Color(1, 1, 1, 0.28))
-	# 低血量闪烁描边
+		draw_rect(fill, col)
+		draw_rect(Rect2(fill.position, Vector2(fill.size.x, 2.0)), Color(1, 1, 1, 0.35))
+		# 电量格
+		var seg := 12
+		for i in seg:
+			var x := bar.position.x + 1.0 + (bar.size.x - 2.0) * float(i) / float(seg)
+			draw_line(Vector2(x, bar.position.y + 1.0), Vector2(x, bar.end.y - 1.0),
+				Color(0.06, 0.10, 0.20, 0.45), 1.0)
 	if ratio <= 0.3 and fmod(_t, 0.6) < 0.3:
-		draw_style_box(UiKit.box(Color(0, 0, 0, 0), 5, Color(1.0, 0.35, 0.35, 0.9), 1, false),
+		draw_style_box(UiKit.box(Color(0, 0, 0, 0), 3, Color(1.0, 0.35, 0.35, 0.9), 1, false),
 			bar.grow(1.0))
-	UiKit.text(self, Vector2(bar.end.x + 6, panel.position.y + 14),
-		"%d/%d" % [GameState.hp, GameState.max_hp], UiKit.F_TINY, Color(0.95, 0.96, 1.0, 0.92))
-
+	UiKit.text(self, Vector2(panel.position.x + 42, panel.position.y + 35),
+		"HP %d/%d" % [GameState.hp, GameState.max_hp], UiKit.F_TINY,
+		Color(0.84, 0.90, 1.0, 0.9))
 
 
 # ---------------- 金币 ----------------
 func _draw_coins() -> void:
-	var y := GameConfig.BASE_H - 16.0
-	var r := Rect2(8, y - 10, 74, 18)
-	draw_style_box(UiKit.box(Color(1, 1, 1, 0.34), 9, Color(1, 1, 1, 0.35), 1, false), r)
-	draw_circle(Vector2(18, y - 1), 5.0, UiKit.GOLD)
-	draw_circle(Vector2(17, y - 2), 1.8, Color(1, 1, 1, 0.9))
-	UiKit.text(self, Vector2(27, y + 3.5), str(int(round(_coins_shown))), UiKit.F_H3,
-		Color(0.22, 0.24, 0.30))
+	var y := GameConfig.BASE_H - 22.0
+	var r := Rect2(8, y - 11, 86, 22)
+	draw_style_box(UiKit.hud_panel(10), r)
+	draw_circle(Vector2(r.position.x + 12, y), 5.2, Color(0.98, 0.80, 0.32))
+	draw_circle(Vector2(r.position.x + 12, y), 5.2, Color(0.55, 0.38, 0.06), false, 1.0)
+	draw_circle(Vector2(r.position.x + 10.6, y - 1.4), 1.6, Color(1, 1, 1, 0.85))
+	UiKit.text(self, Vector2(r.position.x + 22, y + 3.6), str(int(round(_coins_shown))),
+		UiKit.F_H3, Color(1.0, 0.94, 0.78))
 
 
 func _draw_room_info() -> void:
@@ -179,22 +193,24 @@ func _draw_exclusive() -> void:
 	if d == null:
 		return
 	var ready: bool = GameState.exclusive_ready()
-	var w := 126.0
-	var r := Rect2(GameConfig.BASE_W - w - 8, 26, w, 28)
-	draw_style_box(UiKit.box(Color(1, 1, 1, 0.26 if not ready else 0.42), 7,
-		Color(1, 1, 1, 0.32), 1, false), r)
-	var title := "专武 · %s" % d.exclusive_name
-	UiKit.text(self, r.position + Vector2(6, 10), title, UiKit.F_TINY,
-		Color(0.55, 0.36, 0.06) if ready else Color(0.22, 0.28, 0.40, 0.9))
-	var bar := Rect2(r.position.x + 6, r.position.y + 13, w - 12, 5)
-	draw_style_box(UiKit.box(Color(0.25, 0.28, 0.38, 0.5), 2, Color(0, 0, 0, 0), 0, false), bar)
+	var w := 118.0
+	var r := Rect2(8, GameConfig.BASE_H - 56.0, w, 20)
+	draw_style_box(UiKit.hud_panel(9), r)
+	# 进度更新时闪金色
+	var pv: int = int(round(GameState.exclusive_ratio() * 100.0))
+	if pv != _excl_last:
+		_excl_last = pv
+		_excl_flash = 0.6
+	_excl_flash = maxf(0.0, _excl_flash - get_process_delta_time())
+	var title := "%s %s" % [d.exclusive_name, "OK" if ready else GameState.exclusive_progress()]
+	UiKit.text(self, r.position + Vector2(6, 13), title, UiKit.F_TINY,
+		Color(1.0, 0.86, 0.40) if ready or _excl_flash > 0.0 else Color(0.80, 0.88, 1.0, 0.9))
+	var bar := Rect2(r.position.x + 6, r.position.y + 15, w - 12, 3)
+	draw_rect(bar, Color(0.10, 0.16, 0.30, 0.9))
 	var ratio: float = GameState.exclusive_ratio()
 	if ratio > 0.01:
-		draw_style_box(UiKit.box(Color(0.98, 0.78, 0.35) if ready else Color(0.55, 0.72, 0.95), 2,
-			Color(0, 0, 0, 0), 0, false), Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)))
-	UiKit.text(self, r.position + Vector2(6, 26),
-		"已解锁 · 商店购买" if ready else GameState.exclusive_progress(),
-		UiKit.F_TINY, Color(0.62, 0.40, 0.05) if ready else Color(0.30, 0.36, 0.48, 0.9))
+		draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)),
+			Color(1.0, 0.84, 0.38) if ready else Color(0.48, 0.72, 1.0))
 
 
 # ---------------- 技能环（主技能 + 副武器） ----------------
@@ -267,7 +283,7 @@ func _draw_mode(p) -> void:
 # ---------------- 藏品侧栏 ----------------
 func _draw_upgrades() -> void:
 	var x := GameConfig.BASE_W - 26.0
-	var y := 60.0
+	var y := 30.0
 	for uid in GameState.upgrades:
 		var up: Upgrade = UpgradeDB.get_upgrade(uid)
 		if up == null:
@@ -299,7 +315,7 @@ func _draw_relic_desc() -> void:
 	var a: float = clampf(_desc_t / 0.6, 0.0, 1.0)
 	var w := 148.0
 	var r := Rect2(Vector2(GameConfig.BASE_W - w - 8.0,
-		64.0 + minf(GameState.upgrades.size(), 8) * 21.0 + 4.0), Vector2(w, 40))
+		34.0 + minf(GameState.upgrades.size(), 8) * 21.0 + 4.0), Vector2(w, 40))
 	draw_style_box(UiKit.box(Color(1, 1, 1, 0.92 * a), 8, Color(1, 1, 1, 0.8), 1, true), r)
 	UiKit.text(self, r.position + Vector2(7, 13), up.title, UiKit.F_SMALL,
 		Color(0.80, 0.55, 0.10, a))

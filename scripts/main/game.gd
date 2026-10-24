@@ -392,6 +392,8 @@ func _on_room_cleared() -> void:
 func _on_boss_dead() -> void:
 	boss = null
 	for e in enemy_layer.get_children():
+		if e == player:
+			continue
 		if is_instance_valid(e):
 			e.queue_free()
 	alive_count = 0

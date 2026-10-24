@@ -16,6 +16,7 @@ const PauseScript = preload("res://scripts/ui/pause_menu.gd")
 var current: Node = null
 var _settings: Node = null
 var _pause_menu: Node = null
+var _pause_layer: CanvasLayer = null
 
 
 func _ready() -> void:
@@ -48,7 +49,10 @@ func _open_pause() -> void:
 		return
 	_pause_menu = PauseScript.new()
 	_pause_menu.name = "PauseMenu"
-	add_child(_pause_menu)
+	_pause_layer = CanvasLayer.new()
+	_pause_layer.layer = 100
+	add_child(_pause_layer)
+	_pause_layer.add_child(_pause_menu)
 	_pause_menu.resume_pressed.connect(_close_pause)
 	_pause_menu.menu_pressed.connect(func() -> void:
 		_close_pause()
@@ -64,6 +68,9 @@ func _close_pause() -> void:
 	if _pause_menu != null and is_instance_valid(_pause_menu):
 		_pause_menu.queue_free()
 	_pause_menu = null
+	if _pause_layer != null and is_instance_valid(_pause_layer):
+		_pause_layer.queue_free()
+	_pause_layer = null
 	InputBuffer.clear_all()
 
 
@@ -152,11 +159,16 @@ func open_settings() -> void:
 		return
 	DialogueManager.clear()
 	_settings = SettingsScene.instantiate()
-	add_child(_settings)
+	var layer := CanvasLayer.new()
+	layer.layer = 110
+	add_child(layer)
+	layer.add_child(_settings)
 	_settings.closed.connect(func() -> void:
 		if is_instance_valid(_settings):
 			_settings.queue_free()
-		_settings = null)
+		_settings = null
+		if is_instance_valid(layer):
+			layer.queue_free())
 
 
 func _on_run_over() -> void:

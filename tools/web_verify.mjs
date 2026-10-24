@@ -113,6 +113,16 @@ for (const [cx, name] of cards) {
   await sleep(3200);
   await shot(`03_${name}_enemies`);
   await fireShot(450, 150, `04_${name}_fire`);
+  if (name === "deepseek") {
+    // ESC 暂停菜单
+    await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await sleep(700);
+    await shot("05_pause");
+    await send("Input.dispatchKeyEvent", { type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27 });
+    await sleep(400);
+  }
   // 回主菜单：ESC 打开设置再退出太绕，直接重载
   await boot(`${BASE}?enemies=1`);
   await click(320, 144);

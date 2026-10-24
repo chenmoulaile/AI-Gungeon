@@ -294,3 +294,16 @@ static func _btn_scale(b: Button, k: float) -> void:
 	var tw := b.create_tween()
 	tw.tween_property(b, "scale", Vector2(k, k), 0.09)\
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+
+
+## HUD 磨砂深蓝面板：半透明、12 圆角、1px 高光描边、轻微外发光
+static func hud_panel(radius: int = 12, alpha: float = 0.72) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.09, 0.14, 0.26, alpha)
+	sb.set_corner_radius_all(radius)
+	sb.set_border_width_all(1)
+	sb.border_color = Color(0.52, 0.74, 1.0, 0.55)
+	sb.shadow_size = 4
+	sb.shadow_offset = Vector2(0, 2)
+	sb.shadow_color = Color(0.35, 0.62, 1.0, 0.20)
+	return sb

@@ -110,7 +110,11 @@ func _load_font() -> void:
 		if f.load_dynamic_font(path) == OK:
 			ui_font = f
 			return
-	push_warning("未找到中文字体，界面中文可能显示为方块")
+	# 最终兜底：系统字体（Web 端由浏览器提供）
+	var sys := SystemFont.new()
+	sys.font_names = PackedStringArray(["Microsoft YaHei", "Noto Sans CJK SC",
+		"Noto Sans SC", "PingFang SC", "Source Han Sans SC", "sans-serif"])
+	ui_font = sys
 
 
 func _build_theme() -> void:
