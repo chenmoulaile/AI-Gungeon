@@ -63,7 +63,7 @@ func _draw() -> void:
 	var ta: float = clampf((_t - 0.35) / 0.35, 0.0, 1.0)
 	UiKit.text_center(self, cx, 204, "AI GUNGEON", UiKit.F_H1,
 		Color(UiKit.TEXT.r, UiKit.TEXT.g, UiKit.TEXT.b, ta))
-	UiKit.text_center(self, cx, 222, "像素地牢 · 非官方同人", UiKit.F_SMALL,
+	UiKit.text_center(self, cx, 222, "像素地牢", UiKit.F_SMALL,
 		Color(UiKit.TEXT_DIM.r, UiKit.TEXT_DIM.g, UiKit.TEXT_DIM.b, ta))
 	UiKit.text_center(self, cx, 240,
 		"v%s" % str(ProjectSettings.get_setting("application/config/version", "0.9.0")),

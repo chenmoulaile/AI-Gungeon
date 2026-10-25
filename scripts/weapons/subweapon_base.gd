@@ -5,10 +5,14 @@ extends Node2D
 var player = null
 var char_id: String = ""
 var display_name: String = "副武器"
-var key_label: String = "Q"
+var key_label: String = "滚轮"
 var cd_total: float = 4.0
 var cd_left: float = 0.0
 var color: Color = Color("#7fb2ff")
+## 是否处于当前手持槽（滚轮切到副武器时为 true）
+var active: bool = false
+## HUD 图标路径（留空则回退到角色武器图标）
+var icon_path: String = ""
 
 
 func setup(p: Node) -> void:
@@ -20,6 +24,12 @@ func setup(p: Node) -> void:
 ## 子类设置数值
 func _configure() -> void:
 	pass
+
+
+## 滚轮切换时由玩家调用
+func set_active(v: bool) -> void:
+	active = v
+	queue_redraw()
 
 
 func _process(delta: float) -> void:
@@ -34,9 +44,11 @@ func ratio() -> float:
 	return 1.0 - clampf(cd_left / maxf(cd_total, 0.01), 0.0, 1.0)
 
 
-## 每帧由玩家调用（默认：按下即触发）
+## 每帧由玩家调用（副武器槽内：左键按下触发）
 func handle_input(_delta: float) -> void:
-	if Input.is_action_just_pressed("sub_weapon"):
+	if not active:
+		return
+	if InputBuffer.consume("shoot") or Input.is_action_just_pressed("shoot"):
 		try_use()
 
 

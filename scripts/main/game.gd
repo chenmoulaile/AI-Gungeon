@@ -441,6 +441,9 @@ func _show_intro_dialog(deferred_wave: bool = false) -> void:
 		get_tree().paused = false
 		if is_instance_valid(dlg):
 			dlg.queue_free()
+		# 关对白那一下点击不能变成攻击：清缓冲 + 锁 0.4s
+		if player != null and is_instance_valid(player):
+			player.lock_input(0.4)
 		if deferred_wave:
 			_spawn_wave())
 
@@ -454,6 +457,8 @@ func _show_boss_intro() -> void:
 		get_tree().paused = false
 		if is_instance_valid(intro):
 			intro.queue_free()
+		if player != null and is_instance_valid(player):
+			player.lock_input(0.4)
 		DialogueManager.say(GameState.char_id, "boss", 2.8))
 
 
@@ -602,7 +607,9 @@ func open_settings() -> void:
 	menu.closed.connect(func() -> void:
 		get_tree().paused = false
 		if is_instance_valid(menu):
-			menu.queue_free())
+			menu.queue_free()
+		if player != null and is_instance_valid(player):
+			player.lock_input(0.3))
 
 
 func _clear_layer(layer: Node) -> void:

@@ -102,11 +102,11 @@ await sleep(1600);
 await shot("02_select");
 
 // 2) 三个角色各打一次
-const cards = [[164, "deepseek"], [320, "gpt"], [476, "claude"]];
+const cards = [[204, "deepseek"], [320, "gpt"], [436, "claude"]];
 for (const [cx, name] of cards) {
   await click(cx, 170);
   await sleep(350);
-  await click(320, 305);
+  await click(560, 330);
   await sleep(2400);
   // 跳过开场对白
   for (let i = 0; i < 9; i++) { await click(420, 150); await sleep(280); }

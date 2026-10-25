@@ -1,5 +1,5 @@
 extends Control
-## 角色选择（v0.7 P2）：4 张 104×176 像素卡（第 4 张大肥鱼锁定）、属性分段条、
+## 角色选择（v0.9.1）：3 张 104×176 像素卡（大肥鱼即 DeepSeek 本人）、属性分段条、
 ## 难度药丸、种子输入、像素按钮。悬停只上移 1px，不做缩放/脉冲。
 
 signal character_chosen(id: String, seed_text: String, difficulty: int)
@@ -60,7 +60,8 @@ func _ready() -> void:
 
 func _layout() -> void:
 	_rects.clear()
-	var count := IDS.size() + 1
+	# 大肥鱼就是 DeepSeek 本人（召唤物是其缩小版），不再单列第 4 张锁定卡
+	var count := IDS.size()
 	var total: float = count * CARD_W + (count - 1) * CARD_GAP
 	var x0: float = (GameConfig.BASE_W - total) * 0.5
 	for i in count:
@@ -149,11 +150,7 @@ func _gui_input(event: InputEvent) -> void:
 			accept_event()
 			return
 	if _hover >= 0:
-		if _hover >= IDS.size():
-			_toast = "大肥鱼尚未解锁 · 将在 P6 加入"
-			_toast_t = 1.6
-			Sfx.play("hurt", -16.0, 1.6)
-		elif _sel == _hover:
+		if _sel == _hover:
 			_choose(_hover)
 		else:
 			_sel = _hover
@@ -264,9 +261,6 @@ func _draw() -> void:
 		UiKit.text_center(self, 320, 352, _toast, 12, UiKit.DANGER)
 
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	UiKit.text_center(self, GameConfig.BASE_W * 0.5, 354,
-		"非官方同人 · 完全免费 · 角色形象基于 B站 UP 主 ZipZipPipe 二创（CC BY-NC-SA 4.0）",
-		12, Color(0.42, 0.47, 0.57))
 
 
 func _draw_tip() -> void:
@@ -278,9 +272,6 @@ func _draw_tip() -> void:
 
 
 func _draw_card(i: int, r: Rect2) -> void:
-	if i >= IDS.size():
-		_draw_locked_card(r)
-		return
 	var d: CharacterData = _data[i]
 	var accent: Color = d.accent
 	var hk := 1.0 if _hover == i else 0.0
@@ -315,26 +306,6 @@ func _draw_card(i: int, r: Rect2) -> void:
 			draw_rect(tag, UiKit.GOLD)
 			UiKit.text_center(self, tag.get_center().x, tag.get_center().y + 4, "READY", 12,
 				UiKit.VOID)
-
-
-func _draw_locked_card(r: Rect2) -> void:
-	UiKit.frame(self, r, Color("#0C1120"), UiKit.BORDER, Color(0, 0, 0, 0), true)
-	var pr := Rect2(r.position + Vector2(4, 4), Vector2(96, 132))
-	UiKit.inset(self, pr, UiKit.VOID, Color("#222B40"))
-	# 大肥鱼剪影：圆头 + 身体 + 鲸尾（纯色块，不用平滑多边形）
-	var cx := pr.get_center().x
-	var base := pr.end.y - 8
-	draw_rect(Rect2(cx - 22, base - 50, 44, 42), Color("#121926"))
-	draw_rect(Rect2(cx - 26, base - 38, 4, 26), Color("#121926"))
-	draw_rect(Rect2(cx + 22, base - 38, 4, 26), Color("#121926"))
-	draw_rect(Rect2(cx - 18, base - 70, 36, 22), Color("#121926"))
-	draw_rect(Rect2(cx - 14, base - 76, 28, 6), Color("#121926"))
-	# 鲸尾
-	draw_rect(Rect2(cx - 34, base - 34, 12, 8), Color("#121926"))
-	draw_rect(Rect2(cx + 22, base - 34, 12, 8), Color("#121926"))
-	# 锁
-	UiKit.text_center(self, r.get_center().x, r.position.y + 152, "大肥鱼", 12, Color("#4A5468"))
-	UiKit.text_center(self, r.get_center().x, r.position.y + 172, "未解锁 · P6", 12, Color("#3A4A70"))
 
 
 func _draw_detail() -> void:

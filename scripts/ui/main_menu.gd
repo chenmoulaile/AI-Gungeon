@@ -144,7 +144,7 @@ func _draw() -> void:
 	var tp := Vector2(MENU_X, 52)
 	UiKit.text(self, tp + Vector2(2, 2), "AI GUNGEON", 36, Color(0, 0, 0, 0.45))
 	UiKit.text(self, tp, "AI GUNGEON", 36, UiKit.CYAN, false)
-	UiKit.text(self, Vector2(MENU_X + 1, 68), "像素地牢 · 非官方同人", 12, UiKit.TEXT_DIM)
+	UiKit.text(self, Vector2(MENU_X + 1, 68), "像素地牢", 12, UiKit.TEXT_DIM)
 	draw_rect(Rect2(MENU_X, 78, BTN_W, 1), UiKit.BORDER)
 	draw_rect(Rect2(MENU_X, 78, 40, 1), UiKit.CYAN)
 
@@ -174,7 +174,7 @@ func _draw() -> void:
 
 	# 底部操作提示
 	var hint_y := 318.0
-	var keys := [["WASD", "移动"], ["左键", "射击"], ["空格", "翻滚"], ["E", "技能"], ["Q", "副武器"], ["ESC", "暂停"]]
+	var keys := [["WASD", "移动"], ["左键", "射击"], ["空格", "翻滚"], ["E", "技能"], ["滚轮", "切武器"], ["ESC", "暂停"]]
 	var x := 32.0
 	for pair in keys:
 		UiKit.keycap(self, Vector2(x, hint_y), String(pair[0]), 16)
@@ -182,9 +182,7 @@ func _draw() -> void:
 		UiKit.text(self, Vector2(x, hint_y + 12), String(pair[1]), 12, UiKit.TEXT_DIM)
 		x += UiKit.measure(String(pair[1]), 12) + 14
 
-	UiKit.text(self, Vector2(32, 350),
-		"非官方同人 · 角色形象基于 B站 UP 主 ZipZipPipe 二创（CC BY-NC-SA 4.0）",
-		12, Color(0.42, 0.47, 0.57))
+	# 同人声明只放在「关于」页，主菜单不再重复
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 

@@ -60,6 +60,8 @@ func _setup_input() -> void:
 	_add_keys("skill", [KEY_E])
 	_add_keys("sub_weapon", [KEY_Q])
 	_add_keys("switch_mode", [KEY_R])
+	# 武器切换：鼠标滚轮（上/下都切到另一把）
+	_add_wheel("switch_weapon", [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN])
 	_add_keys("restart", [KEY_F5])
 	_add_keys("pause", [KEY_ESCAPE])
 	_add_mouse("shoot", MOUSE_BUTTON_LEFT)
@@ -83,6 +85,17 @@ func _add_mouse(action: String, button: int) -> void:
 	var ev := InputEventMouseButton.new()
 	ev.button_index = button
 	InputMap.action_add_event(action, ev)
+
+
+## 滚轮事件（WHEEL_UP / WHEEL_DOWN）：同一动作绑两个方向
+func _add_wheel(action: String, buttons: Array) -> void:
+	if not InputMap.has_action(action):
+		InputMap.add_action(action)
+	for b in buttons:
+		var ev := InputEventMouseButton.new()
+		ev.button_index = b
+		ev.pressed = true
+		InputMap.action_add_event(action, ev)
 
 
 # ---------------- 字体（像素字体优先，中文兜底） ----------------

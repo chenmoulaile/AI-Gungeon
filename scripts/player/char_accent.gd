@@ -35,8 +35,9 @@ func setup(id: String) -> void:
 	char_id = id
 	z_index = 0
 	if char_id == "claude":
-		z_index = 1
-		position = Vector2(9, -41)
+		# 发梢画在身体后面，花饰仍从头顶探出
+		z_index = 0
+		position = Vector2(7, -38)
 	elif char_id == "gpt":
 		position = Vector2(0, -32)
 	else:
@@ -66,6 +67,12 @@ func _start_tweens() -> void:
 				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 			tw2.tween_property(self, "flap", 0.0, 1.5)\
 				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			# 龙尾独立慢摆，和翅膀错开相位
+			var tw2b := create_tween().set_loops()
+			tw2b.tween_property(self, "sway", 1.0, 1.05)\
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+			tw2b.tween_property(self, "sway", -1.0, 1.05)\
+				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		"claude":
 			var tw3 := create_tween().set_loops()
 			tw3.tween_property(self, "spin", 1.0, 1.0)\
@@ -83,8 +90,13 @@ func _draw() -> void:
 		"deepseek":
 			_draw_tail(int(round(sway)))
 		"gpt":
+			# 龙尾拖在脚边（px 整数摆动），翅膀在肩后轻扇
+			draw_set_transform(Vector2(9, 24), 0.0, Vector2.ONE)
+			_draw_dragon_tail(int(round(sway)))
+			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 			_draw_wings(int(round(flap)))
 		"claude":
+			_draw_hair(int(round(spin)))
 			_draw_flower(int(round(spin)) + 1)
 
 
@@ -141,3 +153,32 @@ func _draw_flower(pose: int) -> void:
 		draw_rect(_rect(c.x - 1, c.y - 1, 2, 2), PETAL)
 	draw_rect(_rect(-2, -2, 4, 4), PETAL_DARK)
 	draw_rect(_rect(-1, -1, 2, 2), SEED)
+
+
+## GPT 龙尾：三节阶梯 + 尾尖三角，p=-1/0/1 时逐节 1px 摆动
+func _draw_dragon_tail(p: int) -> void:
+	var parts := [
+		Vector4i(-1, -4, 6, 5),
+		Vector4i(4, -5 - p, 5, 4),
+		Vector4i(8, -8 - p * 2, 5, 3),
+		Vector4i(12, -12 - p * 2, 4, 3),
+		Vector4i(15, -15 - p * 2, 3, 3),
+	]
+	_pixel_shape(parts, WING_FILL, WING_EDGE)
+	draw_rect(_rect(5, -5 - p, 3, 1), WING_DARK)
+	draw_rect(_rect(9, -8 - p * 2, 3, 1), WING_DARK)
+	draw_rect(_rect(16, -14 - p * 2, 1, 1), PETAL)
+	draw_rect(_rect(13, -12 - p * 2, 1, 1), PETAL_DARK)
+
+
+## Claude 发梢：背后两束长发，p=-1/0/1 时末端反向飘 1px
+func _draw_hair(p: int) -> void:
+	var parts := [
+		Vector4i(-1, 0, 3, 8),
+		Vector4i(-2 - p, 8, 3, 6),
+		Vector4i(2, 2, 2, 7),
+		Vector4i(3 + p, 9, 2, 5),
+	]
+	_pixel_shape(parts, PETAL, PETAL_DARK)
+	draw_rect(_rect(0, 2, 1, 5), Color("#ffd08a"))
+	draw_rect(_rect(3, 4, 1, 4), Color("#ffd08a"))

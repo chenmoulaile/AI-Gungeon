@@ -15,6 +15,11 @@ var anim: AnimatedSprite2D
 var cam: Camera2D
 var weapon = null
 var sub = null
+## 手持槽：0=主武器，1=副武器（铁盆等）。鼠标滚轮切换，左键使用当前槽
+var active_slot: int = 0
+## 开局/对白结束的输入锁：这段时间不响应攻击，且必须松开再按才算一次射击
+var input_lock: float = 0.0
+var _shoot_armed: bool = true
 ## 副武器长按等状态带来的额外移速倍率（与技能 move_mult 相乘）
 var sub_move_mult: float = 1.0
 
@@ -99,9 +104,14 @@ func _ready() -> void:
 	_build_weapon()
 	_build_subweapon()
 	GameState.player = self
+	# 进房第一帧的点击可能来自“选角/开始”按钮，锁 0.3s 防止误触发攻击
+	lock_input(0.3)
 
 
 func _input(event: InputEvent) -> void:
+	# 输入锁期间（刚进房/刚关对白）不缓存任何攻击输入
+	if input_lock > 0.0:
+		return
 	# 只记录"按下"，实际消费在 _handle_actions，保证 0.10s 内不丢输入
 	if event.is_action_pressed("roll"):
 		InputBuffer.press("roll")
@@ -514,6 +524,21 @@ func _clamp_room() -> void:
 
 
 func _handle_actions() -> void:
+	var dt := get_physics_process_delta_time()
+	# 输入锁：对白/暂停刚结束时，锁内不接受攻击；锁结束的那一刻恢复可射击
+	if input_lock > 0.0:
+		input_lock = maxf(0.0, input_lock - dt)
+		InputBuffer.clear("shoot")
+		_shoot_armed = false
+		if input_lock <= 0.0:
+			_shoot_armed = true
+	if not Input.is_action_pressed("shoot"):
+		_shoot_armed = true
+
+	# 0) 滚轮切换武器（主武器 ⇄ 铁盆）
+	if Input.is_action_just_pressed("switch_weapon"):
+		_cycle_slot()
+
 	# 1) 翻滚优先：受击硬直期间不接受翻滚，但移动照常
 	if InputBuffer.peek("roll"):
 		if hurt_stun <= 0.0 and roll_t <= 0.0 and roll_cd <= 0.0:
@@ -528,15 +553,43 @@ func _handle_actions() -> void:
 	if Input.is_action_just_pressed("skill"):
 		_try_skill()
 	if sub != null and is_instance_valid(sub):
-		sub.handle_input(get_physics_process_delta_time())
+		sub.handle_input(dt)
 
 	# 2) 射击：按住即射；翻滚期间的按下被缓冲，翻滚结束当帧释放
-	var want_fire: bool = Input.is_action_pressed("shoot") or InputBuffer.peek("shoot")
-	if want_fire and weapon != null and roll_t <= 0.0:
-		InputBuffer.clear("shoot")
-		weapon.try_fire(aim)
-		fire_anim = 0.12
-		_muzzle_flash()
+	var want_fire: bool = (Input.is_action_pressed("shoot") or InputBuffer.peek("shoot")) \
+		and _shoot_armed and input_lock <= 0.0
+	if want_fire and roll_t <= 0.0:
+		if active_slot == 1:
+			# 副武器槽：攻击由 sub.handle_input 消费（铁盆蓄力/挥击）
+			fire_anim = 0.12
+		elif weapon != null:
+			InputBuffer.clear("shoot")
+			weapon.try_fire(aim)
+			fire_anim = 0.12
+			_muzzle_flash()
+
+
+## 滚轮切换：0 主武器 / 1 副武器；切换时取消蓄力并同步手持外观
+func _cycle_slot() -> void:
+	if sub == null or not is_instance_valid(sub):
+		return
+	active_slot = 1 - active_slot
+	if sub.has_method("set_active"):
+		sub.set_active(active_slot == 1)
+	if gun != null and is_instance_valid(gun):
+		gun.visible = active_slot == 0
+	Sfx.play("ui", -8.0)
+	InputBuffer.clear("shoot")
+	var label := "副武器「%s」" % String(sub.display_name) if active_slot == 1 \
+		else "主武器「%s」" % String(data.weapon_name if data != null else "武器")
+	notify(label, 1.1)
+
+
+## 对白/暂停结束后调用：清空缓冲并锁定攻击，避免那一下点击直接开火
+func lock_input(t: float = 0.35) -> void:
+	input_lock = maxf(input_lock, t)
+	_shoot_armed = false
+	InputBuffer.clear_all()
 
 
 func _muzzle_flash() -> void:

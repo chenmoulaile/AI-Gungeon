@@ -4,13 +4,15 @@ extends "res://scripts/weapons/weapon_base.gd"
 
 const DMG := 5.0
 const RATE := 5.5
+## 参考图导出的像素杖（云灵杖头 + 紫穗），32×32 三帧
+const TEX := "res://assets/weapons/gpt_starter.png"
 
 
 func setup(p: Node) -> void:
 	super.setup(p)
 	mode_name = "云端龙息"
-	# 程序化长杖：56px 杖身 + 云晶杖头，弹体从杖尖发出
-	p.set_held("", 0.0, Color.WHITE, "staff", Color("#B06BFF"), 64.0)
+	# 直接用参考图的像素杖贴图，不再程序化画 88px 长杖（之前过大且压脸）
+	p.set_held(TEX, 0.0, Color.WHITE, "", Color("#B06BFF"), 44.0)
 
 
 func fire(dir: Vector2) -> void:

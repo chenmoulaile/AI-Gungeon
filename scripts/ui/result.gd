@@ -132,9 +132,6 @@ func _draw() -> void:
 	UiKit.text_center(self, GameConfig.BASE_W * 0.5, 298,
 		"组合 %d 组 · 协同 %d 组" % [GameState.combos.size(), GameState.synergies.size()],
 		UiKit.F_SMALL, UiKit.TEXT_DIM)
-	UiKit.text_center(self, GameConfig.BASE_W * 0.5, 342,
-		"非官方同人 · 完全免费 · 角色形象基于 B站 UP 主 ZipZipPipe 的二创（CC BY-NC-SA 4.0）",
-		UiKit.F_SMALL, Color(0.45, 0.50, 0.62))
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 

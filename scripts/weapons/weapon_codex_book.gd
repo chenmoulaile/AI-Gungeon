@@ -3,6 +3,8 @@ extends "res://scripts/weapons/weapon_base.gd"
 ## 按住左键：从书本前方射出持续光束，1s 内宽度 3→13、伤害同步提升；松开进入短冷却
 
 const BeamScript = preload("res://scripts/weapons/beam.gd")
+## 参考图导出的像素法典（棕革封面 + 橙色向日葵 + 金流苏），32×32 三帧
+const TEX := "res://assets/weapons/claude_starter.png"
 const GROW := 1.0
 const MIN_DPS := 26.0
 const MAX_DPS := 78.0
@@ -16,8 +18,8 @@ var _release_cd: float = 0.0
 func setup(p: Node) -> void:
 	super.setup(p)
 	mode_name = "法典之书"
-	# 程序化像素书：厚书脊 + 打开的双页，光束从书页前方发出
-	p.set_held("", 0.0, Color.WHITE, "book", Color("#FFB066"), 20.0)
+	# 直接用参考图的像素法典贴图，和角色/其它武器保持同一像素风
+	p.set_held(TEX, 0.0, Color.WHITE, "", Color("#FFB066"), 34.0)
 
 
 func fire(_dir: Vector2) -> void:

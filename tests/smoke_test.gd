@@ -95,7 +95,8 @@ func _test_character(cid: String) -> void:
 	_check(GameState.enemies.size() > 0, "%s: 首波敌人 %d 个" % [cid, GameState.enemies.size()])
 	GameState.player.invuln = 999.0
 
-	# 用真实输入通道开火
+	# 用真实输入通道开火（开局有 0.4s 输入锁，先等锁结束）
+	await _wait(0.5)
 	Input.action_press("shoot")
 	await _frames(30)
 	Input.action_release("shoot")
@@ -123,7 +124,8 @@ func _test_character(cid: String) -> void:
 		"%s: 技能生效（蓄力 %s / 光束 %d / 增益 %s / 护盾 %d / 小肥鱼 %d）"
 		% [cid, str(charged), beams2.size(), str(buff_ok), p.shield_hits, fish_n])
 	if cid == "deepseek":
-		_check(fish_n > 0 and float(p.token) < 80.0,
+		# Token 有自然回复，只要明显低于满值即可（召唤消耗 20）
+		_check(fish_n > 0 and float(p.token) < 95.0,
 			"deepseek: 鲸群集结消耗 Token 并召唤小肥鱼（Token %.0f / 鱼 %d）"
 			% [float(p.token), fish_n])
 
@@ -148,23 +150,33 @@ func _test_character(cid: String) -> void:
 	Input.action_release("move_right")
 	_check(p.global_position.distance_to(before) > 2.0, "%s: 翻滚位移生效" % cid)
 
-	# 专属副武器（Q）
+	# 专属副武器（滚轮切到副武器槽，左键使用）
 	if p.sub != null:
-		Input.action_press("sub_weapon")
+		Input.action_press("switch_weapon")
+		await _frames(3)
+		Input.action_release("switch_weapon")
+		await _frames(3)
+		_check(int(p.active_slot) == 1, "%s: 滚轮切到副武器槽" % cid)
+		Input.action_press("shoot")
 		if cid == "deepseek":
 			await _wait(0.6)
 			_check(bool(p.sub._charging) and float(p.charge_ratio) > 0.3,
 				"deepseek: 铁盆长按蓄力（%.0f%%）" % (float(p.charge_ratio) * 100.0))
-			Input.action_release("sub_weapon")
+			Input.action_release("shoot")
 			await _frames(4)
 			_check(not bool(p.sub._charging) and float(p.charge_ratio) <= 0.01,
 				"deepseek: 松手挥出并清空蓄力")
 		else:
 			await _frames(4)
-			Input.action_release("sub_weapon")
+			Input.action_release("shoot")
 			await _wait(0.2)
 		_check(float(p.sub.cd_left) > 0.0, "%s: 副武器「%s」进入冷却（%.1fs）"
 			% [cid, String(p.sub.display_name), float(p.sub.cd_left)])
+		# 切回主武器，后续用例仍能射击
+		Input.action_press("switch_weapon")
+		await _frames(3)
+		Input.action_release("switch_weapon")
+		await _frames(3)
 	else:
 		_check(false, "%s: 副武器节点缺失" % cid)
 

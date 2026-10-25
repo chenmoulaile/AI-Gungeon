@@ -22,6 +22,7 @@ func _configure() -> void:
 	display_name = "铁盆"
 	color = Color("#FFD166")
 	cd_total = 1.0
+	icon_path = "res://assets/weapons/basin_icon.png"
 
 
 func _process(delta: float) -> void:
@@ -33,9 +34,20 @@ func _process(delta: float) -> void:
 			queue_redraw()
 
 
+func set_active(v: bool) -> void:
+	# 切走时取消蓄力，避免松开鼠标时凭空挥一下
+	if not v and _charging:
+		_cancel()
+	super.set_active(v)
+
+
 func handle_input(delta: float) -> void:
 	if _charging:
-		if Input.is_action_pressed("sub_weapon"):
+		# 蓄力中：保持在副武器槽且按住左键才继续，否则挥出
+		var holding: bool = active and (Input.is_action_pressed("shoot")
+			or InputBuffer.peek("shoot"))
+		if holding:
+			InputBuffer.clear("shoot")
 			_charge = minf(CHARGE_MAX, _charge + delta)
 			if player != null and is_instance_valid(player):
 				player.charge_ratio = clampf(_charge / CHARGE_MAX, 0.0, 1.0)
@@ -50,7 +62,9 @@ func handle_input(delta: float) -> void:
 		else:
 			_release()
 		return
-	if Input.is_action_just_pressed("sub_weapon") and ready():
+	if not active:
+		return
+	if ready() and (InputBuffer.consume("shoot") or Input.is_action_just_pressed("shoot")):
 		_start_charge()
 
 
@@ -189,7 +203,7 @@ func _beg() -> void:
 func _draw() -> void:
 	if player == null or not is_instance_valid(player):
 		return
-	if _charging:
+	if _charging or active:
 		_draw_held_basin()
 	else:
 		_draw_head_basin()

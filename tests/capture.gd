@@ -65,12 +65,20 @@ func _run() -> void:
 	GameState.player.invuln = 999.0
 	Input.action_release("shoot")
 
-	# 副武器
-	Input.action_press("sub_weapon")
-	await _frames(6)
-	Input.action_release("sub_weapon")
-	await _frames(8)
+	# 副武器：滚轮切到铁盆，左键蓄力
+	Input.action_press("switch_weapon")
+	await _frames(4)
+	Input.action_release("switch_weapon")
+	await _frames(4)
+	Input.action_press("shoot")
+	await _frames(24)
 	await _shot("subweapon")
+	Input.action_release("shoot")
+	await _frames(6)
+	Input.action_press("switch_weapon")
+	await _frames(4)
+	Input.action_release("switch_weapon")
+	await _frames(4)
 
 	# 技能：蓄力到释放的瞬间
 	Input.action_press("skill")

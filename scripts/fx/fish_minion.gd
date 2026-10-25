@@ -3,12 +3,15 @@ extends Node2D
 ## 形象是 DeepSeek 角色精灵的缩小版；跟随玩家、自动索敌吐泡泡；14s 后淡出。
 
 const MINI_TEX: Texture2D = preload("res://assets/sprites/deepseek/idle.png")
+## 子代里手上的武器：铁盆概率更高，饭盆概率较低（都按 2px 块画，和缩小版身体同风格）
+const BASIN_CHANCE := 0.7
 
 var player = null
 var slot: int = 0
 var life: float = 14.0
 var fire_gap: float = 0.72
 var damage: float = 4.0
+var weapon_kind: String = "basin"
 
 var _t: float = 0.0
 var _fire_t: float = 0.3
@@ -21,6 +24,8 @@ func _ready() -> void:
 	z_index = 1
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	_fire_t = 0.2 + 0.18 * float(slot % 4)
+	# 每只子代里独立随机：铁盆 70%，饭盆 30%
+	weapon_kind = "basin" if SeedManager.randf() < BASIN_CHANCE else "bowl"
 
 
 func _process(delta: float) -> void:
@@ -107,6 +112,39 @@ func _draw() -> void:
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2(float(_dir), 1.0))
 	draw_texture_rect_region(MINI_TEX, Rect2(-13, -14, 26, 26), region)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+	# 手上武器：铁盆（多）/ 饭盆（少），随朝向翻到身体外侧
+	_draw_held_prop()
 	# 头顶小水泡
 	if int(_t * 3.0) % 4 == 0:
 		draw_rect(Rect2(7, -16, 2, 2), Color(0.78, 0.94, 1.0, 0.7))
+
+
+## 手上小武器（整像素块）：铁盆 70% / 大白饭盆 30%
+func _draw_held_prop() -> void:
+	var edge := Color("#15224A")
+	var blue := Color("#2E5BD0")
+	var hi := Color("#86E3FF")
+	var rice := Color("#F4F6FF")
+	var ox := 7.0 * float(_dir)
+	var oy := -1.0
+	if weapon_kind == "basin":
+		# 宽口浅盆：黑描边 + 蓝搪瓷 + 白饭
+		draw_rect(Rect2(ox - 4, oy - 1, 9, 1), edge)
+		draw_rect(Rect2(ox - 5, oy, 10, 1), edge)
+		draw_rect(Rect2(ox - 4, oy + 1, 9, 3), edge)
+		draw_rect(Rect2(ox - 3, oy + 4, 7, 1), edge)
+		draw_rect(Rect2(ox - 4, oy, 9, 3), blue)
+		draw_rect(Rect2(ox - 3, oy + 3, 7, 1), Color("#1B3A8F"))
+		draw_rect(Rect2(ox - 4, oy, 9, 1), hi)
+		draw_rect(Rect2(ox - 3, oy - 1, 7, 1), rice)
+		draw_rect(Rect2(ox - 1, oy - 2, 4, 1), rice)
+	else:
+		# 大白饭碗：窄一圈的蓝碗
+		draw_rect(Rect2(ox - 3, oy - 1, 7, 1), edge)
+		draw_rect(Rect2(ox - 4, oy, 8, 4), edge)
+		draw_rect(Rect2(ox - 3, oy + 4, 6, 1), edge)
+		draw_rect(Rect2(ox - 3, oy, 7, 3), blue)
+		draw_rect(Rect2(ox - 2, oy + 3, 5, 1), Color("#1B3A8F"))
+		draw_rect(Rect2(ox - 3, oy, 7, 1), hi)
+		draw_rect(Rect2(ox - 2, oy - 2, 6, 2), rice)
+		draw_rect(Rect2(ox - 1, oy - 3, 4, 1), rice)

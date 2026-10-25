@@ -262,30 +262,34 @@ func _draw_weapon(p) -> void:
 	var r := Rect2(396, 312, 236, 42)
 	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.88), UiKit.BORDER, UiKit.BORDER_HI, true)
 	var w = p.weapon
+	var active_sub: bool = int(p.active_slot) == 1
 	var icon_rect := Rect2(r.position + Vector2(6, 9), Vector2(24, 24))
-	if not UiKit.draw_icon(self, "res://assets/icons/weapons/%s.png" % GameState.char_id, icon_rect):
+	var icon_path := "res://assets/icons/weapons/%s.png" % GameState.char_id
+	if active_sub:
+		icon_path = "res://assets/weapons/basin_icon.png"
+	if not UiKit.draw_icon(self, icon_path, icon_rect):
 		_draw_gun_placeholder(icon_rect, GameConfig.char_color(GameState.char_id))
 	var nm := "武器"
-	if w != null and GameState.char_data != null:
-		nm = String(GameState.char_data.weapon_name)
+	if GameState.char_data != null:
+		nm = "铁盆（副）" if active_sub else String(GameState.char_data.weapon_name)
 	UiKit.text(self, Vector2(r.position.x + 36, r.position.y + 15), UiKit.fit(nm, 118, 12),
 		12, UiKit.TEXT)
-	var hint := "左键射击 · Q 副武器"
+	var hint := "滚轮切换武器 · 左键使用"
 	var hint_col := Color(0.42, 0.48, 0.58)
 	match String(p.char_id):
 		"deepseek":
-			hint = "大白饭 -7 · 铁盆"
+			hint = "铁盆（副）" if active_sub else "大白饭 -7 Token"
 		"gpt":
-			hint = "龙息 · 思维链"
+			hint = "思维链（副）" if active_sub else "云团追踪弹"
 		"claude":
-			hint = "光束 · 对齐"
+			hint = "对齐协议（副）" if active_sub else "蓄力光束"
 	if float(p.charge_ratio) > 0.0:
 		hint = "铁盆蓄力 %d%%" % int(round(float(p.charge_ratio) * 100.0))
 		hint_col = UiKit.GOLD
 	UiKit.text(self, Vector2(r.position.x + 36, r.position.y + 31),
 		UiKit.fit(hint, 118, 12), 12, hint_col)
 
-	# E / Q：像素键帽 + 3px 冷却条（8 段散点环放大后像噪点，已弃用）
+	# E / 铁盆图标：像素键帽 + 冷却条
 	var e_c := Vector2(r.position.x + 170, r.position.y + 16)
 	var q_c := Vector2(r.position.x + 208, r.position.y + 16)
 	if w != null:
@@ -301,9 +305,32 @@ func _draw_weapon(p) -> void:
 		if sready and not _sub_was_ready:
 			_sub_pulse = 0.45
 		_sub_was_ready = sready
-		_key(q_c, sub.ratio(), sub.color, "Q", sready, _sub_pulse)
+		_sub_icon(q_c, sub.ratio(), sub.color, active_sub, sready, _sub_pulse,
+			String(sub.icon_path))
 	else:
-		_key(q_c, 0.0, Color(0.4, 0.45, 0.55), "Q", false, 0.0)
+		_key(q_c, 0.0, Color(0.4, 0.45, 0.55), "-", false, 0.0)
+
+
+## 副武器槽图标：专属立绘 + 冷却条；当前手持时描边高亮
+func _sub_icon(c: Vector2, ratio: float, col: Color, active: bool, ready: bool,
+		pulse: float, path: String = "") -> void:
+	var cap := Rect2((c - Vector2(10, 10)).round(), Vector2(20, 20))
+	UiKit.frame(self, cap, Color(0.09, 0.13, 0.21) if ready else Color(0.07, 0.09, 0.14),
+		col if (ready or active) else UiKit.BORDER, Color(0, 0, 0, 0), false)
+	if path == "":
+		path = "res://assets/icons/weapons/%s.png" % GameState.char_id
+	if not UiKit.draw_icon(self, path, Rect2(cap.position + Vector2(2, 2), Vector2(16, 16))):
+		UiKit.text_center(self, c.x, c.y + 4.0, "副", 12, UiKit.WHITE)
+	var bar := Rect2(cap.position.x + 2, cap.end.y + 2, 16, 3)
+	draw_rect(bar, UiKit.VOID)
+	var lit: int = int(round(clampf(ratio, 0.0, 1.0) * 16.0))
+	if lit > 0:
+		draw_rect(Rect2(bar.position, Vector2(lit, 3)),
+			col if ready else col.darkened(0.45))
+	if active:
+		UiKit.corner_brackets(self, cap.grow(2), Color(1.0, 0.92, 0.55, 0.9), 3)
+	elif ready and pulse > 0.0:
+		UiKit.corner_brackets(self, cap.grow(1), Color(1, 1, 1, pulse * 1.2), 3)
 
 
 ## 单个键帽：20×20 硬框 + 字母 + 底部 16×3 冷却条；就绪时白色角括号脉冲

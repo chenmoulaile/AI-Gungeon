@@ -18,7 +18,7 @@ const HINTS := [
 	["WASD 移动", "先走两步，熟悉手感"],
 	["鼠标瞄准 · 左键射击", "打爆前面的靶子"],
 	["空格翻滚", "翻滚期间可以穿过子弹"],
-	["Q 专属副武器", "试试角色专属的那把武器"],
+	["滚轮切换副武器", "滚一下滚轮，切到角色专属那把武器"],
 ]
 
 
@@ -65,7 +65,7 @@ func _process(delta: float) -> void:
 				MetaProgress.set_tutorial_flag("rolled")
 				_advance()
 		3:
-			if Input.is_action_just_pressed("sub_weapon"):
+			if Input.is_action_just_pressed("switch_weapon"):
 				MetaProgress.set_tutorial_flag("sub")
 				_advance()
 	queue_redraw()
