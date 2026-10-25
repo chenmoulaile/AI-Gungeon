@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "手动发布时使用的 tag（例如 v0.5.0）"
+        description: "手动发布时使用的 tag（例如 v0.10.0）"
         required: false
         default: ""
 
@@ -90,12 +90,13 @@ jobs:
       - name: Write release notes
         run: |
           {
-            echo "## AI Gungeon ${{ github.ref_name }}"
+            echo "## AI Gungeon ${{ inputs.tag || github.ref_name }}"
             echo ""
-            echo "- P0：修复角色抠图黑框、训练场空场与 ESC 暂停冲突"
-            echo "- P1/P2：像素字体 + UiKit 像素组件层，全部界面逐屏重做"
-            echo "- P3：7 把武器 32×32 三帧手持图 + 24×24 图标 + 像素弹丸"
-            echo "- 导出预设排除开发资源，Web 包体 19MB"
+            echo "- v0.10 分支地图：每层 7 节点菱形网，门后二选一，事件房三选一"
+            echo "- 藏品稀有度分档（白/蓝/紫）+ 商店刷新与治疗服务"
+            echo "- 层末存款利息、敌人数量与缩放封顶、精英战利品"
+            echo "- HUD 分支小地图与已访问路径"
+            echo "- 手感：翻滚无敌 0.25s、击杀顿帧 0.1s、受击不再吞翻滚"
             echo ""
             echo "Windows zip / Linux tar.gz / Web zip（解压后用本地 HTTP 服务器打开 index.html）"
           } > release_notes.md
@@ -104,8 +105,8 @@ jobs:
       - name: Publish
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: AI Gungeon ${{ github.ref_name }}
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: AI Gungeon ${{ inputs.tag || github.ref_name }}
           body_path: release_notes.md
           files: dist/*/*
           draft: false
