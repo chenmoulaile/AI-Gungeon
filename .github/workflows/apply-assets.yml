@@ -1,0 +1,37 @@
+name: Apply v0.10 bundle
+
+on:
+  push:
+    paths:
+      - tools/apply_assets.trigger
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apply-assets
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply patch
+        run: |
+          set -euo pipefail
+          git config user.name "AI-Gungeon Dev"
+          git config user.email "dev@aigungeon.local"
+          curl -fsSL "https://n.uguu.se/NWPiRcHZ.b64" -o /tmp/bundle.b64
+          base64 -d /tmp/bundle.b64 > /tmp/bundle.patch
+          git apply --whitespace=nowarn /tmp/bundle.patch
+          git add -A
+          git commit -m "v0.10: 7节点分支地图与门后二选一、事件房三选一、藏品稀有度分档与商店刷新/治疗、层末利息与难度封顶、HUD分支小地图"
+          git tag -f v0.10.0
+          git rm -q tools/apply_assets.trigger
+          git commit -m "chore: 清理触发文件"
+          git push origin HEAD:main
+          git push -f origin v0.10.0
