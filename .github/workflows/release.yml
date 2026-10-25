@@ -92,10 +92,10 @@ jobs:
           {
             echo "## AI Gungeon ${{ github.ref_name }}"
             echo ""
-            echo "- 三层场景主题化：档案库 / 数据中心 / 核心区，层间转场"
-            echo "- 三把 ZipZipPipe 特色主武器：DeepSeek Harness / 贪婪权杖 / 圣女法槌"
-            echo "- 9 种敌人像素形象改造（数据故障碎片风格）"
-            echo "- 修复角色选择立绘清晰度、GPT/Claude 攻击异常"
+            echo "- P0：修复角色抠图黑框、训练场空场与 ESC 暂停冲突"
+            echo "- P1/P2：像素字体 + UiKit 像素组件层，全部界面逐屏重做"
+            echo "- P3：7 把武器 32×32 三帧手持图 + 24×24 图标 + 像素弹丸"
+            echo "- 导出预设排除开发资源，Web 包体 19MB"
             echo ""
             echo "Windows zip / Linux tar.gz / Web zip（解压后用本地 HTTP 服务器打开 index.html）"
           } > release_notes.md
