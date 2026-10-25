@@ -10,6 +10,8 @@ const ChaserScene = preload("res://scenes/enemies/enemy_chaser.tscn")
 const ShooterScene = preload("res://scenes/enemies/enemy_shooter.tscn")
 const SpreaderScene = preload("res://scenes/enemies/enemy_spreader.tscn")
 const BossScene = preload("res://scenes/enemies/boss.tscn")
+const BossMirrorScene = preload("res://scenes/enemies/boss_mirror.tscn")
+const BossTwinsScene = preload("res://scenes/enemies/boss_twins.tscn")
 const ChargerScene = preload("res://scenes/enemies/enemy_charger.tscn")
 const RingScene = preload("res://scenes/enemies/enemy_ring_shooter.tscn")
 const SummonerScene = preload("res://scenes/enemies/enemy_summoner.tscn")
@@ -404,9 +406,16 @@ func _spawn_wave() -> void:
 	var count: int = mini(want, 10)
 	var overflow: int = maxi(0, want - count)
 	var types := _wave_types()
+	var miniboss_spawned := false
 	for i in count:
 		var scene: PackedScene = _scene_for(String(types[i % types.size()]))
 		var e = scene.instantiate()
+		# 混合/高潮房首波 15% 概率升一只迷你首领
+		if i == 0 and not miniboss_spawned and wave_index == 1 \
+				and (room_kind == Kind.MIXED or room_kind == Kind.CLIMAX) \
+				and SeedManager.randf() < 0.15:
+			e.miniboss = true
+			miniboss_spawned = true
 		if room_kind == Kind.ELITE and SeedManager.randf() < 0.45:
 			e.elite = true
 		if overflow > 0 and i < overflow:
@@ -422,6 +431,9 @@ func _spawn_wave() -> void:
 		e.died.connect(_on_enemy_died)
 		enemy_layer.add_child(e)
 		alive_count += 1
+	if miniboss_spawned:
+		hud.show_toast("迷你首领出现 · 优先击杀", 2.0)
+		Sfx.play("warn_high", -2.0, 0.85)
 
 
 func _pool() -> Array:
@@ -482,13 +494,23 @@ func _scene_for(key: String) -> PackedScene:
 
 
 func _spawn_boss() -> void:
-	boss = BossScene.instantiate()
+	boss = _boss_scene_for_floor().instantiate()
 	boss.position = Vector2(GameConfig.ROOM_W * 0.66, GameConfig.ROOM_H * 0.5)
 	boss.died.connect(_on_enemy_died)
 	enemy_layer.add_child(boss)
 	alive_count = 1
 	Sfx.play("boss")
-	_show_boss_intro()
+	_show_boss_intro(boss.intro_config())
+
+
+## 三层 Boss 循环：1 回响聚合体 / 2 镜像回声 / 3 双生回响
+func _boss_scene_for_floor() -> PackedScene:
+	match (GameState.floor_index - 1) % 3:
+		1:
+			return BossMirrorScene
+		2:
+			return BossTwinsScene
+	return BossScene
 
 
 ## 开局对话：立绘 + 打字机
@@ -506,9 +528,9 @@ func _show_intro_dialog(deferred_wave: bool = false) -> void:
 		portrait = "res://assets/portraits/%s_full.png" % GameState.char_id
 	dlg.setup(portrait, d.display_name,
 		[d.blurb, "武器「%s」：%s" % [d.weapon_name, d.weapon_desc],
-		 "技能「%s」：%s" % [d.skill_name, d.skill_desc],
-		 "天赋「%s」：%s" % [d.passive_name, d.passive_desc],
-		 "清空 5 个房间，第 5 间是 Boss。走吧。"])
+			"技能「%s」：%s" % [d.skill_name, d.skill_desc],
+			"天赋「%s」：%s" % [d.passive_name, d.passive_desc],
+			"清空 5 个房间，第 5 间是 Boss。走吧。"])
 	get_tree().paused = true
 	dlg.finished.connect(func() -> void:
 		get_tree().paused = false
@@ -521,8 +543,9 @@ func _show_intro_dialog(deferred_wave: bool = false) -> void:
 			_spawn_wave())
 
 
-func _show_boss_intro() -> void:
+func _show_boss_intro(cfg: Dictionary = {}) -> void:
 	var intro = BossIntroScene.instantiate()
+	intro.setup(cfg)
 	intro.process_mode = Node.PROCESS_MODE_ALWAYS
 	ui_layer.add_child(intro)
 	get_tree().paused = true
@@ -780,4 +803,3 @@ func _on_run_ended() -> void:
 	if not is_inside_tree():
 		return
 	run_over.emit()
-
