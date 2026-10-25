@@ -108,13 +108,38 @@ func _run() -> void:
 	await _shot("floor_card")
 	card.queue_free()
 
-	# Boss 房（沿用第 3 层主题的强化版）
+	# Boss 房：第 1 层回响聚合体
+	GameState.floor_index = 1
+	g._debug_set_floor(1)
 	g.debug_start(FloorMap.KIND_BOSS)
 	await _frames(20)
 	await _shot("boss_intro")
 	await _close_overlay(g)
 	await _frames(30)
 	await _shot("boss_fight")
+	DialogueManager.clear()
+
+	# B2 镜像回声：等镜盾展开再截
+	GameState.floor_index = 2
+	g._debug_set_floor(2)
+	g.debug_start(FloorMap.KIND_BOSS)
+	await _frames(20)
+	await _shot("boss_mirror_intro")
+	await _close_overlay(g)
+	await _wait(3.2)
+	await _shot("boss_mirror_fight")
+	DialogueManager.clear()
+
+	# B3 双生回响
+	GameState.floor_index = 3
+	g._debug_set_floor(3)
+	g.debug_start(FloorMap.KIND_BOSS)
+	await _frames(20)
+	await _shot("boss_twins_intro")
+	await _close_overlay(g)
+	await _wait(2.2)
+	await _shot("boss_twins_fight")
+	DialogueManager.clear()
 
 	# 事件房三选一
 	g.debug_start(FloorMap.KIND_EVENT)
