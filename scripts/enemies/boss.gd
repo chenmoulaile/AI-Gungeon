@@ -14,8 +14,20 @@ const POOLS := {
 
 const MOVE_LABEL := {
 	"ring": "环", "fan": "扇", "charge": "冲", "homing": "追",
-	"summon": "召", "laser": "激", "spiral": "旋", "mine": "雷",
+	"summon": "召", "laser": "激", "spiral": "旋", "mine": "雷", "cross": "叉",
 }
+
+## 身份配置：登场界面与 HUD 都从这里取，子类在 _setup 里覆盖
+var boss_key: String = "echo"
+var display_name: String = "回响聚合体"
+var subtitle: String = "ECHO AGGREGATE"
+var intro_lines: Array = [
+	"三个助手的推理回响，在这个房间里聚成了一个实体。",
+	"它没有名字，只有你刚才打出的每一发子弹的记忆。",
+	"清空它，才能进入下一层。",
+]
+var accent_color: Color = Color("#b45cff")
+var light_color: Color = Color(0.72, 0.45, 1.0)
 
 var phase: int = 1
 var atk_cd: float = 1.6
@@ -41,7 +53,12 @@ func _setup() -> void:
 	radius = 27.0
 	contact_damage = 2
 	coin_value = 26
-	accent = Color("#b45cff")
+	_setup_common()
+
+
+## 子类设完数值后调用：公共标记、点光源、招式抽取
+func _setup_common() -> void:
+	accent = accent_color
 	is_boss = true
 	add_to_group("boss")
 	var light := PointLight2D.new()
@@ -49,14 +66,24 @@ func _setup() -> void:
 		light.texture = load("res://assets/fx/light_radial.png")
 	light.energy = 0.85
 	light.texture_scale = 1.5
-	light.color = Color(0.72, 0.45, 1.0)
+	light.color = light_color
 	light.shadow_enabled = true
 	light.shadow_filter = Light2D.SHADOW_FILTER_NONE
 	add_child(light)
-	# 本体不参与 2D 光照：否则自己的紫色光会把像素体染成洋红，看着像没做像素化
+	# 本体不参与 2D 光照：否则自己的点光会把像素体染色，看着像没做像素化
 	light_mask = 0
 	atk_cd = 1.8
 	_roll_moves()
+
+
+## 登场界面配置
+func intro_config() -> Dictionary:
+	return {
+		"name": display_name,
+		"subtitle": subtitle,
+		"lines": intro_lines,
+		"color": accent,
+	}
 
 
 ## 每个阶段抽 2 个不重复招式
