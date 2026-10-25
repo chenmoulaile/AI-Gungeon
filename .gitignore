@@ -12,7 +12,7 @@ build/
 tests/_shot_*
 tests/_web_*
 tools/_dbg_*
-tools/_*.png
+tools/_*.png*
 tools/_preview_sprites.*
 preview/shots/
 

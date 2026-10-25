@@ -1,38 +1,35 @@
 extends Control
-## 设置：TabContainer + 容器布局，任何分辨率下都不重叠
-## 音频 / 显示 / 操作 三个页签，每次只显示一个面板
+## 设置（v0.7 P2）：像素标签页 + 硬边滑条（8 段感）+ 方块开关。
+## 音频 / 显示 / 操作；Web 端隐藏不可用项。
 
 signal closed
 
 var _panel: Control = null
-
-const MARGIN := 32
+const MARGIN := 16
 
 var _tabs: TabContainer = null
 var _sliders: Dictionary = {}
-var _values: Dictionary = {}
 
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	modulate.a = 0.0
 	await get_tree().process_frame
 	if not is_inside_tree():
 		return
-	# 强制以 640x360 设计画布为基准，避免 Web 端按窗口像素计算导致偏移
 	position = Vector2.ZERO
 	size = Vector2(GameConfig.BASE_W, GameConfig.BASE_H)
 	_build()
 	var tw := create_tween()
-	tw.tween_property(self, "modulate:a", 1.0, 0.16)
+	tw.tween_property(self, "modulate:a", 1.0, 0.12)
 
 
 func _build() -> void:
 	var dim := ColorRect.new()
-	dim.color = Color(0.04, 0.07, 0.13, 0.55)
+	dim.color = Color(0.02, 0.03, 0.06, 0.72)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
@@ -42,8 +39,7 @@ func _build() -> void:
 	add_child(holder)
 
 	var panel := PanelContainer.new()
-	panel.add_theme_stylebox_override("panel", UiKit.panel_style(0.92))
-	# 以画布中心为锚点，向四周对称生长 —— 不依赖父容器尺寸
+	panel.add_theme_stylebox_override("panel", UiKit.panel_style(0.98))
 	panel.anchor_left = 0.5
 	panel.anchor_right = 0.5
 	panel.anchor_top = 0.5
@@ -63,26 +59,34 @@ func _build() -> void:
 	panel.add_child(margin)
 
 	var col := VBoxContainer.new()
-	col.add_theme_constant_override("separation", 10)
+	col.add_theme_constant_override("separation", 8)
 	col.custom_minimum_size = Vector2(520, 0)
 	margin.add_child(col)
 
+	var head := HBoxContainer.new()
+	col.add_child(head)
 	var title := Label.new()
 	title.text = "设置"
-	title.add_theme_font_size_override("font_size", 16)
-	title.add_theme_color_override("font_color", UiKit.TEXT)
-	col.add_child(title)
+	title.add_theme_font_size_override("font_size", 24)
+	title.add_theme_color_override("font_color", UiKit.CYAN)
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	head.add_child(title)
+	var hint := Label.new()
+	hint.text = "ESC 返回"
+	hint.add_theme_font_size_override("font_size", 12)
+	hint.add_theme_color_override("font_color", UiKit.TEXT_DIM)
+	head.add_child(hint)
 
 	_tabs = TabContainer.new()
-	_tabs.custom_minimum_size = Vector2(520, 230)
-	_tabs.add_theme_font_size_override("font_size", 9)
+	_tabs.custom_minimum_size = Vector2(520, 196)
+	_tabs.add_theme_font_size_override("font_size", 12)
 	_tabs.add_theme_stylebox_override("panel", _tab_panel())
-	_tabs.add_theme_stylebox_override("tab_selected", _tab_sb(UiKit.ACCENT, true))
-	_tabs.add_theme_stylebox_override("tab_unselected", _tab_sb(Color(0.90, 0.94, 1.0), false))
-	_tabs.add_theme_stylebox_override("tab_hovered", _tab_sb(Color(0.80, 0.90, 1.0), false))
-	_tabs.add_theme_stylebox_override("tab_disabled", _tab_sb(Color(0.88, 0.89, 0.92), false))
-	_tabs.add_theme_color_override("font_selected_color", Color(1, 1, 1))
-	_tabs.add_theme_color_override("font_unselected_color", UiKit.TEXT)
+	_tabs.add_theme_stylebox_override("tab_selected", _tab_sb(UiKit.DEEP, true))
+	_tabs.add_theme_stylebox_override("tab_unselected", _tab_sb(UiKit.VOID, false))
+	_tabs.add_theme_stylebox_override("tab_hovered", _tab_sb(UiKit.PANEL, false))
+	_tabs.add_theme_stylebox_override("tab_disabled", _tab_sb(UiKit.VOID, false))
+	_tabs.add_theme_color_override("font_selected_color", UiKit.CYAN)
+	_tabs.add_theme_color_override("font_unselected_color", UiKit.TEXT_DIM)
 	_tabs.add_theme_color_override("font_hovered_color", UiKit.TEXT)
 	col.add_child(_tabs)
 	_tabs.add_child(_audio_tab())
@@ -93,11 +97,9 @@ func _build() -> void:
 	footer.alignment = BoxContainer.ALIGNMENT_END
 	footer.add_theme_constant_override("separation", 8)
 	col.add_child(footer)
-	var back := Button.new()
-	back.text = "返回"
-	back.custom_minimum_size = Vector2(96, 32)
-	back.focus_mode = Control.FOCUS_NONE
-	UiKit.style_button(back, "primary")
+	var back := BaButton.new()
+	back.custom_minimum_size = Vector2(96, 22)
+	back.setup("返回", Rect2(0, 0, 96, 22), "primary", "", UiKit.F_BODY)
 	back.pressed.connect(_close)
 	footer.add_child(back)
 
@@ -137,61 +139,72 @@ func _video_tab() -> Control:
 func _input_tab() -> Control:
 	var box := _page("操作")
 	var tip := Label.new()
-	tip.text = "移动 WASD / 瞄准 鼠标 / 射击 左键 / 翻滚 空格\n技能 E / 副武器 Q / 暂停 ESC"
-	tip.add_theme_font_size_override("font_size", 8)
+	tip.text = "移动 WASD / 瞄准 鼠标 / 射击 左键 / 翻滚 空格\n技能 E / 副武器 Q / 暂停 ESC / 训练场 T"
+	tip.add_theme_font_size_override("font_size", 12)
 	tip.add_theme_color_override("font_color", UiKit.TEXT_DIM)
 	box.add_child(tip)
-	box.add_child(_slider_row("难度", "diff", float(Settings.difficulty) / 2.0,
+	var diff_row := _row("难度")
+	var diff_val := Label.new()
+	diff_val.add_theme_font_size_override("font_size", 12)
+	diff_val.add_theme_color_override("font_color", UiKit.GOLD)
+	diff_val.custom_minimum_size = Vector2(64, 0)
+	diff_val.text = ["简单", "普通", "困难"][clampi(Settings.difficulty, 0, 2)]
+	box.add_child(diff_row)
+	diff_row.add_child(_pixel_slider(float(Settings.difficulty) / 2.0, 0.5,
 		func(v: float) -> void:
 			Settings.difficulty = clampi(int(round(v * 2.0)), 0, 2)
-			SeedManager.difficulty = Settings.difficulty))
+			SeedManager.difficulty = Settings.difficulty
+			diff_val.text = ["简单", "普通", "困难"][Settings.difficulty]))
+	diff_row.add_child(diff_val)
 	return box
 
 
 func _tab_sb(col: Color, selected: bool) -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = col
-	sb.set_corner_radius_all(8)
-	sb.content_margin_left = 12
-	sb.content_margin_right = 12
-	sb.content_margin_top = 5
-	sb.content_margin_bottom = 5
-	if not selected:
+	sb.set_corner_radius_all(0)
+	sb.anti_aliasing = false
+	sb.content_margin_left = 10
+	sb.content_margin_right = 10
+	sb.content_margin_top = 4
+	sb.content_margin_bottom = 4
+	if selected:
+		sb.border_width_bottom = 2
+		sb.border_color = UiKit.CYAN
+	else:
 		sb.border_width_bottom = 1
-		sb.border_color = Color(0.78, 0.86, 0.98)
+		sb.border_color = UiKit.BORDER
 	return sb
 
 
 func _tab_panel() -> StyleBoxFlat:
 	var sb := StyleBoxFlat.new()
-	sb.bg_color = Color(1, 1, 1, 0.55)
-	sb.set_corner_radius_all(10)
+	sb.bg_color = Color(0.06, 0.09, 0.15, 1.0)
+	sb.set_corner_radius_all(0)
+	sb.anti_aliasing = false
 	sb.set_border_width_all(1)
-	sb.border_color = Color(0.80, 0.88, 1.0, 0.9)
-	sb.content_margin_left = 14
-	sb.content_margin_right = 14
-	sb.content_margin_top = 14
-	sb.content_margin_bottom = 12
+	sb.border_color = UiKit.BORDER
+	sb.content_margin_left = 12
+	sb.content_margin_right = 12
+	sb.content_margin_top = 10
+	sb.content_margin_bottom = 8
 	return sb
 
 
 func _page(name_text: String) -> VBoxContainer:
 	var box := VBoxContainer.new()
 	box.name = name_text
-	box.add_theme_constant_override("separation", 10)
-	var pad := MarginContainer.new()
-	pad.add_theme_constant_override("margin_left", 4)
-	pad.add_theme_constant_override("margin_top", 8)
+	box.add_theme_constant_override("separation", 8)
 	return box
 
 
 func _row(label_text: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 12)
+	row.add_theme_constant_override("separation", 10)
 	var l := Label.new()
 	l.text = label_text
-	l.custom_minimum_size = Vector2(110, 0)
-	l.add_theme_font_size_override("font_size", 9)
+	l.custom_minimum_size = Vector2(104, 0)
+	l.add_theme_font_size_override("font_size", 12)
 	l.add_theme_color_override("font_color", UiKit.TEXT)
 	row.add_child(l)
 	return row
@@ -199,49 +212,70 @@ func _row(label_text: String) -> HBoxContainer:
 
 func _slider_row(label_text: String, key: String, value: float, cb: Callable) -> Control:
 	var row := _row(label_text)
-	var s := HSlider.new()
-	s.min_value = 0.0
-	s.max_value = 1.0
-	s.step = 0.05
-	s.value = value
-	s.custom_minimum_size = Vector2(240, 20)
-	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	s.focus_mode = Control.FOCUS_NONE
-	var track := StyleBoxFlat.new()
-	track.bg_color = Color(0.86, 0.90, 0.97)
-	track.set_corner_radius_all(4)
-	track.content_margin_top = 3
-	track.content_margin_bottom = 3
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = UiKit.ACCENT
-	fill.set_corner_radius_all(4)
-	fill.content_margin_top = 3
-	fill.content_margin_bottom = 3
-	s.add_theme_stylebox_override("slider", track)
-	s.add_theme_stylebox_override("grabber_area", fill)
-	s.add_theme_stylebox_override("grabber_area_highlight", fill)
 	var val := Label.new()
 	val.text = "%d%%" % int(round(value * 100.0))
 	val.custom_minimum_size = Vector2(44, 0)
-	val.add_theme_font_size_override("font_size", 8)
+	val.add_theme_font_size_override("font_size", 12)
 	val.add_theme_color_override("font_color", UiKit.TEXT_DIM)
-	s.value_changed.connect(func(v: float) -> void:
+	row.add_child(_pixel_slider(value, 0.05, func(v: float) -> void:
 		val.text = "%d%%" % int(round(v * 100.0))
-		cb.call(v))
-	row.add_child(s)
+		cb.call(v)))
 	row.add_child(val)
-	_sliders[key] = s
+	_sliders[key] = row
 	return row
+
+
+func _pixel_slider(value: float, step: float, cb: Callable) -> HSlider:
+	var s := HSlider.new()
+	s.min_value = 0.0
+	s.max_value = 1.0
+	s.step = step
+	s.value = value
+	s.custom_minimum_size = Vector2(0, 20)
+	s.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	s.focus_mode = Control.FOCUS_NONE
+	var track := StyleBoxFlat.new()
+	track.bg_color = UiKit.VOID
+	track.set_corner_radius_all(0)
+	track.set_border_width_all(1)
+	track.border_color = UiKit.BORDER
+	track.content_margin_top = 5
+	track.content_margin_bottom = 5
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = UiKit.CYAN
+	fill.set_corner_radius_all(0)
+	fill.content_margin_top = 5
+	fill.content_margin_bottom = 5
+	s.add_theme_stylebox_override("slider", track)
+	s.add_theme_stylebox_override("grabber_area", fill)
+	s.add_theme_stylebox_override("grabber_area_highlight", fill)
+	# 8×12 金色方块滑块（程序生成，避免默认圆角贴图）
+	var img := Image.create_empty(8, 12, false, Image.FORMAT_RGBA8)
+	img.fill(UiKit.GOLD)
+	for x in 8:
+		img.set_pixel(x, 0, UiKit.BORDER_HI)
+		img.set_pixel(x, 11, UiKit.SHADOW)
+	s.add_theme_icon_override("grabber", ImageTexture.create_from_image(img))
+	s.add_theme_icon_override("grabber_highlight", ImageTexture.create_from_image(img))
+	s.value_changed.connect(cb)
+	return s
 
 
 func _toggle_row(label_text: String, value: bool, cb: Callable) -> Control:
 	var row := _row(label_text)
-	var c := CheckButton.new()
-	c.button_pressed = value
-	c.focus_mode = Control.FOCUS_NONE
-	c.add_theme_font_size_override("font_size", 9)
-	c.toggled.connect(func(on: bool) -> void: cb.call(on))
-	row.add_child(c)
+	var b := Button.new()
+	b.toggle_mode = true
+	b.button_pressed = value
+	b.custom_minimum_size = Vector2(56, 20)
+	b.focus_mode = Control.FOCUS_NONE
+	b.text = "开" if value else "关"
+	UiKit.style_button(b, "primary" if value else "ghost")
+	b.toggled.connect(func(on: bool) -> void:
+		b.text = "开" if on else "关"
+		UiKit.style_button(b, "primary" if on else "ghost")
+		Sfx.play("ui", -12.0)
+		cb.call(on))
+	row.add_child(b)
 	return row
 
 
@@ -263,7 +297,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_close()
 		get_viewport().set_input_as_handled()
 
-## 手动居中：不依赖 CenterContainer 在 Web 端的尺寸计算
+
 func _center_panel(panel: Control) -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame

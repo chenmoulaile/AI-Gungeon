@@ -1,5 +1,5 @@
 extends Control
-## 训练场分步引导（非模态，不暂停）：移动 -> 射击 -> 翻滚 -> 副武器
+## 训练场分步引导（v0.7 P2 像素版）：键帽/文字 + 4 格进度方块
 ## 每一步只显示一条提示，完成当前步骤才显示下一步；状态写入 meta.cfg 的 tutorial 节
 
 const TargetScript = preload("res://scripts/fx/training_target.gd")
@@ -22,9 +22,12 @@ const HINTS := [
 ]
 
 
-func setup(p: Node, host_node: Node) -> void:
+func setup(p: Node, host_node: Node, target: Node = null, enemy: Node = null) -> void:
 	player = p
 	host = host_node
+	# 训练场已经常驻靶和敌人时直接复用，不再额外生成
+	_target = target
+	_enemy = enemy
 	_start_pos = p.global_position if p != null else Vector2.ZERO
 	if MetaProgress.tutorial_flag("moved"):
 		step = 1
@@ -40,6 +43,7 @@ func setup(p: Node, host_node: Node) -> void:
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 
 
 func _process(delta: float) -> void:
@@ -69,7 +73,7 @@ func _process(delta: float) -> void:
 
 func _advance() -> void:
 	step += 1
-	_done_pop = 0.5
+	_done_pop = 0.6
 	Sfx.play("relic", -6.0, 1.4)
 	if step >= 4:
 		MetaProgress.mark_training_done()
@@ -90,19 +94,24 @@ func _enter_step() -> void:
 func _draw() -> void:
 	if step >= HINTS.size():
 		if _done_pop > 0.0:
-			UiKit.text_center(self, GameConfig.BASE_W * 0.5, GameConfig.BASE_H * 0.5,
-				"训练完成 · 按 ESC 返回", UiKit.F_H3,
-				Color(UiKit.ACCENT.r, UiKit.ACCENT.g, UiKit.ACCENT.b, _done_pop * 2.0))
+			var r := Rect2(220, 150, 200, 44)
+			UiKit.frame(self, r, UiKit.DEEP, UiKit.BORDER, UiKit.SUCCESS, true)
+			UiKit.text_center(self, r.get_center().x, r.position.y + 20, "训练完成",
+				UiKit.F_BODY, UiKit.SUCCESS)
+			UiKit.text_center(self, r.get_center().x, r.position.y + 36, "ESC 打开菜单",
+				UiKit.F_SMALL, UiKit.TEXT_DIM)
 		return
 	var hint: Array = HINTS[step]
 	var cx := GameConfig.BASE_W * 0.5
-	var cy := GameConfig.BASE_H - 78.0
-	var w := 190.0
-	var r := Rect2(cx - w * 0.5, cy - 22, w, 34)
-	draw_style_box(UiKit.box(Color(1, 1, 1, 0.90), 10, Color(1, 1, 1, 0.9), 1, true), r)
-	UiKit.text_center(self, cx, cy - 6, String(hint[0]), UiKit.F_H3, UiKit.TEXT)
-	UiKit.text_center(self, cx, cy + 6, String(hint[1]), UiKit.F_TINY, UiKit.TEXT_DIM)
-	# 步骤点
+	var r := Rect2(cx - 108, 264, 216, 48)
+	UiKit.frame(self, r, Color(UiKit.DEEP.r, UiKit.DEEP.g, UiKit.DEEP.b, 0.94),
+		UiKit.BORDER, UiKit.BORDER_HI, true)
+	draw_rect(Rect2(r.position.x, r.position.y, r.size.x, 2), UiKit.CYAN)
+	UiKit.text_center(self, cx, r.position.y + 18, String(hint[0]), UiKit.F_BODY, UiKit.TEXT)
+	UiKit.text_center(self, cx, r.position.y + 34, String(hint[1]), UiKit.F_SMALL, UiKit.TEXT_DIM)
+	# 4 个步骤方块
 	for i in 4:
-		var c := Vector2(cx - 21 + i * 14, cy + 20)
-		draw_circle(c, 2.6, UiKit.ACCENT if i <= step else Color(1, 1, 1, 0.5))
+		var c := Rect2(cx - 21 + i * 11, r.position.y + 40, 6, 4)
+		var col := UiKit.CYAN if i < step else (UiKit.GOLD if i == step else UiKit.RAISED)
+		draw_rect(c, col)
+		draw_rect(c, UiKit.SHADOW, false, 1.0)

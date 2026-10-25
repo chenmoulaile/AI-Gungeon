@@ -1,6 +1,6 @@
 extends Control
-## HUD（蔚蓝档案风格）：生命图标 / 金币 / 技能与副武器环形冷却 / 藏品侧栏 / Boss 血条 / 挑战
-## 全部贴边、半透明白底，中间 70% 区域完全留给弹幕
+## HUD（v0.7 P2）：像素终端风。左上 32 头像 + 10 段血条，右上楼层 + 8×6 小地图，
+## 左下金币/专武进度，右下武器图标 + Q/E 像素冷却块。中间 70% 留给弹幕。
 
 var toast_text: String = ""
 var toast_time: float = 0.0
@@ -23,13 +23,14 @@ var _skill_pulse: float = 0.0
 var _sub_pulse: float = 0.0
 var _sub_was_ready: bool = true
 var _skill_was_ready: bool = true
+var _coin_pop: float = 0.0
+var _last_coins: int = 0
 var _t: float = 0.0
 
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
-	if ResourceLoader.exists("res://resources/ui/theme.tres"):
-		theme = load("res://resources/ui/theme.tres")
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	GameState.combo_activated.connect(_on_combo_activated)
 	GameState.upgrades_changed.connect(_on_upgrades_changed)
@@ -38,6 +39,7 @@ func _ready() -> void:
 	ChallengeManager.challenge_changed.connect(_on_challenge)
 	ChallengeManager.completed.connect(_on_challenge_done)
 	_coins_shown = float(GameState.coins)
+	_last_coins = GameState.coins
 
 
 func _process(delta: float) -> void:
@@ -51,11 +53,13 @@ func _process(delta: float) -> void:
 	_challenge_pop = maxf(0.0, _challenge_pop - delta)
 	_skill_pulse = maxf(0.0, _skill_pulse - delta)
 	_sub_pulse = maxf(0.0, _sub_pulse - delta)
-	# 金币数字滚动
+	_coin_pop = maxf(0.0, _coin_pop - delta)
+	if GameState.coins != _last_coins:
+		_last_coins = GameState.coins
+		_coin_pop = 0.25
 	if absf(_coins_shown - float(GameState.coins)) > 0.01:
 		_coins_shown = move_toward(_coins_shown, float(GameState.coins),
 			maxf(1.0, absf(float(GameState.coins) - _coins_shown) * 8.0) * delta)
-	# 冷却完成时脉冲一次
 	var p = GameState.player
 	if p != null and is_instance_valid(p) and p.weapon != null:
 		var rdy: bool = float(p.weapon.skill_cd_left) <= 0.0
@@ -117,7 +121,7 @@ func _draw() -> void:
 	_draw_exclusive()
 	var p = GameState.player
 	if p != null and is_instance_valid(p):
-		_draw_rings(p)
+		_draw_weapon(p)
 		_draw_mode(p)
 	_draw_upgrades()
 	_draw_relic_desc()
@@ -126,143 +130,153 @@ func _draw() -> void:
 	_draw_toasts()
 
 
-# ---------------- 生命 ----------------
+# ---------------- 左上：头像 + 分段血条 ----------------
 func _draw_hearts() -> void:
 	var ratio: float = clampf(float(GameState.hp) / maxf(1.0, float(GameState.max_hp)), 0.0, 1.0)
-	var panel := Rect2(8, 6, 156, 42)
-	draw_style_box(UiKit.hud_panel(12), panel)
-	# 圆形头像
-	var av := UiKit.icon("res://assets/portraits/%s_avatar.png" % GameState.char_id)
-	var ar := Rect2(panel.position + Vector2(6, 6), Vector2(30, 30))
+	var panel := Rect2(8, 6, 196, 48)
+	UiKit.frame(self, panel, Color(0.06, 0.09, 0.15, 0.90), UiKit.BORDER, UiKit.BORDER_HI, true)
+
+	var av := UiKit.icon("res://assets/portraits/%s_pixel_avatar.png" % GameState.char_id)
+	var ar := Rect2(14, 12, 32, 32)
+	UiKit.inset(self, ar.grow(1), UiKit.VOID, UiKit.BORDER)
 	if av != null:
 		draw_texture_rect(av, ar, false)
-	draw_arc(ar.get_center(), 15.4, 0.0, TAU, 26, Color(0.55, 0.78, 1.0, 0.85), 1.2, true)
-	# 名字 + 血条 + 数值
+
 	var name_txt: String = String(GameState.char_data.display_name) if GameState.char_data != null else "AI"
-	UiKit.text(self, Vector2(panel.position.x + 42, panel.position.y + 13), name_txt,
-		UiKit.F_TINY, Color(0.92, 0.96, 1.0, 0.95))
-	var bar := Rect2(panel.position.x + 42, panel.position.y + 17, 104, 8)
-	draw_style_box(UiKit.box(Color(0.06, 0.10, 0.20, 0.65), 3, Color(0.40, 0.58, 0.85, 0.5), 1, false), bar)
-	var col := Color(0.36, 0.86, 0.72)
+	UiKit.text(self, Vector2(52, 21), name_txt, 12, UiKit.TEXT)
+
+	var bar := Rect2(52, 25, 144, 8)
+	var col := UiKit.SUCCESS
 	if ratio <= 0.3:
-		col = Color(1.0, 0.36, 0.42)
+		col = UiKit.DANGER
 	elif ratio <= 0.6:
-		col = Color(1.0, 0.76, 0.32)
-	var fill := Rect2(bar.position + Vector2(1, 1), Vector2(maxf(0.0, (bar.size.x - 2.0) * ratio), bar.size.y - 2.0))
-	if fill.size.x > 1.0:
-		draw_rect(fill, col)
-		draw_rect(Rect2(fill.position, Vector2(fill.size.x, 2.0)), Color(1, 1, 1, 0.35))
-		# 电量格
-		var seg := 12
-		for i in seg:
-			var x := bar.position.x + 1.0 + (bar.size.x - 2.0) * float(i) / float(seg)
-			draw_line(Vector2(x, bar.position.y + 1.0), Vector2(x, bar.end.y - 1.0),
-				Color(0.06, 0.10, 0.20, 0.45), 1.0)
+		col = UiKit.GOLD
+	UiKit.bar(self, bar, ratio, col)
+
+	UiKit.text(self, Vector2(52, 46), "HP %d/%d" % [GameState.hp, GameState.max_hp], 12,
+		UiKit.TEXT_DIM)
 	if ratio <= 0.3 and fmod(_t, 0.6) < 0.3:
-		draw_style_box(UiKit.box(Color(0, 0, 0, 0), 3, Color(1.0, 0.35, 0.35, 0.9), 1, false),
-			bar.grow(1.0))
-	UiKit.text(self, Vector2(panel.position.x + 42, panel.position.y + 35),
-		"HP %d/%d" % [GameState.hp, GameState.max_hp], UiKit.F_TINY,
-		Color(0.84, 0.90, 1.0, 0.9))
+		UiKit.corner_brackets(self, bar.grow(2), UiKit.DANGER, 3)
 
 
-# ---------------- 金币 ----------------
+# ---------------- 左下：金币 ----------------
 func _draw_coins() -> void:
-	var y := GameConfig.BASE_H - 22.0
-	var r := Rect2(8, y - 11, 86, 22)
-	draw_style_box(UiKit.hud_panel(10), r)
-	draw_circle(Vector2(r.position.x + 12, y), 5.2, Color(0.98, 0.80, 0.32))
-	draw_circle(Vector2(r.position.x + 12, y), 5.2, Color(0.55, 0.38, 0.06), false, 1.0)
-	draw_circle(Vector2(r.position.x + 10.6, y - 1.4), 1.6, Color(1, 1, 1, 0.85))
-	UiKit.text(self, Vector2(r.position.x + 22, y + 3.6), str(int(round(_coins_shown))),
-		UiKit.F_H3, Color(1.0, 0.94, 0.78))
+	var r := Rect2(8, 328, 96, 22)
+	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.90), UiKit.BORDER, UiKit.BORDER_HI, true)
+	# 金币图标 12×12：外圈 + 高光，硬边像素
+	var c := Vector2(r.position.x + 10, r.position.y + 5)
+	draw_rect(Rect2(c, Vector2(12, 12)), UiKit.GOLD)
+	draw_rect(Rect2(c + Vector2(3, 3), Vector2(6, 6)), Color("#B8860B"))
+	draw_rect(Rect2(c + Vector2(2, 2), Vector2(2, 2)), Color("#FFF3C4"))
+	var num := str(int(round(_coins_shown)))
+	UiKit.text(self, Vector2(r.position.x + 28, r.position.y + 15), num, 12,
+		UiKit.GOLD if _coin_pop > 0.0 else UiKit.TEXT)
+	UiKit.text(self, Vector2(r.position.x + 57, r.position.y + 15), "COIN", 12,
+		Color(0.45, 0.5, 0.6))
 
 
+# ---------------- 右上：楼层 + 小地图 ----------------
 func _draw_room_info() -> void:
-	var s := "B%d  ·  %d/5" % [GameState.floor_index, GameState.room_index]
-	var w := UiKit.measure(s, UiKit.F_TINY) + 12.0
-	var r := Rect2(GameConfig.BASE_W - w - 8, 8, w, 14)
-	draw_style_box(UiKit.box(Color(1, 1, 1, 0.28), 7, Color(1, 1, 1, 0.3), 1, false), r)
-	UiKit.text_center(self, r.get_center().x, r.get_center().y + 2.2, s, UiKit.F_TINY,
-		Color(0.96, 0.97, 1.0, 0.9))
+	var s := "B%d - %02d" % [GameState.floor_index, GameState.room_index]
+	UiKit.text_right(self, 632, 20, s, 12, UiKit.CYAN)
+	# 小地图 48×32：3×2 房间格
+	var mr := Rect2(584, 24, 48, 32)
+	UiKit.frame(self, mr, UiKit.VOID, UiKit.BORDER, Color(0, 0, 0, 0), false)
+	var total := 5
+	for i in total:
+		var gx := int(i % 3)
+		var gy := int(i / 3)
+		var cell := Rect2(mr.position + Vector2(2 + gx * 15, 2 + gy * 15), Vector2(13, 13))
+		var here: bool = (i + 1) == GameState.room_index
+		draw_rect(cell, UiKit.RAISED if here else Color(0.10, 0.13, 0.21))
+		if here:
+			draw_rect(cell, UiKit.CYAN, false, 1.0)
+			draw_rect(Rect2(cell.get_center() - Vector2(1, 1), Vector2(3, 3)), UiKit.WHITE)
+		else:
+			draw_rect(cell, UiKit.BORDER, false, 1.0)
 
 
-# ---------------- 专武解锁进度 ----------------
+# ---------------- 左下：专武解锁 ----------------
 func _draw_exclusive() -> void:
 	var d = GameState.char_data
 	if d == null:
 		return
 	var ready: bool = GameState.exclusive_ready()
-	var w := 118.0
-	var r := Rect2(8, GameConfig.BASE_H - 56.0, w, 20)
-	draw_style_box(UiKit.hud_panel(9), r)
-	# 进度更新时闪金色
+	var r := Rect2(8, 300, 156, 24)
+	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.86), UiKit.BORDER, Color(0, 0, 0, 0), false)
 	var pv: int = int(round(GameState.exclusive_ratio() * 100.0))
 	if pv != _excl_last:
 		_excl_last = pv
 		_excl_flash = 0.6
 	_excl_flash = maxf(0.0, _excl_flash - get_process_delta_time())
 	var title := "%s %s" % [d.exclusive_name, "OK" if ready else GameState.exclusive_progress()]
-	UiKit.text(self, r.position + Vector2(6, 13), title, UiKit.F_TINY,
-		Color(1.0, 0.86, 0.40) if ready or _excl_flash > 0.0 else Color(0.80, 0.88, 1.0, 0.9))
-	var bar := Rect2(r.position.x + 6, r.position.y + 15, w - 12, 3)
-	draw_rect(bar, Color(0.10, 0.16, 0.30, 0.9))
+	UiKit.text(self, r.position + Vector2(6, 12), UiKit.fit(title, r.size.x - 12, 12), 12,
+		UiKit.GOLD if ready or _excl_flash > 0.0 else UiKit.TEXT_DIM)
+	var bar := Rect2(r.position.x + 6, r.position.y + 17, r.size.x - 12, 4)
+	draw_rect(bar, UiKit.VOID)
 	var ratio: float = GameState.exclusive_ratio()
-	if ratio > 0.01:
-		draw_rect(Rect2(bar.position, Vector2(bar.size.x * ratio, bar.size.y)),
-			Color(1.0, 0.84, 0.38) if ready else Color(0.48, 0.72, 1.0))
+	var segs := 24
+	var lit := int(round(ratio * segs))
+	for i in segs:
+		if i < lit:
+			draw_rect(Rect2(bar.position.x + i * 6, bar.position.y, 5, 4),
+				UiKit.GOLD if ready else UiKit.CYAN)
 
 
-# ---------------- 技能环（主技能 + 副武器） ----------------
-func _draw_rings(p) -> void:
+# ---------------- 右下：武器 + 键帽冷却 ----------------
+func _draw_weapon(p) -> void:
+	var r := Rect2(396, 314, 236, 38)
+	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.88), UiKit.BORDER, UiKit.BORDER_HI, true)
 	var w = p.weapon
-	var base := Vector2(GameConfig.BASE_W - 30.0, GameConfig.BASE_H - 32.0)
-	var col: Color = GameConfig.char_color(GameState.char_id)
+	var icon_rect := Rect2(r.position + Vector2(6, 7), Vector2(24, 24))
+	if not UiKit.draw_icon(self, "res://assets/icons/weapons/%s.png" % GameState.char_id, icon_rect):
+		_draw_gun_placeholder(icon_rect, GameConfig.char_color(GameState.char_id))
+	var nm := "武器"
+	if w != null and GameState.char_data != null:
+		nm = String(GameState.char_data.weapon_name)
+	UiKit.text(self, Vector2(r.position.x + 36, r.position.y + 15), UiKit.fit(nm, 96, 12),
+		12, UiKit.TEXT)
+	UiKit.text(self, Vector2(r.position.x + 36, r.position.y + 31), "左键射击", 12,
+		Color(0.42, 0.48, 0.58))
+
+	# E / Q：8 段像素环 + 键帽字
+	var e_c := Vector2(r.position.x + 176, r.position.y + 16)
+	var q_c := Vector2(r.position.x + 210, r.position.y + 16)
 	if w != null:
 		var cd: float = float(w.skill_cd_left)
 		var total: float = 8.0
 		if p.data != null:
 			total = maxf(0.5, p.data.skill_cd)
-		var ready: bool = cd <= 0.0
-		var ratio: float = clampf(1.0 - cd / total, 0.0, 1.0)
-		_ring(base, 15.0, ratio, col, "E", ready, cd, _skill_pulse, _skill_name(p))
-	# 副武器
+		_ring(e_c, 12.0, clampf(1.0 - cd / total, 0.0, 1.0),
+			GameConfig.char_color(GameState.char_id), "E", cd <= 0.0, cd, _skill_pulse)
 	var sub = p.sub
 	if sub != null and is_instance_valid(sub):
 		var sready: bool = sub.ready()
 		if sready and not _sub_was_ready:
 			_sub_pulse = 0.45
 		_sub_was_ready = sready
-		_ring(base + Vector2(-40, 2), 11.5, sub.ratio(), sub.color, "Q", sready,
-			float(sub.cd_left), _sub_pulse, String(sub.display_name))
+		_ring(q_c, 10.0, sub.ratio(), sub.color, "Q", sready, float(sub.cd_left), _sub_pulse)
+	else:
+		_ring(q_c, 10.0, 0.0, Color(0.4, 0.45, 0.55), "Q", false, 0.0, 0.0)
 
 
-func _skill_name(p) -> String:
-	if p.data != null:
-		return p.data.skill_name
-	return "技能"
+func _draw_gun_placeholder(rect: Rect2, accent: Color) -> void:
+	UiKit.inset(self, rect, UiKit.VOID, UiKit.BORDER)
+	var c := rect.position
+	draw_rect(Rect2(c + Vector2(4, 7), Vector2(13, 4)), accent)
+	draw_rect(Rect2(c + Vector2(14, 10), Vector2(4, 7)), accent)
+	draw_rect(Rect2(c + Vector2(7, 11), Vector2(5, 3)), accent.darkened(0.25))
 
 
 func _ring(c: Vector2, radius: float, ratio: float, col: Color, key: String,
-		ready: bool, cd: float, pulse: float, label: String) -> void:
-	var glow: float = 0.0
-	if ready:
-		glow = 0.5 + 0.5 * sin(_t * 3.0)
-	draw_circle(c, radius + 2.0, Color(1, 1, 1, 0.20))
-	UiKit.ring(self, c, radius, ratio, col if ready else col.darkened(0.15), 3.0,
-		Color(0.55, 0.62, 0.75, 0.55))
-	if ready:
-		draw_arc(c, radius + 2.0 + glow * 1.2, 0.0, TAU, 26,
-			Color(col.r, col.g, col.b, 0.35 * glow), 1.2, true)
-	if pulse > 0.0:
-		draw_arc(c, radius + 3.0 + (0.45 - pulse) * 10.0, 0.0, TAU, 26,
-			Color(1, 1, 1, pulse * 1.4), 1.4, true)
-	UiKit.text_center(self, c.x, c.y + 2.0, key, UiKit.F_SMALL,
-		UiKit.TEXT if ready else Color(0.30, 0.35, 0.45))
-	if radius >= 14.0:
-		UiKit.text_center(self, c.x, c.y + 10.0, label, UiKit.F_TINY, UiKit.TEXT_DIM)
-		if not ready:
-			UiKit.text_center(self, c.x, c.y - 6.0, "%.1f" % cd, UiKit.F_TINY, UiKit.TEXT_DIM)
+		ready: bool, cd: float, pulse: float) -> void:
+	UiKit.ring(self, c, radius + 4.0, ratio, col if ready else col.darkened(0.2), 4.0, UiKit.BORDER)
+	UiKit.text_center(self, c.x, c.y + 4.0, key, 12, UiKit.TEXT if ready else UiKit.TEXT_DIM)
+	if ready and pulse > 0.0:
+		UiKit.corner_brackets(self, Rect2(c - Vector2(radius + 5, radius + 5),
+			Vector2(radius + 5, radius + 5) * 2), Color(1, 1, 1, pulse * 1.5), 4)
+	elif not ready:
+		UiKit.text_center(self, c.x, c.y + 18.0, "%.1f" % cd, 12, UiKit.TEXT_DIM)
 
 
 func _draw_mode(p) -> void:
@@ -273,36 +287,27 @@ func _draw_mode(p) -> void:
 	var b: String = w.buff_text() if w.has_method("buff_text") else ""
 	if b != "":
 		txt += "  ·  " + b
-	var wd := UiKit.measure(txt, UiKit.F_TINY) + 16.0
-	var r := Rect2(GameConfig.BASE_W * 0.5 - wd * 0.5, GameConfig.BASE_H - 20, wd, 14)
-	draw_style_box(UiKit.box(Color(0.72, 0.62, 1.0, 0.30), 7, Color(1, 1, 1, 0.35), 1, false), r)
-	UiKit.text_center(self, r.get_center().x, r.get_center().y + 2.2, txt, UiKit.F_TINY,
-		Color(0.98, 0.97, 1.0, 0.95))
+	var wd := UiKit.measure(txt, 12) + 16.0
+	var r := Rect2(GameConfig.BASE_W * 0.5 - wd * 0.5, 294, wd, 18)
+	UiKit.frame(self, r, Color(0.16, 0.12, 0.26, 0.86), UiKit.PURPLE, Color(0, 0, 0, 0), false)
+	UiKit.text_center(self, r.get_center().x, r.get_center().y + 4.0, txt, 12, UiKit.WHITE)
 
 
-# ---------------- 藏品侧栏 ----------------
+# ---------------- 右侧：藏品 ----------------
 func _draw_upgrades() -> void:
 	var x := GameConfig.BASE_W - 26.0
-	var y := 30.0
+	var y := 64.0
 	for uid in GameState.upgrades:
 		var up: Upgrade = UpgradeDB.get_upgrade(uid)
 		if up == null:
 			continue
 		var pop: float = float(_pop.get(uid, 0.0))
-		var sc: float = 1.0
-		if pop > 0.0:
-			sc = 1.0 + 0.15 * sin(clampf(pop / 0.45, 0.0, 1.0) * PI)
-		var size := 18.0 * sc
-		var r := Rect2(Vector2(x + (18.0 - size) * 0.5, y + (18.0 - size) * 0.5),
-			Vector2(size, size))
-		draw_style_box(UiKit.box(Color(1, 1, 1, 0.55), 5, Color(1, 1, 1, 0.6), 1, false),
-			r.grow(1.0))
-		UiKit.draw_icon(self, up.icon_path, r)
-		if pop > 0.0:
-			draw_style_box(UiKit.box(Color(0, 0, 0, 0), 5, Color(1.0, 0.85, 0.4, pop * 0.9), 1, false),
-				r.grow(1.0))
+		var r := Rect2(x, y, 18, 18)
+		UiKit.frame(self, r, UiKit.PANEL, UiKit.GOLD if pop > 0.0 else UiKit.BORDER,
+			Color(0, 0, 0, 0), false)
+		UiKit.draw_icon(self, up.icon_path, r.grow(-1))
 		y += 21.0
-		if y > GameConfig.BASE_H - 54.0:
+		if y > GameConfig.BASE_H - 74.0:
 			break
 
 
@@ -313,13 +318,12 @@ func _draw_relic_desc() -> void:
 	if up == null:
 		return
 	var a: float = clampf(_desc_t / 0.6, 0.0, 1.0)
-	var w := 148.0
-	var r := Rect2(Vector2(GameConfig.BASE_W - w - 8.0,
-		34.0 + minf(GameState.upgrades.size(), 8) * 21.0 + 4.0), Vector2(w, 40))
-	draw_style_box(UiKit.box(Color(1, 1, 1, 0.92 * a), 8, Color(1, 1, 1, 0.8), 1, true), r)
-	UiKit.text(self, r.position + Vector2(7, 13), up.title, UiKit.F_SMALL,
-		Color(0.80, 0.55, 0.10, a))
-	UiKit.text_block(self, r.position + Vector2(7, 26), up.desc, w - 14, UiKit.F_TINY,
+	var w := 164.0
+	var r := Rect2(GameConfig.BASE_W - w - 8.0,
+		64.0 + minf(GameState.upgrades.size(), 8) * 21.0 + 4.0, w, 44)
+	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.94 * a), UiKit.GOLD, UiKit.BORDER, true)
+	UiKit.text(self, r.position + Vector2(7, 13), up.title, 12, Color(1, 0.82, 0.4, a))
+	UiKit.text_block(self, r.position + Vector2(7, 27), up.desc, w - 14, 12,
 		Color(UiKit.TEXT.r, UiKit.TEXT.g, UiKit.TEXT.b, a), 2)
 
 
@@ -328,64 +332,66 @@ func _draw_boss() -> void:
 	var boss = get_tree().get_first_node_in_group("boss")
 	if boss == null or not is_instance_valid(boss) or boss.dead:
 		return
-	var w := 220.0
+	var w := 240.0
 	var x := (GameConfig.BASE_W - w) * 0.5
-	var y := 24.0
-	var r := Rect2(x - 5, y - 4, w + 10, 20)
-	draw_style_box(UiKit.box(Color(1, 1, 1, 0.26), 8, Color(1, 1, 1, 0.3), 1, false), r)
-	UiKit.bar(self, Rect2(x, y + 2, w, 6), boss.hp_ratio(),
-		Color(0.95, 0.36, 0.52) if boss.phase < 3 else Color(0.95, 0.28, 0.28),
-		Color(0.35, 0.30, 0.45, 0.5))
+	var y := 16.0
+	UiKit.text(self, Vector2(x, y + 10), "回响聚合体 · 第 %d 阶段" % boss.phase, 12, UiKit.TEXT)
+	# 2 段血条，段间 2px
+	var seg_w := (w - 2) * 0.5
+	for i in 2:
+		UiKit.bar(self, Rect2(x + i * (seg_w + 2), y + 16, seg_w, 8), boss.hp_ratio(),
+			UiKit.DANGER if boss.phase >= 2 else Color("#E45C7A"), UiKit.VOID)
 	for mark in [0.6, 0.25]:
 		var mx: float = x + w * float(mark)
-		draw_line(Vector2(mx, y + 1), Vector2(mx, y + 9), Color(1, 1, 1, 0.55), 1.0)
-	UiKit.text(self, Vector2(x, y - 1), "回响聚合体 · 第 %d 阶段" % boss.phase, UiKit.F_TINY,
-		Color(1, 1, 1, 0.9))
+		draw_line(Vector2(mx, y + 16), Vector2(mx, y + 24), UiKit.DEEP, 1.0)
 	var mv: Array = boss.current_moves() if boss.has_method("current_moves") else []
 	var labels := {"ring": "环", "fan": "扇", "charge": "冲", "homing": "追",
 		"summon": "召", "laser": "激", "spiral": "旋", "mine": "雷"}
 	for i in mv.size():
-		UiKit.text(self, Vector2(x + w - 14.0 - i * 13.0, y + 17),
-			String(labels.get(String(mv[i]), "?")), UiKit.F_TINY, Color(1, 0.92, 0.85, 0.75))
+		UiKit.text(self, Vector2(x + w - 14.0 - i * 15.0, y + 34),
+			String(labels.get(String(mv[i]), "?")), 12, Color(1, 0.92, 0.85, 0.75))
 	if float(boss.telegraph) > 0.0:
 		var a: float = clampf(float(boss.telegraph) / 0.75, 0.0, 1.0)
-		UiKit.text_center(self, GameConfig.BASE_W * 0.5, y + 24, "阶段转换！", UiKit.F_SMALL,
-			Color(1.0, 0.55, 0.55, a))
+		UiKit.text_center(self, GameConfig.BASE_W * 0.5, y + 46, "阶段转换！", 12,
+			Color(1.0, 0.36, 0.47, a))
 
 
-# ---------------- 挑战 ----------------
+# ---------------- 挑战横幅 ----------------
 func _draw_challenge() -> void:
 	if _challenge_title == "":
 		return
 	var txt := "挑战 · %s" % _challenge_desc
-	var size := UiKit.F_TINY + int(round(2.0 * _challenge_pop))
-	var col := UiKit.GOLD if _challenge_done else Color(1, 1, 1, 0.78)
-	var w := UiKit.measure(txt, size) + 18.0
-	var r := Rect2(GameConfig.BASE_W * 0.5 - w * 0.5, 4, w, 12)
-	draw_style_box(UiKit.box(Color(0.10, 0.16, 0.28, 0.42), 6, Color(1, 1, 1, 0.2), 1, false), r)
-	UiKit.text_center(self, r.get_center().x, r.get_center().y + 2.0, txt, size, col)
+	var col := UiKit.GOLD if _challenge_done else UiKit.TEXT_DIM
+	var w := UiKit.measure(txt, 12) + 18.0
+	var r := Rect2(GameConfig.BASE_W * 0.5 - w * 0.5, 66, w, 18)
+	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.86),
+		UiKit.GOLD if _challenge_done else UiKit.BORDER, Color(0, 0, 0, 0), false)
+	UiKit.text_center(self, r.get_center().x, r.get_center().y + 4.0, txt, 12, col)
+	if _challenge_done and _challenge_pop > 0.0:
+		UiKit.corner_brackets(self, r.grow(1), Color(1, 1, 1, _challenge_pop), 4)
 
 
+# ---------------- Toast / 组合 ----------------
 func _draw_toasts() -> void:
 	if toast_time > 0.0:
 		var a: float = clampf(toast_time, 0.0, 1.0)
-		var w := UiKit.measure(toast_text, UiKit.F_H3) + 24.0
-		var r := Rect2(GameConfig.BASE_W * 0.5 - w * 0.5, GameConfig.BASE_H * 0.30, w, 20)
-		draw_style_box(UiKit.box(Color(1, 1, 1, 0.90 * a), 10, Color(1, 1, 1, 0.9 * a), 1, true), r)
-		UiKit.text_center(self, r.get_center().x, r.get_center().y + 4.0, toast_text,
-			UiKit.F_H3, Color(0.18, 0.26, 0.40, a))
+		var w := UiKit.measure(toast_text, 12) + 24.0
+		var r := Rect2(GameConfig.BASE_W * 0.5 - w * 0.5, 96, w, 22)
+		UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.94 * a), UiKit.CYAN, UiKit.BORDER, true)
+		UiKit.text_center(self, r.get_center().x, r.get_center().y + 4.0, toast_text, 12,
+			Color(1, 1, 1, a))
 	if combo_time > 0.0:
 		var a2: float = clampf(combo_time, 0.0, 1.0)
-		UiKit.text_center(self, GameConfig.BASE_W * 0.5, GameConfig.BASE_H * 0.38,
-			combo_text, UiKit.F_SMALL, Color(0.95, 0.75, 0.25, a2))
+		UiKit.text_center(self, GameConfig.BASE_W * 0.5, 130, combo_text, 12,
+			Color(1.0, 0.82, 0.4, a2))
 
 
+# ---------------- 低血：4×4 抖动红边 ----------------
 func _draw_low_flash() -> void:
-	var a: float = clampf(_low_flash / 0.7, 0.0, 1.0) * 0.45
-	for i in 5:
-		var d: float = 8.0 + i * 6.0
-		var aa: float = a * (1.0 - float(i) / 5.0)
-		draw_rect(Rect2(0, 0, GameConfig.BASE_W, d), Color(0.9, 0.1, 0.15, aa))
-		draw_rect(Rect2(0, GameConfig.BASE_H - d, GameConfig.BASE_W, d), Color(0.9, 0.1, 0.15, aa))
-		draw_rect(Rect2(0, 0, d, GameConfig.BASE_H), Color(0.9, 0.1, 0.15, aa))
-		draw_rect(Rect2(GameConfig.BASE_W - d, 0, d, GameConfig.BASE_H), Color(0.9, 0.1, 0.15, aa))
+	var a: float = clampf(_low_flash / 0.7, 0.0, 1.0)
+	var col := Color(0.9, 0.12, 0.22, 0.18 * a)
+	var band := 6
+	UiKit.dither_rect(self, Rect2(0, 0, GameConfig.BASE_W, band), col, 2)
+	UiKit.dither_rect(self, Rect2(0, GameConfig.BASE_H - band, GameConfig.BASE_W, band), col, 2)
+	UiKit.dither_rect(self, Rect2(0, 0, band, GameConfig.BASE_H), col, 2)
+	UiKit.dither_rect(self, Rect2(GameConfig.BASE_W - band, 0, band, GameConfig.BASE_H), col, 2)

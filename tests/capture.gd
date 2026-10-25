@@ -58,7 +58,11 @@ func _run() -> void:
 	await _frames(30)
 	Input.action_release("move_right")
 	await _frames(16)
+	# 无敌闪烁会把角色压到 alpha 0.35，截图里看起来像"褪色"，截图前先关掉
+	GameState.player.invuln = 0.0
+	await _frames(2)
 	await _shot("battle")
+	GameState.player.invuln = 999.0
 	Input.action_release("shoot")
 
 	# 副武器
@@ -136,10 +140,26 @@ func _run() -> void:
 	main.open_settings()
 	await _frames(20)
 	await _shot("settings")
+	# 设置是 110 层的覆盖层，不关掉会挡住后面的训练场截图
+	if main._settings != null and is_instance_valid(main._settings):
+		main._settings.closed.emit()
+	await _frames(4)
 
 	# 训练场引导
 	main.show_training()
 	await _wait(0.8)
 	await _shot("training")
 
+	# 三个角色的配饰近景（鲸尾 / 龙翼 / 向日葵）
+	for cid in ["deepseek", "gpt", "claude"]:
+		main._on_character_chosen(cid)
+		await _wait(1.2)
+		await _close_overlay(main.current)
+		GameState.player.invuln = 0.0
+		await _frames(8)
+		await _shot("accent_" + cid)
+
+	# 先回主菜单把训练场释放掉，再退出：带着满场景直接 quit 会触发渲染资源泄漏崩溃
+	main.show_menu()
+	await _wait(1.2)
 	get_tree().quit()

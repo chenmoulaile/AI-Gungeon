@@ -1,6 +1,6 @@
 # AI Gungeon
 
-**v0.4.0** · 视觉/UI 全面重做 · 角色动态与专属副武器 · 完整流程与新手引导
+**v0.7.0-pixel** · 像素化整改（1px 描边 / NEAREST / 像素吸附）· 训练场常驻靶与敌人 · ESC 单一入口
 
 一款 2D 像素俯视角 Roguelike 射击游戏，用 **Godot 4 + GDScript** 开发。
 玩法参考《Enter the Gungeon》的核心循环（角色选择 → 房间清怪 → 开门 → 商店 → Boss → 下一层），
@@ -26,7 +26,7 @@ GPT 龙娘、Claude 大小姐形象基于 B站 UP 主 ZipZipPipe 的 AI 娘系�
 ### 方式一：直接运行已导出的构建
 
 ```
-E:\Projects\AiGungeon\build\AIGungeon.exe
+D:\projects\AiGungeon\build\windows\AIGungeon.exe
 ```
 
 ### 方式二：在 Godot 编辑器中运行
@@ -34,21 +34,20 @@ E:\Projects\AiGungeon\build\AIGungeon.exe
 1. 启动编辑器（绿色版，无需安装）：
 
    ```
-   E:\DevTools\Godot\Godot_v4.4.1-stable_win64.exe
+   D:\DevTools\Godot\Godot_v4.7.2-stable_win64.exe
    ```
 
-2. 打开工程：`E:\Projects\AiGungeon\project.godot`
+2. 打开工程：`D:\projects\AiGungeon\project.godot`
 3. 按 **F5** 运行。
 
 ### 方式三：浏览器本地预览（不弹游戏窗口）
 
 ```bat
 :: 1) 导出 Web 版
-set APPDATA=E:/DevTools/cache/appdata
-E:/DevTools/Godot/Godot_v4.4.1-stable_win64_console.exe --headless --path E:/Projects/AiGungeon --export-release "Web" build/web/index.html
+D:\DevTools\Godot\Godot_v4.7.2-stable_win64_console.exe --headless --path D:\projects\AiGungeon --export-release "Web" build/web/index.html
 
 :: 2) 起本地服务器（带 wasm MIME 与 COOP/COEP 头）
-E:/DevTools/Python/python.exe E:/Projects/AiGungeon/tools/serve_web.py 8765
+python D:\projects\AiGungeon\tools\serve_web.py 8765
 
 :: 3) 浏览器打开 http://127.0.0.1:8765/index.html
 ```
@@ -59,11 +58,74 @@ Web 版关闭了线程（`thread_support=false`），不需要特殊服务器配
 ### 方式四：命令行无头自测（不需要显示器）
 
 ```bat
-set APPDATA=E:\DevTools\cache\appdata
-E:\DevTools\Godot\Godot_v4.4.1-stable_win64_console.exe --headless --path E:\Projects\AiGungeon res://tests/smoke_test.tscn
+D:\DevTools\Godot\Godot_v4.7.2-stable_win64_console.exe --headless --path D:\projects\AiGungeon res://tests/smoke_test.tscn
 ```
 
 自测覆盖：三个角色开局 / 开火 / 技能 / 翻滚 / 清场开门 / 换房 / 商店购买 / Boss 三阶段 / 死亡结算。
+
+---
+
+## 构建桌面版与网页版
+
+### 0. 一次性准备
+
+1. 安装 Godot **4.7.2 stable**（绿色版即可，无需安装器）。
+2. 安装同版本导出模板：编辑器菜单 `编辑器 → 管理导出模板 → 下载并安装`。
+   检查目录 `%APPDATA%\Godot\export_templates\4.7.2.stable\` 存在。
+3. 新增/替换 PNG 资产后，先让 Godot 生成 `.import`，否则运行时读不到贴图：
+
+```bat
+D:\DevTools\Godot\Godot_v4.7.2-stable_win64_console.exe --headless --path D:\projects\AiGungeon --editor --quit
+```
+
+### 1. Windows 桌面版
+
+```bat
+D:\DevTools\Godot\Godot_v4.7.2-stable_win64_console.exe --headless --path D:\projects\AiGungeon --export-release "Windows Desktop" D:\projects\AiGungeon\build\windows\AIGungeon.exe
+```
+
+产物 `build/windows/AIGungeon.exe`：单文件，PCK 已内嵌，双击即玩。
+导出预设见 `export_presets.cfg`，已排除 `tests/`、`tools/`、`assets/reference/`、`preview/`、`docs/` 等开发资源。
+
+Linux（可选）：
+
+```bash
+godot --headless --path . --export-release "Linux" build/linux/AIGungeon.x86_64
+```
+
+### 2. 网页版
+
+```bat
+D:\DevTools\Godot\Godot_v4.7.2-stable_win64_console.exe --headless --path D:\projects\AiGungeon --export-release "Web" D:\projects\AiGungeon\build\web\index.html
+```
+
+产物目录 `build/web/`：`index.html`、`index.js`、`index.wasm`、`index.pck`。
+必须通过 HTTP 打开（`file://` 会被浏览器拦），本地预览：
+
+```bat
+python D:\projects\AiGungeon\tools\serve_web.py 8765
+```
+
+浏览器访问 `http://127.0.0.1:8765/index.html`。部署到静态服务器时保证 `.wasm`
+的 MIME 为 `application/wasm`（`serve_web.py` 已带 COOP/COEP 与 MIME 配置）。
+
+### 3. 一键发布（GitHub Actions）
+
+推送 `v*` tag 会触发 `.github/workflows/release.yml`：云端安装 Godot 4.7.2 与导出模板，
+分别导出 Windows / Linux / Web，打包后发布到 GitHub Release。
+
+```bash
+git tag v0.7.0
+git push origin v0.7.0
+```
+
+### 4. 导出前自检
+
+```bat
+D:\DevTools\Godot\Godot_v4.7.2-stable_win64_console.exe --headless --path D:\projects\AiGungeon res://tests/smoke_test.tscn
+```
+
+确认输出 `失败项: 0` 再导出。
 
 ---
 
@@ -271,13 +333,14 @@ assets/sprites/<角色>/
 > 中间那个视图是唯一完整的主体，因此脚本统一取 **index=1（中间视图）**，保证三个角色一致；
 > 侧视造型在俯视角射击里也更好读（左右移动靠 `flip_h` 翻转）。
 
-### 2. 高分辨率立绘（界面层）
+### 2. 像素立绘（界面层）
 
-脚本：`tools/make_portraits.py`
+脚本：`tools/make_pixel_sprites.py`（与战斗帧表同一条管线）
 
-- 输出 `assets/portraits/<角色>_full.png`（1024×1024）
-- 处理：去背景 → 取中间视图 → 等比缩放到画布高度 92% → 统一渐变底板 + 光晕 + 底部渐隐 + 内描边
-- 只用于**角色选择 / Boss 登场 / 结算 / 对话**，**不进入战斗场景**
+- 输出 `assets/portraits/<角色>_pixel.png`（96×128）与 `<角色>_pixel_avatar.png`（32×32）
+- 处理：参考三视图 → 去背景 → 取正面视图 → 等比缩放到 96×128 → 20 色量化 → 脸内噪点清理 → 补画虹膜 → 统一 1px 描边
+- UI 全部用 `TEXTURE_FILTER_NEAREST` + `UiKit.draw_tex_contain()` 最近邻放大，禁止线性过滤
+- 只用于**角色选择 / Boss 登场 / 结算 / 对话 / HUD 头像**，**不进入战斗场景**
 
 ### 3. 视觉一致性
 
@@ -299,7 +362,7 @@ assets/sprites/<角色>/
 | 想替换的东西 | 怎么做 |
 | --- | --- |
 | 像素 sprite | 直接覆盖 `assets/sprites/<角色>/<动画>.png`，要求**横向帧表、每帧 64×64、脚底对齐 y=61**；或改 `tools/make_pixel_sprites.py` 里的 `CHARACTERS` 配置后重跑 |
-| 立绘 | 覆盖 `assets/portraits/<角色>_full.png`（1024×1024，PNG），界面自动生效 |
+| 立绘 | 覆盖 `assets/portraits/<角色>_pixel.png`（96×128）与 `<角色>_pixel_avatar.png`（32×32），或改 `tools/make_pixel_sprites.py` 的 `CHARACTERS["<角色>"]["portrait"]` 后重跑 |
 | 藏品图标 | 覆盖 `assets/icons/<id>.png`（32×32） |
 | 音效 | 覆盖 `assets/audio/<name>.wav`，文件名保持不变 |
 | 中文字体 | 把 ttf 放到 `assets/fonts/ui.ttf`，程序会优先用系统微软雅黑，找不到时回退到它 |
@@ -317,7 +380,7 @@ project.godot                 Godot 4 工程配置（1280x720 窗口 / 640x360 �
 assets/
   reference/                  参考图（只读，未修改原图）
   sprites/<角色>/             像素战斗资源 + palette.gpl
-  portraits/                  1024x1024 立绘
+  portraits/                  96x128 像素立绘 + 32x32 头像
   icons/                      藏品图标
   audio/                      程序化合成音效
   fonts/                      字体（可选，放 ui.ttf）
@@ -346,37 +409,27 @@ build/          Windows 导出产物
 
 ---
 
-## 环境与安装记录（全部在 E 盘，未使用任何 C 盘默认路径）
+## 环境与安装记录（当前机器）
 
 | 工具 | 版本 | 实际安装路径 | 是否加入 PATH |
 | --- | --- | --- | --- |
-| Godot | 4.4.1.stable | `E:\DevTools\Godot\Godot_v4.4.1-stable_win64.exe` | 否（用绝对路径调用） |
-| Godot 导出模板 | 4.4.1.stable | `E:\DevTools\cache\appdata\Godot\export_templates\4.4.1.stable\` | — |
-| Python | 3.13.14（便携版） | `E:\DevTools\Python\python.exe` | 否（用绝对路径调用） |
-| Pillow | 13.0.0 | `E:\DevTools\Python\Lib\site-packages` | — |
-| numpy | 2.5.4 | `E:\DevTools\Python\Lib\site-packages` | — |
-| LibreSprite | 未安装（可选，见下文） | 预留 `E:\DevTools\LibreSprite\` | — |
+| Godot | 4.7.2.stable | `D:\DevTools\Godot\Godot_v4.7.2-stable_win64.exe` | 否（用绝对路径调用） |
+| Godot 导出模板 | 4.7.2.stable | `%APPDATA%\Godot\export_templates\4.7.2.stable\` | — |
+| Python | 3.14.6 | `C:\Users\<你>\AppData\Local\Python\pythoncore-3.14-64\python.exe` | 否（用绝对路径调用） |
+| Pillow | 12.3.0 | 同上 `Lib\site-packages` | — |
+| numpy | 2.5.3 | 同上 `Lib\site-packages` | — |
 
-缓存与临时目录重定向：
-
-```
-pip   --cache-dir E:\DevTools\cache\pip
-TEMP/TMP = E:\DevTools\cache\temp
-APPDATA  = E:\DevTools\cache\appdata      （把 Godot 编辑器配置/导出模板从 C 盘拉走）
-```
-
-> 重要：如果直接用桌面图标启动 Godot，它会去 `C:\Users\<你>\AppData\Roaming\Godot` 找导出模板。
-> 想让编辑器也能导出，请在启动前设置 `APPDATA=E:\DevTools\cache\appdata`，
-> 或把 `E:\DevTools\cache\appdata\Godot\export_templates\4.4.1.stable` 整个目录
-> 复制到 `%APPDATA%\Godot\export_templates\4.4.1.stable`（这一步会写 C 盘，需你手动决定）。
+> 注意：PATH 里的 `python` 可能是 MSYS2 的 mingw python，**没有 pip 和 Pillow**。
+> 跑 `tools/make_pixel_sprites.py` 时请用上面那个 Python 3.14 的绝对路径。
+> Godot 导出模板现在位于默认 `%APPDATA%\Godot\export_templates\`，不再需要重定向 APPDATA。
 
 ---
 
 ## 已知问题与妥协
 
-1. **参考图被裁切**：上传的三视图截图中，左起第一个（正面）视图被裁掉了约三分之一，
-   因此像素 sprite 与立绘统一采用中间那个完整的侧视视图，造型为侧身。
-   如果你补一张完整的正面图，改 `tools/make_pixel_sprites.py` 里的 `idx = 1` 为 `0` 重跑即可。
+1. **Claude 仍用侧视图**：大肥鱼与 GPT 已有完整正面三视图（`assets/reference/*_3view*.png`），
+   Claude 只有旧的 Q 版三视图且左格被裁，因此保持 `view=1`（侧面）。
+   补一张完整的 Claude 正面三视图后，把 `make_pixel_sprites.py` 里 claude 的 `view` 改成 0 重跑即可。
 2. **Claude 没有全身立绘**：只有 Q 版三视图，立绘由 Q 版放大 + 锐化补到 1024×1024，
    风格上比另外两张更「Q」，但发色/瞳色/服装主色/雏菊发饰一致。
 3. **Boss 没有参考立绘**：Boss「回响聚合体」没有对应的参考图，
@@ -388,5 +441,6 @@ APPDATA  = E:\DevTools\cache\appdata      （把 Godot 编辑器配置/导出模
 7. **敌人没有像素 sprite**：需求只要求三个角色的战斗资源，敌人/Boss 用 `_draw()` 几何绘制，保证零占位图。
 8. **Web 版性能**：本地无头 Chrome（软件光栅）实测平均 49.9 FPS、最差 1% 帧 33.4ms，
    桌面 GPU 下预期稳定 60；如果目标机器较弱，优先减少 `PointLight2D` 数量（当前 3 个）而不是降画质。
-9. **像素 sprite 的细节损失**：从插画 5 倍降采样到 52px 高，裙摆花纹等细节不可逆丢失，
-   已通过对比度提升、暗部提亮、rim light、2px 描边尽量保住可读性。
+9. **像素 sprite 的细节损失**：从插画降采样到 52px 高，裙摆花纹等细节不可逆丢失。
+   现在改为「正面参考图 + 去背景 + 24 色量化 + 1px 主题色描边」，不再叠加 2px 近黑描边和描边 shader，
+   黑框问题已消除；细节保留仍受 52px 上限约束。

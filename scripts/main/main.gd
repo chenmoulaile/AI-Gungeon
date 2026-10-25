@@ -49,6 +49,8 @@ func _open_pause() -> void:
 		return
 	_pause_menu = PauseScript.new()
 	_pause_menu.name = "PauseMenu"
+	# 训练场里 ESC 只打开暂停菜单，退出训练场必须走菜单里的按钮
+	_pause_menu.in_training = current != null and current.get("is_training_room") == true
 	_pause_layer = CanvasLayer.new()
 	_pause_layer.layer = 100
 	add_child(_pause_layer)
@@ -57,10 +59,19 @@ func _open_pause() -> void:
 	_pause_menu.menu_pressed.connect(func() -> void:
 		_close_pause()
 		Transition.play("fade", show_menu))
+	_pause_menu.training_exit_pressed.connect(_exit_training)
 	_pause_menu.quit_pressed.connect(func() -> void: get_tree().quit())
 	DialogueManager.clear()
 	get_tree().paused = true
 	BaCursor.set_battle(false)
+
+
+## 暂停菜单 -> 退出训练场：先关菜单再让训练场自己发 exit_requested
+func _exit_training() -> void:
+	var t := current
+	_close_pause()
+	if t != null and is_instance_valid(t) and t.has_method("exit_training"):
+		t.exit_training()
 
 
 func _close_pause() -> void:
@@ -75,6 +86,8 @@ func _close_pause() -> void:
 
 
 func _swap(node: Node) -> void:
+	# 任何场景切换都必须先解除暂停并销毁暂停菜单，否则菜单会残留在新场景上
+	_close_pause()
 	DialogueManager.clear()
 	if current != null and is_instance_valid(current):
 		current.queue_free()

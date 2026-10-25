@@ -3,6 +3,7 @@ extends "res://scripts/weapons/weapon_base.gd"
 ## 左键召唤黑色虎鲸虚影冲刺撕咬，冷却 3s；被动满 10 token 时下一击翻倍并吞噬
 
 const HarnessScript = preload("res://scripts/weapons/harness_phantom.gd")
+const TEX := "res://assets/weapons/excl_harness.png"
 const BeamScript = preload("res://scripts/weapons/beam.gd")
 const CHARGE_TIME := 1.5
 const TOKEN_FULL := 10
@@ -17,7 +18,7 @@ var _pt: float = 0.0
 func setup(p: Node) -> void:
 	super.setup(p)
 	mode_name = "Harness"
-	p.set_held("", 0.0, Color(1, 1, 1, 1), "orca", Color(0.35, 0.55, 0.95, 1.0))
+	p.set_held(TEX, 0.0, Color(1, 1, 1, 1), "", Color(0.35, 0.55, 0.95, 1.0))
 
 
 func _process(delta: float) -> void:

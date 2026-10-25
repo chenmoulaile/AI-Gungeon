@@ -1,7 +1,8 @@
 extends Node2D
-## 角色“活着的细节”：程序化像素配饰 + Tween 摆动
-## DeepSeek 鲸尾（局部旋转 ±8°）/ GPT 龙翼（局部缩放 1.00→1.08）/ Claude 向日葵（±5°）
-## 全部用矩形块绘制，保持像素风；不依赖额外美术资源
+## 角色“活着的细节”：程序化像素配饰 + 离散整数帧摆动
+## DeepSeek 鲸尾 / GPT 龙翼 / Claude 向日葵
+## 全部用整数像素 rect 拼（禁止 polygon 与亚像素旋转）：摆动只切换 3 个整数偏移姿态，
+## 和 1px 描边的角色帧放在一起才不会出现"平滑配饰 + 像素身体"的割裂感。
 
 const TAIL_FILL := Color("#4c63c4")
 const TAIL_DARK := Color("#1b2350")
@@ -13,10 +14,21 @@ const PETAL := Color("#f2b13c")
 const PETAL_DARK := Color("#b87a1c")
 const SEED := Color("#6b4a1f")
 
+## 向日葵花瓣中心的三个离散姿态（顺时针/正中/逆时针），整数坐标，不做旋转变换
+const FLOWER_POSES := [
+	[Vector2i(4, 0), Vector2i(3, 3), Vector2i(0, 4), Vector2i(-3, 3),
+	 Vector2i(-4, 0), Vector2i(-3, -3), Vector2i(0, -4), Vector2i(3, -3)],
+	[Vector2i(3, 1), Vector2i(1, 3), Vector2i(-1, 3), Vector2i(-3, 1),
+	 Vector2i(-3, -1), Vector2i(-1, -3), Vector2i(1, -3), Vector2i(3, -1)],
+	[Vector2i(3, -1), Vector2i(1, -3), Vector2i(-1, -3), Vector2i(-3, -1),
+	 Vector2i(-3, 1), Vector2i(-1, 3), Vector2i(1, 3), Vector2i(3, 1)],
+]
+
 var char_id: String = "deepseek"
-var sway: float = 0.0     # -1..1，Tween 驱动
-var flap: float = 1.0     # 龙翼缩放
-var spin: float = 0.0     # 向日葵摆动
+var sway: float = 0.0     # -1..1，Tween 驱动，取整后是 3 个姿态
+var flap: float = 0.0     # 0..2，龙翼三档高度
+var spin: float = 0.0     # -1..1，向日葵三档
+var home := Vector2.ZERO  # 各角色的固定挂点，弹簧甩动只在它之上做整数偏移
 
 
 func setup(id: String) -> void:
@@ -28,14 +40,21 @@ func setup(id: String) -> void:
 	elif char_id == "gpt":
 		position = Vector2(0, -32)
 	else:
-		position = Vector2(8, -10)
+		# 鲸尾拖在脚边：手持物在胸口/手部高度，不会再盖住尾巴
+		position = Vector2(9, -8)
+	home = position
 	_start_tweens()
+
+
+## 弹簧甩动：只做整数像素平移。配饰一旦整体旋转，像素方块就会变成模糊的斜线。
+func set_shake(v: Vector2) -> void:
+	position = home + Vector2(roundf(v.x), roundf(v.y))
 
 
 func _start_tweens() -> void:
 	match char_id:
 		"deepseek":
-			# 尾巴缓慢摆 ±8°（周期 2.5s），偶尔快速扇一下
+			# 尾巴缓慢摆 ±1 帧（周期 2.5s）
 			var tw := create_tween().set_loops()
 			tw.tween_property(self, "sway", 1.0, 1.25)\
 				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
@@ -43,9 +62,9 @@ func _start_tweens() -> void:
 				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		"gpt":
 			var tw2 := create_tween().set_loops()
-			tw2.tween_property(self, "flap", 1.08, 1.5)\
+			tw2.tween_property(self, "flap", 2.0, 1.5)\
 				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-			tw2.tween_property(self, "flap", 1.0, 1.5)\
+			tw2.tween_property(self, "flap", 0.0, 1.5)\
 				.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 		"claude":
 			var tw3 := create_tween().set_loops()
@@ -62,58 +81,63 @@ func _process(_delta: float) -> void:
 func _draw() -> void:
 	match char_id:
 		"deepseek":
-			_draw_tail()
+			_draw_tail(int(round(sway)))
 		"gpt":
-			_draw_wings()
+			_draw_wings(int(round(flap)))
 		"claude":
-			_draw_flower()
+			_draw_flower(int(round(spin)) + 1)
 
 
-## 鲸尾：三节鳍片，绕根部旋转 ±8°
-func _draw_tail() -> void:
-	draw_set_transform(Vector2.ZERO, deg_to_rad(sway * 8.0), Vector2.ONE)
-	# 尾柄
-	draw_rect(Rect2(-2, 0, 5, 4), TAIL_FILL)
-	# 鳍片：两段，向斜上方展开
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(2, 1), Vector2(12, -2), Vector2(15, -8), Vector2(7, -7)]), TAIL_FILL)
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(2, 5), Vector2(10, 5), Vector2(13, 1), Vector2(3, 1)]), TAIL_FILL)
-	draw_polyline(PackedVector2Array([
-		Vector2(-2, 4), Vector2(2, 1), Vector2(12, -2), Vector2(15, -8)]), TAIL_DARK, 1.2)
-	draw_polyline(PackedVector2Array([
-		Vector2(-2, 4), Vector2(2, 5), Vector2(10, 5), Vector2(13, 1)]), TAIL_DARK, 1.2)
-	draw_line(Vector2(4, 0), Vector2(9, -5), TAIL_LIGHT, 1.0)
-	draw_line(Vector2(4, 3), Vector2(9, 3), TAIL_LIGHT, 1.0)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+func _rect(x: int, y: int, w: int, h: int) -> Rect2:
+	return Rect2(float(x), float(y), float(w), float(h))
 
 
-## 龙翼：左右各一片，缩放扇动
-func _draw_wings() -> void:
-	for side in [-1.0, 1.0]:
-		var base := Vector2(side * 5.0, 0)
-		var pts := PackedVector2Array([
-			base,
-			base + Vector2(side * 8.0, -8.0) * flap,
-			base + Vector2(side * 12.0, -4.0) * flap,
-			base + Vector2(side * 10.0, -1.0) * flap,
-			base + Vector2(side * 12.0, 4.0) * flap,
-			base + Vector2(side * 6.0, 6.0) * flap,
-		])
-		draw_colored_polygon(pts, WING_FILL)
-		var outline := pts.duplicate()
-		outline.append(pts[0])
-		draw_polyline(outline, WING_EDGE, 1.2)
-		draw_line(base, base + Vector2(side * 10.0, 0.0) * flap, WING_DARK, 1.0)
+## 一组整数 rect（Vector4i：x, y, w, h）：先铺 1px 深色（并集即外描边），再盖填充色
+func _pixel_shape(parts: Array, fill: Color, edge: Color) -> void:
+	for r: Vector4i in parts:
+		draw_rect(_rect(r.x - 1, r.y - 1, r.z + 2, r.w + 2), edge)
+	for r: Vector4i in parts:
+		draw_rect(_rect(r.x, r.y, r.z, r.w), fill)
 
 
-## 向日葵：8 片花瓣 + 花心，整体 ±5°
-func _draw_flower() -> void:
-	draw_set_transform(Vector2.ZERO, deg_to_rad(spin * 5.0), Vector2.ONE)
-	for i in 8:
-		var a := TAU * float(i) / 8.0
-		var c := Vector2(cos(a), sin(a)) * 3.6
-		draw_rect(Rect2(c - Vector2(1, 1), Vector2(2, 2)), PETAL)
-	draw_rect(Rect2(-2, -2, 4, 4), PETAL_DARK)
-	draw_rect(Rect2(-1, -1, 2, 2), SEED)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+## 鲸尾：尾柄 + 上下两级鳍片，p=-1/0/1 时鳍片反向起伏 1px
+func _draw_tail(p: int) -> void:
+	var parts := [
+		Vector4i(-2, 0, 5, 4),
+		Vector4i(1, -1 - p, 4, 2),
+		Vector4i(4, -3 - p, 4, 2),
+		Vector4i(8, -4 - p, 3, 2),
+		Vector4i(1, 3 + p, 4, 2),
+		Vector4i(4, 4 + p, 4, 2),
+		Vector4i(8, 5 + p, 3, 2),
+	]
+	_pixel_shape(parts, TAIL_FILL, TAIL_DARK)
+	draw_rect(_rect(3, -2 - p, 3, 1), TAIL_LIGHT)
+	draw_rect(_rect(6, -3 - p, 2, 1), TAIL_LIGHT)
+	draw_rect(_rect(4, 4 + p, 3, 1), TAIL_LIGHT)
+
+
+## 龙翼：左右各三级翼骨，p=0/1/2 时整体上下移动 1px
+func _draw_wings(p: int) -> void:
+	var lift: int = p - 1
+	var bars := [
+		Vector4i(12, -2, 4, 3),
+		Vector4i(15, -5, 4, 3),
+		Vector4i(18, -7, 3, 2),
+	]
+	for side in [-1, 1]:
+		var parts := []
+		for b: Vector4i in bars:
+			var x: int = b.x if side > 0 else -b.x - b.z
+			parts.append(Vector4i(x, b.y + lift, b.z, b.w))
+		_pixel_shape(parts, WING_FILL, WING_EDGE)
+		draw_rect(_rect(14 if side > 0 else -17, -1 + lift, 3, 1), WING_DARK)
+
+
+## 向日葵：8 片 2x2 花瓣 + 花心，只用整数坐标切换姿态
+func _draw_flower(pose: int) -> void:
+	var petals: Array = FLOWER_POSES[clampi(pose, 0, 2)]
+	for c in petals:
+		draw_rect(_rect(c.x - 1, c.y - 1, 2, 2), PETAL)
+	draw_rect(_rect(-2, -2, 4, 4), PETAL_DARK)
+	draw_rect(_rect(-1, -1, 2, 2), SEED)

@@ -1,5 +1,6 @@
 extends Node2D
 ## 训练场：无死亡、无统计；中央弹幕发生器可切换 6 种弹幕
+## 场景里常驻 3 个靶 + 2 个敌人，任何时候进来都有东西可打
 
 signal exit_requested
 
@@ -8,8 +9,34 @@ const PlayerScene = preload("res://scenes/player/player.tscn")
 const LaserScene = preload("res://scripts/weapons/laser_sweep.gd")
 const BulletScript = preload("res://scripts/weapons/bullet.gd")
 const GuideScript = preload("res://scripts/ui/tutorial_guide.gd")
+const TargetScript = preload("res://scripts/fx/training_target.gd")
+const ShooterScene = preload("res://scenes/enemies/enemy_shooter.tscn")
+const ChaserScene = preload("res://scenes/enemies/enemy_chaser.tscn")
 
 const PATTERN_NAMES := ["环形", "扇形", "追踪", "激光", "地雷", "反弹"]
+
+## 常驻靶位（房间归一化坐标）：都落在出生点相机的首屏内，进来就能看见
+const TARGET_SPOTS := [Vector2(0.36, 0.30), Vector2(0.44, 0.50), Vector2(0.52, 0.66)]
+## 常驻敌人位（0=射击怪 1=冲撞怪）
+const ENEMY_SPOTS := [[0, Vector2(0.54, 0.30)], [1, Vector2(0.50, 0.78)]]
+
+## 发生器：世界空间绘制，带脉冲，避免和 UI 屏幕坐标混用
+class GenPad extends Node2D:
+	var t: float = 0.0
+
+	func _process(delta: float) -> void:
+		t += delta
+		queue_redraw()
+
+	func _draw() -> void:
+		var pulse: float = 0.5 + 0.5 * sin(t * 3.0)
+		draw_rect(Rect2(-23, -10, 46, 20), Color("#131a2a"))
+		draw_rect(Rect2(-23, -10, 46, 20), Color("#3a4a70"), false, 1.0)
+		draw_rect(Rect2(-11, -6, 22, 12), Color("#1b2740"))
+		draw_rect(Rect2(-6, -4, 12, 8), Color(0.35, 0.76, 1.0, 0.40 + 0.5 * pulse))
+		for sx in [-1, 1]:
+			for sy in [-1, 1]:
+				draw_rect(Rect2(sx * 17 - 1, sy * 7 - 1, 2, 2), Color("#7fe3ff"))
 
 var room = null
 var player = null
@@ -18,7 +45,12 @@ var pattern: int = 0
 var timer: float = 1.2
 var t: float = 0.0
 var is_gameplay: bool = true
+## main 用这个标记决定暂停菜单是否显示"退出训练场"
+var is_training_room: bool = true
 var gen_pos := Vector2(GameConfig.ROOM_W * 0.5, GameConfig.ROOM_H * 0.5)
+var _gen_pad: Node2D = null
+var _targets: Array = []
+var _enemies: Array = []
 var _beeps: float = 0.0
 
 
@@ -32,6 +64,8 @@ func _ready() -> void:
 	GameState.enemies.clear()
 
 	room = RoomScene.instantiate()
+	# 训练场固定第一层主题：否则从 Boss 层进来会继承核心区的红色配色
+	room.floor_override = 1
 	add_child(room)
 	move_child(room, 0)
 
@@ -40,6 +74,14 @@ func _ready() -> void:
 	player.global_position = Vector2(GameConfig.ROOM_W * 0.28, GameConfig.ROOM_H * 0.5)
 	GameState.player = player
 	GameState.bullets_root = self
+
+	# 发生器画在世界空间（之前画在 CanvasLayer 里，用世界坐标当屏幕坐标，跑到屏幕右下角去了）
+	_gen_pad = GenPad.new()
+	_gen_pad.position = gen_pos
+	_gen_pad.z_index = 2
+	add_child(_gen_pad)
+
+	_spawn_lab()
 
 	ui = Control.new()
 	ui.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -52,10 +94,49 @@ func _ready() -> void:
 	if not MetaProgress.training_done():
 		var guide = GuideScript.new()
 		layer.add_child(guide)
-		guide.setup(player, self)
+		guide.setup(player, self, _first_target(), _first_enemy())
 	MusicManager.play("combat")
 	ScreenFx.set_battle(true)
 	BaCursor.set_battle(true)
+
+
+## 常驻靶与敌人：进训练场立刻可见，不依赖教程进度
+func _spawn_lab() -> void:
+	for p in TARGET_SPOTS:
+		var tg = TargetScript.new()
+		tg.position = Vector2(GameConfig.ROOM_W * p.x, GameConfig.ROOM_H * p.y)
+		add_child(tg)
+		_targets.append(tg)
+	for item in ENEMY_SPOTS:
+		_spawn_enemy(int(item[0]), item[1])
+
+
+func _spawn_enemy(kind: int, spot: Vector2) -> void:
+	var scene: PackedScene = ShooterScene if kind == 0 else ChaserScene
+	var e = scene.instantiate()
+	e.position = Vector2(GameConfig.ROOM_W * spot.x, GameConfig.ROOM_H * spot.y)
+	add_child(e)
+	_enemies.append(e)
+	# 打死 1.5s 后原地补一个，保证训练场不会越打越空
+	var respawn_spot := spot
+	e.died.connect(func(_who: Node) -> void:
+		await get_tree().create_timer(1.5).timeout
+		if is_inside_tree():
+			_spawn_enemy(kind, respawn_spot))
+
+
+func _first_target() -> Node:
+	for t2 in _targets:
+		if t2 != null and is_instance_valid(t2):
+			return t2
+	return null
+
+
+func _first_enemy() -> Node:
+	for e in _enemies:
+		if e != null and is_instance_valid(e):
+			return e
+	return null
 
 
 func _process(delta: float) -> void:
@@ -72,10 +153,10 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# ESC 不在这里处理：统一由 main.gd 打开暂停菜单，
+	# 训练场只能从暂停菜单里的"退出训练场"离开，避免一次 ESC 触发两套逻辑
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
-			KEY_ESCAPE:
-				_exit()
 			KEY_Q, KEY_LEFT:
 				pattern = (pattern + PATTERN_NAMES.size() - 1) % PATTERN_NAMES.size()
 				Sfx.play("ui")
@@ -88,9 +169,7 @@ func _unhandled_input(event: InputEvent) -> void:
 				_switch_char(["deepseek", "gpt", "claude"][event.physical_keycode - KEY_1])
 	elif event is InputEventJoypadButton and event.pressed:
 		var b := (event as InputEventJoypadButton).button_index
-		if b == 1:
-			_exit()
-		elif b == 2:
+		if b == 2:
 			_reset()
 		elif b == 4:
 			pattern = (pattern + PATTERN_NAMES.size() - 1) % PATTERN_NAMES.size()
@@ -117,6 +196,11 @@ func _exit() -> void:
 	ScreenFx.set_battle(false)
 	BaCursor.set_battle(false)
 	exit_requested.emit()
+
+
+## 给 main 的暂停菜单调用：退出训练场并回到角色选择
+func exit_training() -> void:
+	_exit()
 
 
 func _reset() -> void:
@@ -218,17 +302,11 @@ func _spawn(dir: Vector2, speed: float, radius: float) -> void:
 func _draw_ui() -> void:
 	if ui == null:
 		return
-	# 发生器
-	var pulse: float = 0.5 + 0.5 * sin(t * 3.0)
-	ui.draw_circle(gen_pos, 26.0, Color(0.16, 0.18, 0.24))
-	ui.draw_arc(gen_pos, 26.0, 0.0, TAU, 24, Color(0.55, 0.7, 1.0, 0.5 + 0.4 * pulse), 2.0, true)
-	UiKit.text_center(ui, gen_pos.x, gen_pos.y + 4.0, "靶", UiKit.F_H3, Color(0.9, 0.95, 1.0))
-
 	var panel := Rect2(10, 10, 150, 22)
 	ui.draw_style_box(UiKit.box(Color(1, 1, 1, 0.86), 8, Color(1, 1, 1, 0.9), 1, true), panel)
 	UiKit.text(ui, Vector2(18, 25), "弹幕 · %s" % PATTERN_NAMES[pattern], UiKit.F_SMALL, UiKit.TEXT)
 	var hint := Rect2(10, GameConfig.BASE_H - 26, GameConfig.BASE_W - 20, 18)
 	ui.draw_style_box(UiKit.box(Color(1, 1, 1, 0.55), 7, Color(1, 1, 1, 0.5), 1, false), hint)
 	UiKit.text(ui, Vector2(18, GameConfig.BASE_H - 13),
-		"← → / Q E 切换弹幕    R 重置    1/2/3 换角色    ESC 退出（不计统计）",
+		"← → / Q E 切换弹幕    R 重置    1/2/3 换角色    ESC 菜单",
 		UiKit.F_TINY, UiKit.TEXT)

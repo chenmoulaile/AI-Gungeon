@@ -1,6 +1,6 @@
 extends Control
-## 角色选择（蔚蓝档案风格）：三张正视图立绘卡片 + 难度/种子 + 开始按钮 + 次级入口
-## 卡片悬停：立绘放大 1.04 + 卡片上浮 6px；选中：强调色描边 + 1.00→1.02 脉冲
+## 角色选择（v0.7 P2）：4 张 104×176 像素卡（第 4 张大肥鱼锁定）、属性分段条、
+## 难度药丸、种子输入、像素按钮。悬停只上移 1px，不做缩放/脉冲。
 
 signal character_chosen(id: String, seed_text: String, difficulty: int)
 signal open_collection
@@ -9,21 +9,20 @@ signal resume_requested
 signal abandon_requested
 
 const IDS := ["deepseek", "gpt", "claude"]
-const CARD_W := 140.0
-const CARD_H := 216.0
-const CARD_Y := 62.0
-const CARD_GAP := 16.0
+const CARD_W := 104.0
+const CARD_H := 176.0
+const CARD_Y := 60.0
+const CARD_GAP := 12.0
 
 var _data: Array = []
 var _tex: Array = []
 var _intro: Array = []
 var _rects: Array = []
+var _stats: Array = []
 var _hover: int = -1
-var _hover_k: Array = [0.0, 0.0, 0.0]
 var _sel: int = 0
-var _pulse: float = 0.0
 var _t: float = 0.0
-var _enter: float = 20.0
+var _enter: float = 8.0
 
 var seed_text: String = ""
 var _difficulty: int = 1
@@ -31,6 +30,8 @@ var _editing: bool = false
 var _has_save: bool = false
 var _confirm_abandon: float = 0.0
 var _tip_visible: bool = true
+var _toast: String = ""
+var _toast_t: float = 0.0
 
 var _start_btn: BaButton = null
 var _btns: Array = []
@@ -38,15 +39,14 @@ var _btns: Array = []
 
 func _ready() -> void:
 	set_anchors_preset(Control.PRESET_FULL_RECT)
-	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
-	if ResourceLoader.exists("res://resources/ui/theme.tres"):
-		theme = load("res://resources/ui/theme.tres")
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	for id in IDS:
 		_data.append(GameState.load_character(id))
-		var p := "res://assets/portraits/%s_face.png" % id
+		var p := "res://assets/portraits/%s_pixel.png" % id
 		_tex.append(load(p) if ResourceLoader.exists(p) else null)
 		_intro.append(DialogueManager.pick(id, "intro"))
+		_stats.append(Stats.char(id))
 	_has_save = RunSave.has_save()
 	_difficulty = clampi(Settings.difficulty, 0, 2)
 	SeedManager.difficulty = _difficulty
@@ -55,39 +55,32 @@ func _ready() -> void:
 	_build_buttons()
 	BaCursor.set_battle(false)
 	var tw := create_tween()
-	tw.tween_property(self, "_enter", 0.0, 0.25)\
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	var pw := create_tween().set_loops()
-	pw.tween_property(self, "_pulse", 1.0, 0.75)\
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
-	pw.tween_property(self, "_pulse", 0.0, 0.75)\
-		.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tw.tween_property(self, "_enter", 0.0, 0.18).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
 
 
 func _layout() -> void:
-	var total: float = IDS.size() * CARD_W + (IDS.size() - 1) * CARD_GAP
+	_rects.clear()
+	var count := IDS.size() + 1
+	var total: float = count * CARD_W + (count - 1) * CARD_GAP
 	var x0: float = (GameConfig.BASE_W - total) * 0.5
-	for i in IDS.size():
+	for i in count:
 		_rects.append(Rect2(x0 + i * (CARD_W + CARD_GAP), CARD_Y, CARD_W, CARD_H))
 
 
 func _build_buttons() -> void:
 	_start_btn = BaButton.new()
 	add_child(_start_btn)
-	_start_btn.setup("开始游戏", Rect2(GameConfig.BASE_W * 0.5 - 62, 292, 124, 26), "primary",
-		"", UiKit.F_H3)
+	_start_btn.setup("开始游戏", Rect2(500, 318, 116, 22), "primary", "", UiKit.F_BODY)
 	_start_btn.pressed.connect(func() -> void: _choose(_sel))
 
 	var labels := [["训练场", "T"], ["图鉴", "C"], ["继续", "V"], ["放弃", "X"]]
 	var w := 92.0
 	var gap := 8.0
-	var total: float = labels.size() * w + (labels.size() - 1) * gap
-	var x0: float = (GameConfig.BASE_W - total) * 0.5
 	for i in labels.size():
 		var b := BaButton.new()
 		add_child(b)
-		b.setup(String(labels[i][0]) + "  [" + String(labels[i][1]) + "]",
-			Rect2(x0 + i * (w + gap), 326, w, 20), "ghost", "", UiKit.F_SMALL)
+		b.setup(String(labels[i][0]) + " [" + String(labels[i][1]) + "]",
+			Rect2(24 + i * (w + gap), 319, w, 22), "ghost", "", UiKit.F_BODY)
 		_btns.append(b)
 	_btns[0].pressed.connect(func() -> void: open_training.emit())
 	_btns[1].pressed.connect(func() -> void: open_collection.emit())
@@ -112,15 +105,13 @@ func _abandon() -> void:
 func _process(delta: float) -> void:
 	_t += delta
 	_confirm_abandon = maxf(0.0, _confirm_abandon - delta)
+	_toast_t = maxf(0.0, _toast_t - delta)
 	var mouse := get_local_mouse_position()
 	var prev := _hover
 	_hover = -1
 	for i in _rects.size():
 		if (_rects[i] as Rect2).has_point(mouse):
 			_hover = i
-	if _hover != prev:
-		for i in 3:
-			_tween_hover(i, 1.0 if i == _hover else 0.0)
 	if _hover >= 0:
 		BaCursor.force_hot()
 	for i in 3:
@@ -129,15 +120,7 @@ func _process(delta: float) -> void:
 			Sfx.play("ui")
 	if Input.is_action_just_pressed("ui_accept") and not _editing:
 		_choose(_sel)
-	if InputDevice.using_pad:
-		pass
 	queue_redraw()
-
-
-func _tween_hover(i: int, target: float) -> void:
-	var tw := create_tween()
-	tw.tween_method(func(v: float) -> void: _hover_k[i] = v, float(_hover_k[i]), target, 0.12)\
-		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -166,7 +149,11 @@ func _gui_input(event: InputEvent) -> void:
 			accept_event()
 			return
 	if _hover >= 0:
-		if _sel == _hover:
+		if _hover >= IDS.size():
+			_toast = "大肥鱼尚未解锁 · 将在 P6 加入"
+			_toast_t = 1.6
+			Sfx.play("hurt", -16.0, 1.6)
+		elif _sel == _hover:
 			_choose(_hover)
 		else:
 			_sel = _hover
@@ -213,20 +200,20 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _diff_rect(i: int) -> Rect2:
-	return Rect2(28 + i * 40, 296, 36, 18)
+	return Rect2(56 + i * 48, 294, 44, 18)
 
 
 func _seed_rect() -> Rect2:
-	return Rect2(474, 296, 138, 18)
+	return Rect2(452, 10, 164, 20)
 
 
 func _tip_rect() -> Rect2:
-	return Rect2(GameConfig.BASE_W * 0.5 - 130, 34, 260, 18)
+	return Rect2(24, 36, 288, 18)
 
 
 func _tip_close_rect() -> Rect2:
 	var r := _tip_rect()
-	return Rect2(r.end.x - 16, r.position.y + 2, 14, 14)
+	return Rect2(r.end.x - 18, r.position.y + 1, 16, 16)
 
 
 func _choose(index: int) -> void:
@@ -239,109 +226,146 @@ func _choose(index: int) -> void:
 
 # ---------------- 绘制 ----------------
 func _draw() -> void:
-	UiKit.gradient_backdrop(self, Rect2(0, 0, GameConfig.BASE_W, GameConfig.BASE_H))
-	UiKit.stripes(self, Rect2(0, 0, GameConfig.BASE_W, 90), _t)
+	UiKit.gradient_backdrop(self, Rect2(0, 0, GameConfig.BASE_W, GameConfig.BASE_H), _t)
 	draw_set_transform(Vector2(0, _enter), 0.0, Vector2.ONE)
 
-	UiKit.text(self, Vector2(28, 32), "选择角色", UiKit.F_H2, UiKit.TEXT)
-	UiKit.text(self, Vector2(28, 44), "挑一个搭档，闯进回响聚合体的核心", UiKit.F_TINY, UiKit.TEXT_DIM)
-	UiKit.text_right(self, 612, 30, "种子 " + (seed_text if seed_text != "" else "随机"),
-		UiKit.F_TINY, UiKit.TEXT_DIM)
+	UiKit.text(self, Vector2(24, 30), "选择角色", UiKit.F_H2, UiKit.TEXT)
+	# 种子
+	var sr := _seed_rect()
+	UiKit.inset(self, sr, UiKit.VOID, UiKit.CYAN if _editing else UiKit.BORDER)
+	var seed_show := seed_text if seed_text != "" else "随机"
+	UiKit.text(self, sr.position + Vector2(8, 15), "种子 " + seed_show + ("_" if _editing else ""),
+		12, UiKit.TEXT if _editing else UiKit.TEXT_DIM)
+	if _editing:
+		UiKit.corner_brackets(self, sr, UiKit.CYAN, 3)
 
-	for i in IDS.size():
+	for i in _rects.size():
 		_draw_card(i, _rects[i])
+	_draw_detail()
 
-	# 难度
-	UiKit.text(self, Vector2(28, 291), "难度", UiKit.F_TINY, UiKit.TEXT_DIM)
+	# 难度药丸
+	UiKit.text(self, Vector2(24, 308), "难度", 12, UiKit.TEXT_DIM)
 	for i in 3:
 		var dr := _diff_rect(i)
 		var on := i == _difficulty
-		draw_style_box(UiKit.box(UiKit.ACCENT if on else Color(1, 1, 1, 0.72), 7,
-			Color(1, 1, 1, 0.8), 1, false), dr)
-		UiKit.text_center(self, dr.get_center().x, dr.position.y + 12,
-			["简单", "普通", "困难"][i], UiKit.F_TINY, UiKit.TEXT_LIGHT if on else UiKit.TEXT_DIM)
-
-	# 种子
-	var sr := _seed_rect()
-	draw_style_box(UiKit.box(Color(1, 1, 1, 0.9), 8, UiKit.ACCENT if _editing else Color(1, 1, 1, 0.8),
-		1, false), sr)
-	UiKit.text(self, sr.position + Vector2(8, 12),
-		("种子 " + seed_text + ("_" if _editing else "")) if seed_text != "" else "种子 随机（点击输入）",
-		UiKit.F_TINY, UiKit.TEXT if _editing else UiKit.TEXT_DIM)
+		UiKit.frame(self, dr, UiKit.RAISED if on else UiKit.PANEL,
+			UiKit.GOLD if on else UiKit.BORDER, Color(0, 0, 0, 0), false)
+		UiKit.text_center(self, dr.get_center().x, dr.position.y + 13,
+			["简单", "普通", "困难"][i], 12, UiKit.GOLD if on else UiKit.TEXT_DIM)
 
 	if _tip_visible:
 		_draw_tip()
 	if _confirm_abandon > 0.0:
-		UiKit.text_center(self, GameConfig.BASE_W * 0.5, 288, "再点一次「放弃」确认删除本局存档",
-			UiKit.F_TINY, UiKit.DANGER)
+		UiKit.text_center(self, GameConfig.BASE_W * 0.5, 300,
+			"再点一次「放弃」确认删除本局存档", 12, UiKit.DANGER)
+	if _toast_t > 0.0:
+		var tw := UiKit.measure(_toast, 12) + 20
+		UiKit.frame(self, Rect2((640 - tw) * 0.5, 340, tw, 18), UiKit.DEEP, UiKit.DANGER, Color(0, 0, 0, 0))
+		UiKit.text_center(self, 320, 352, _toast, 12, UiKit.DANGER)
 
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	UiKit.text_center(self, GameConfig.BASE_W * 0.5, GameConfig.BASE_H - 2,
-		"非官方同人 · 完全免费 · 角色形象基于 B站 UP 主 ZipZipPipe 的二创（CC BY-NC-SA 4.0）",
-		UiKit.F_TINY, Color(0.55, 0.60, 0.70))
+	UiKit.text_center(self, GameConfig.BASE_W * 0.5, 354,
+		"非官方同人 · 完全免费 · 角色形象基于 B站 UP 主 ZipZipPipe 二创（CC BY-NC-SA 4.0）",
+		12, Color(0.42, 0.47, 0.57))
 
 
 func _draw_tip() -> void:
 	var r := _tip_rect()
-	draw_style_box(UiKit.box(Color(1.0, 0.97, 0.88, 0.95), 8, Color(1, 1, 1, 0.9), 1, true), r)
-	UiKit.text(self, r.position + Vector2(10, 12), "第一次玩？先试试训练场（T）",
-		UiKit.F_TINY, Color(0.55, 0.42, 0.12))
+	UiKit.frame(self, r, Color("#2A2418"), UiKit.GOLD, Color(0, 0, 0, 0), false)
+	UiKit.text(self, r.position + Vector2(8, 13), "第一次玩？先试试训练场（T）", 12, UiKit.GOLD)
 	var c := _tip_close_rect()
-	UiKit.text_center(self, c.get_center().x, c.get_center().y + 4, "×", UiKit.F_SMALL, UiKit.TEXT_DIM)
+	UiKit.text_center(self, c.get_center().x, c.get_center().y + 4, "×", 12, UiKit.TEXT_DIM)
 
 
 func _draw_card(i: int, r: Rect2) -> void:
+	if i >= IDS.size():
+		_draw_locked_card(r)
+		return
 	var d: CharacterData = _data[i]
 	var accent: Color = d.accent
-	var hk: float = float(_hover_k[i])
+	var hk := 1.0 if _hover == i else 0.0
 	var selected := (_sel == i)
-	var lift: float = -6.0 * hk
-	var rr := Rect2(r.position + Vector2(0, lift), r.size)
-	if selected:
-		var k: float = 1.0 + 0.02 * _pulse
-		var c2 := rr.get_center()
-		rr = Rect2(c2 - rr.size * k * 0.5, rr.size * k)
-	var bg := Color(1, 1, 1, 0.95) if not selected else Color(1, 1, 1, 0.99)
-	draw_style_box(UiKit.box(bg, 10, Color(1, 1, 1, 0.9), 1, true), rr)
-	if selected:
-		draw_style_box(UiKit.box(Color(0, 0, 0, 0), 10, accent, 2, false), rr)
-	elif hk > 0.01:
-		draw_style_box(UiKit.box(Color(0, 0, 0, 0), 10,
-			Color(accent.r, accent.g, accent.b, 0.35 * hk), 1, false), rr)
+	var rr := Rect2(r.position + Vector2(0, -1 if (hk > 0.0 or selected) else 0), r.size)
+	var bg := UiKit.RAISED if (hk > 0.0 or selected) else UiKit.PANEL
+	UiKit.frame(self, rr, bg, UiKit.BORDER, UiKit.BORDER_HI, true)
+	# 顶部角色色条
+	draw_rect(Rect2(rr.position + Vector2(1, 1), Vector2(rr.size.x - 2, 2)), accent)
 
-	# 立绘：正视图裁切，底部渐隐（图本身已带 alpha 渐隐）
-	var pr := Rect2(rr.position + Vector2(5, 5), Vector2(rr.size.x - 10, rr.size.y - 70))
-	draw_style_box(UiKit.box(Color(accent.r, accent.g, accent.b, 0.10), 8,
-		Color(1, 1, 1, 0.6), 1, false), pr)
+	# 立绘 96×128（1x 精确放入 96×132 区域）
+	var pr := Rect2(rr.position + Vector2(4, 4), Vector2(96, 132))
+	UiKit.inset(self, pr, Color(accent.r, accent.g, accent.b, 0.10), UiKit.BORDER)
 	if _tex[i] != null:
-		var sc: float = 1.0 + 0.04 * hk
-		var size := pr.size * sc
-		var dst := Rect2(pr.get_center() - size * 0.5, size)
-		UiKit.draw_tex_cover(self, _tex[i], dst)
+		UiKit.draw_tex_contain(self, _tex[i], Rect2(pr.position + Vector2(0, 2), Vector2(96, 128)))
 
-	var tx := rr.position.x + 8.0
-	var base := rr.end.y - 54.0
-	UiKit.text(self, Vector2(tx, base), d.display_name, UiKit.F_H3, accent)
-	UiKit.text(self, Vector2(tx, base + 10), UiKit.fit(d.title, rr.size.x - 16, UiKit.F_TINY),
-		UiKit.F_TINY, UiKit.TEXT_DIM)
-	UiKit.text(self, Vector2(tx, base + 22), "武器 · " + d.weapon_name, UiKit.F_TINY, UiKit.TEXT)
-	UiKit.text(self, Vector2(tx, base + 32), "副武器 · " + _sub_name(d.id), UiKit.F_TINY,
-		Color(accent.r * 0.8, accent.g * 0.8, accent.b * 0.9))
-	UiKit.text(self, Vector2(tx, base + 44), "技能 · " + d.skill_name, UiKit.F_TINY, UiKit.TEXT)
+	# 名字
+	UiKit.text_center(self, rr.get_center().x, rr.position.y + 148, d.display_name, 12,
+		accent if (selected or hk > 0.0) else UiKit.TEXT)
+	# 武器图标 24×24 + 名称
+	var icon_path := "res://assets/icons/weapons/%s.png" % d.id
+	var icon_rect := Rect2(rr.position + Vector2(8, 151), Vector2(20, 20))
+	if not UiKit.draw_icon(self, icon_path, icon_rect):
+		_draw_weapon_placeholder(icon_rect, accent)
+	UiKit.text(self, rr.position + Vector2(32, 166),
+		UiKit.fit(d.weapon_name, rr.size.x - 38, 12), 12, UiKit.TEXT_DIM)
 
 	if selected:
-		var cc := Vector2(rr.end.x - 12, rr.position.y + 12)
-		draw_circle(cc, 5.0, accent)
-		draw_polyline(PackedVector2Array([
-			cc + Vector2(-2.4, 0.2), cc + Vector2(-0.6, 2.0), cc + Vector2(2.6, -2.0)]),
-			Color(1, 1, 1, 0.96), 1.6, true)
+		UiKit.corner_brackets(self, rr.grow(1), UiKit.GOLD, 6)
+		if fmod(_t, 1.0) < 0.6:
+			var tag := Rect2(rr.position + Vector2(62, 6), Vector2(38, 16))
+			draw_rect(tag, UiKit.GOLD)
+			UiKit.text_center(self, tag.get_center().x, tag.get_center().y + 4, "READY", 12,
+				UiKit.VOID)
 
 
-func _sub_name(id: String) -> String:
-	match id:
-		"deepseek":
-			return "深度检索"
-		"gpt":
-			return "思维链"
-		_:
-			return "对齐协议"
+func _draw_locked_card(r: Rect2) -> void:
+	UiKit.frame(self, r, Color("#0C1120"), UiKit.BORDER, Color(0, 0, 0, 0), true)
+	var pr := Rect2(r.position + Vector2(4, 4), Vector2(96, 132))
+	UiKit.inset(self, pr, UiKit.VOID, Color("#222B40"))
+	# 大肥鱼剪影：圆头 + 身体 + 鲸尾（纯色块，不用平滑多边形）
+	var cx := pr.get_center().x
+	var base := pr.end.y - 8
+	draw_rect(Rect2(cx - 22, base - 50, 44, 42), Color("#121926"))
+	draw_rect(Rect2(cx - 26, base - 38, 4, 26), Color("#121926"))
+	draw_rect(Rect2(cx + 22, base - 38, 4, 26), Color("#121926"))
+	draw_rect(Rect2(cx - 18, base - 70, 36, 22), Color("#121926"))
+	draw_rect(Rect2(cx - 14, base - 76, 28, 6), Color("#121926"))
+	# 鲸尾
+	draw_rect(Rect2(cx - 34, base - 34, 12, 8), Color("#121926"))
+	draw_rect(Rect2(cx + 22, base - 34, 12, 8), Color("#121926"))
+	# 锁
+	UiKit.text_center(self, r.get_center().x, r.position.y + 152, "大肥鱼", 12, Color("#4A5468"))
+	UiKit.text_center(self, r.get_center().x, r.position.y + 172, "未解锁 · P6", 12, Color("#3A4A70"))
+
+
+func _draw_detail() -> void:
+	var r := Rect2(24, 240, 592, 48)
+	UiKit.frame(self, r, UiKit.DEEP, UiKit.BORDER, UiKit.BORDER_HI, true)
+	var d: CharacterData = _data[_sel]
+	var st: CharacterStats = _stats[_sel]
+	UiKit.text(self, Vector2(36, 258), d.display_name, 24, d.accent, false)
+	UiKit.text(self, Vector2(36, 278),
+		UiKit.fit(d.title + " · 武器 " + d.weapon_name + " · 技能 " + d.skill_name, 320, 12),
+		12, UiKit.TEXT_DIM)
+
+	# 属性：HP / SPD / CD 三列，数值与条留 6px 间隙
+	var bx := 388.0
+	UiKit.text(self, Vector2(bx, 254), "HP", 12, UiKit.TEXT_DIM)
+	UiKit.bar(self, Rect2(bx + 30, 246, 58, 8), clampf(float(st.max_hp) / 120.0, 0.0, 1.0), UiKit.SUCCESS)
+	UiKit.text(self, Vector2(bx + 94, 254), str(st.max_hp), 12, UiKit.TEXT)
+
+	UiKit.text(self, Vector2(bx, 274), "SPD", 12, UiKit.TEXT_DIM)
+	UiKit.bar(self, Rect2(bx + 30, 266, 58, 8), clampf(st.move_speed / 160.0, 0.0, 1.0), UiKit.CYAN)
+	UiKit.text(self, Vector2(bx + 94, 274), str(int(st.move_speed)), 12, UiKit.TEXT)
+
+	UiKit.text(self, Vector2(524, 254), "CD", 12, UiKit.TEXT_DIM)
+	UiKit.bar(self, Rect2(550, 246, 58, 8), clampf(1.0 - st.skill_cd / 12.0, 0.0, 1.0), UiKit.GOLD)
+	UiKit.text(self, Vector2(524, 274), "技能 %.0fs" % st.skill_cd, 12, UiKit.TEXT_DIM)
+
+
+func _draw_weapon_placeholder(r: Rect2, accent: Color) -> void:
+	UiKit.inset(self, r, UiKit.VOID, UiKit.BORDER)
+	# 简易手枪剪影：1px 像素块
+	var c := r.position
+	draw_rect(Rect2(c + Vector2(4, 7), Vector2(13, 4)), accent)
+	draw_rect(Rect2(c + Vector2(14, 10), Vector2(4, 7)), accent)
+	draw_rect(Rect2(c + Vector2(7, 11), Vector2(5, 3)), accent.darkened(0.25))

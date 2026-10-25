@@ -54,12 +54,24 @@ func hp_ratio() -> float:
 	return 1.0
 
 
+const OUTLINE := Color("#0b0f18")
+const WOOD := Color("#8a5a34")
+const WOOD_D := Color("#5c3a22")
+const BOARD := Color("#f2e6cf")
+const RING := Color("#e2504f")
+
+
 func _draw() -> void:
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.4))
-	draw_circle(Vector2(0, radius * 0.8), radius * 0.9, Color(0, 0, 0, 0.25))
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-	var c := Color(1, 1, 1, 1) if _hit > 0.0 else accent
-	draw_circle(Vector2.ZERO, radius, Color(c.r, c.g, c.b, 0.28))
-	draw_arc(Vector2.ZERO, radius, 0.0, TAU, 24, c, 2.0, true)
-	draw_arc(Vector2.ZERO, radius * 0.55, 0.0, TAU, 18, Color(c.r, c.g, c.b, 0.7), 1.2, true)
-	draw_circle(Vector2.ZERO, 2.4, Color(1, 1, 1, 0.9))
+	# 硬阴影 + 木架 + 红白像素靶心（无半透明、无圆弧）
+	draw_rect(Rect2(-8, 22, 16, 3), Color(0, 0, 0, 0.25))
+	draw_rect(Rect2(-1, 10, 3, 12), WOOD_D)
+	draw_rect(Rect2(-7, 21, 14, 2), WOOD_D)
+	if _hit > 0.0:
+		draw_rect(Rect2(-13, -13, 26, 26), OUTLINE)
+		draw_rect(Rect2(-12, -12, 24, 24), Color(1, 1, 1, 1))
+		return
+	draw_rect(Rect2(-13, -13, 26, 26), OUTLINE)
+	draw_rect(Rect2(-12, -12, 24, 24), BOARD)
+	draw_rect(Rect2(-9, -9, 18, 18), RING)
+	draw_rect(Rect2(-5, -5, 10, 10), BOARD)
+	draw_rect(Rect2(-2, -2, 4, 4), RING)

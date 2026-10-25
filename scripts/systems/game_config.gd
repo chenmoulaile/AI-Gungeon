@@ -85,14 +85,29 @@ func _add_mouse(action: String, button: int) -> void:
 	InputMap.action_add_event(action, ev)
 
 
-# ---------------- 字体（优先系统 CJK 字体，避免中文变方块） ----------------
+# ---------------- 字体（像素字体优先，中文兜底） ----------------
 func _load_font() -> void:
-	# 优先用工程内置字体（OFL 授权的 Noto Sans SC），Web/导出包也能正常显示中文
-	for bundled in ["res://assets/fonts/ui.otf", "res://assets/fonts/ui.ttf"]:
+	# P2：优先融合像素 12px（OFL），关闭抗锯齿/次像素/微调，保证 1px 网格
+	for bundled in ["res://assets/fonts/pixel_12px.woff2", "res://assets/fonts/pixel_12px.ttf"]:
 		if ResourceLoader.exists(bundled):
 			var res = load(bundled)
-			if res is Font:
+			if res is FontFile:
+				var ff := res as FontFile
+				ff.antialiasing = TextServer.FONT_ANTIALIASING_NONE
+				ff.subpixel_positioning = TextServer.SUBPIXEL_POSITIONING_DISABLED
+				ff.hinting = TextServer.HINTING_NORMAL
+				ff.oversampling = 1.0
+				ui_font = ff
+				return
+			elif res is Font:
 				ui_font = res
+				return
+	# 中文兜底：工程内置 Noto Sans SC（非像素，仅当像素字体缺失时使用）
+	for bundled in ["res://assets/fonts/ui.otf", "res://assets/fonts/ui.ttf"]:
+		if ResourceLoader.exists(bundled):
+			var res2 = load(bundled)
+			if res2 is Font:
+				ui_font = res2
 				return
 	# 兜底：桌面系统字体（不复制、不打包）
 	var candidates := [

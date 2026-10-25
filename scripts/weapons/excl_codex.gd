@@ -2,7 +2,7 @@ extends "res://scripts/weapons/weapon_base.gd"
 ## GPT 专武「Codex」
 ## 左键发射金色代码符文：首次命中挂「财富印记」，再次命中消耗印记并追加一倍伤害
 
-const TEX := "res://assets/weapons/gpt_starter.png"
+const TEX := "res://assets/weapons/excl_codex.png"
 const DMG := 7.0
 const RATE := 6.5
 
@@ -10,7 +10,7 @@ const RATE := 6.5
 func setup(p: Node) -> void:
 	super.setup(p)
 	mode_name = "Codex"
-	p.set_held(TEX, 45.0, Color(1.0, 0.92, 0.62, 1.0), "", Color(0.95, 0.75, 0.25, 1.0))
+	p.set_held(TEX, 0.0, Color(1, 1, 1, 1), "", Color(0.95, 0.75, 0.25, 1.0))
 
 
 func fire(dir: Vector2) -> void:

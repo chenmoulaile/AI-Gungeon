@@ -10,7 +10,7 @@ const RATE := 5.5
 func setup(p: Node) -> void:
 	super.setup(p)
 	mode_name = "云端龙息"
-	p.set_held(TEX, 45.0)
+	p.set_held(TEX, 0.0)
 
 
 func fire(dir: Vector2) -> void:

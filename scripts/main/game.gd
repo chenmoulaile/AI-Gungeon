@@ -322,7 +322,7 @@ func _show_intro_dialog() -> void:
 	var dlg = PortraitDialogScene.instantiate()
 	dlg.process_mode = Node.PROCESS_MODE_ALWAYS
 	ui_layer.add_child(dlg)
-	var portrait := "res://assets/portraits/%s_bust.png" % GameState.char_id
+	var portrait := "res://assets/portraits/%s_pixel.png" % GameState.char_id
 	if not ResourceLoader.exists(portrait):
 		portrait = "res://assets/portraits/%s_full.png" % GameState.char_id
 	dlg.setup(portrait, d.display_name,

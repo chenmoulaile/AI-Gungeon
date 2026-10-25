@@ -5,7 +5,7 @@ extends CanvasLayer
 
 signal covered
 
-const DUR := 0.28
+const DUR := 0.18
 const MODES := {"fade": 0, "circle": 1, "slide": 2}
 
 var busy: bool = false

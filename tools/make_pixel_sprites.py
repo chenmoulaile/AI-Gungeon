@@ -4,13 +4,13 @@
 
 流程（严格按项目要求实现）：
     读参考图 -> 取正面视图 -> 中心裁剪主体 -> 降采样到目标尺寸
-    -> 中位切分量化到 24 色调色板 -> 按 alpha 做 2px 描边 -> 输出 PNG
+    -> 中位切分量化到 24 色调色板 -> 按 alpha 做 1px 描边 -> 输出 PNG
 
 生成后还会执行一次 manual_fix 手动修正 pass：
     - 眼睛颜色按参考图采样色重绘（标志性特征 1）
     - 发型主色按参考图色相重新锚定（标志性特征 2）
     - 服装主色按参考图色相重新锚定（标志性特征 3）
-    - 轮廓可读性：清理孤立像素、统一 2px 描边
+    - 轮廓可读性：清理孤立像素、统一 1px 描边
 
 用法：
     python tools/make_pixel_sprites.py
@@ -18,7 +18,10 @@
     assets/sprites/<角色>/{idle,walk,attack,roll}.png
     assets/sprites/<角色>/portrait_icon.png
     assets/sprites/<角色>/palette.gpl
+    assets/portraits/<角色>_pixel.png        96x128 像素立绘
+    assets/portraits/<角色>_pixel_avatar.png 32x32 像素头像
     tools/_preview_sprites.png（自检用接触表）
+    tools/_preview_portraits.png（立绘接触表）
 """
 
 import colorsys
@@ -31,42 +34,56 @@ from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REF_DIR = os.path.join(ROOT, "assets", "reference")
 SPRITE_DIR = os.path.join(ROOT, "assets", "sprites")
+PORTRAIT_DIR = os.path.join(ROOT, "assets", "portraits")
 
 FRAME = 64          # 单帧画布尺寸
 BODY_H = 52         # 角色在画布内的高度（保证 64x64 画布里有留白，便于特效）
 FEET_Y = 61         # 脚底基准线
-PALETTE_SIZE = 24   # 每角色独立 24 色
+PALETTE_SIZE = 20   # 每角色独立 24 色
+PORTRAIT_W = 96     # 像素立绘画布（UI 里按最近邻放大）
+PORTRAIT_H = 128
+AVATAR_SIZE = 32    # HUD 头像
 
 # 每个角色的手工修正锚点（归一化坐标，基于 sprite 主体包围盒）
+# view: 三视图中第几格（0=正面 1=侧面 2=背面）；优先用正面，辨识度最高
 CHARACTERS = {
     "deepseek": {
-        "ref": "deepseek_chibi.png",
-        "eye_xy": (0.32, 0.44),
-        "eye_xy2": (0.40, 0.44),
+        "ref": "dafeiyu_chibi_3view.png",
+        "view": 0,
         "hair_region": (0.0, 0.0, 1.0, 0.55),
         "cloth_region": (0.0, 0.5, 1.0, 1.0),
-        "outline": (20, 26, 64),
+        # 描边用主色的深色版，而不是近黑：避免出现"贴纸黑框"
+        "outline": (16, 20, 48),
         "lift": 40,
     },
     "gpt": {
-        "ref": "gpt_chibi.png",
-        "eye_xy": (0.30, 0.45),
-        "eye_xy2": (0.38, 0.45),
+        "ref": "gpt_chibi_3view_hd.png",
+        "view": 0,
         "hair_region": (0.0, 0.0, 1.0, 0.5),
         "cloth_region": (0.0, 0.48, 1.0, 1.0),
-        "outline": (20, 19, 38),
+        "outline": (44, 38, 72),
         "lift": 10,
         "contrast": 1.52,
         "shade": (150, 148, 178),
         "bottom_tint": (0.66, 0.69, 0.88),
+        # 全白角色在 96px 上会被线稿噪点弄脏脸，立绘单独做一遍脸部清理 + 补虹膜
+        "portrait": {
+            "face_clean": (0.244, 0.317, 0.756, 0.483),
+            "eye_xy": (0.344, 0.383),
+            "eye_xy2": (0.566, 0.383),
+            "eye_frac": (0.078, 0.033),
+            "eye_color": (96, 78, 152),
+        },
     },
     "claude": {
+        # 暂时没有正面三视图：旧图左格被裁，只能用中间侧视图
         "ref": "claude_chibi.png",
+        "view": 1,
         "eye_xy": (0.30, 0.46),
         "eye_xy2": (0.38, 0.46),
         "hair_region": (0.0, 0.0, 1.0, 0.55),
         "cloth_region": (0.0, 0.5, 1.0, 1.0),
-        "outline": (62, 32, 18),
+        "outline": (74, 38, 24),
         "lift": 14,
     },
 }
@@ -155,11 +172,16 @@ def trim(im):
 
 
 def sample_color(im, box, pick="dominant"):
-    """在区域内采样主色（忽略透明与近白像素）。"""
+    """在区域内采样主色（忽略透明、近白与线稿近黑像素）。
+
+    三视图的线稿通常是纯黑，如果不过滤，白毛角色（GPT）会把"发色"采样成黑色，
+    后续的色相锚定就会把整片白发去饱和洗白。
+    """
     x0, y0, x1, y1 = [int(v) for v in box]
     region = im.crop((max(0, x0), max(0, y0), max(1, x1), max(1, y1)))
     arr = np.array(region.convert("RGBA")).reshape(-1, 4)
-    keep = arr[(arr[:, 3] > 200) & (arr[:, :3].min(axis=1) < 235)]
+    keep = arr[(arr[:, 3] > 200) & (arr[:, :3].min(axis=1) < 235)
+               & (arr[:, :3].max(axis=1) > 60)]
     if len(keep) == 0:
         return (128, 128, 128)
     q = (keep[:, :3] // 16 * 16).astype(np.int32)
@@ -193,13 +215,13 @@ def sample_eye_color(subject):
 
 
 def load_subject(name, cfg):
-    """读参考图 -> 去背 -> 取正面视图 -> 裁掉空白 -> 主体。"""
+    """读参考图 -> 去背 -> 取 cfg["view"] 指定的视图 -> 裁掉空白 -> 主体。"""
     path = os.path.join(REF_DIR, cfg["ref"])
     im = strip_bg(Image.open(path).convert("RGBA"))
     views = split_views(im)
-    # 说明：上传的三视图截图中，左起第一个视图被裁掉了约三分之一，
-    # 中间的侧视视图是唯一完整的主体，因此统一取 index=1，保证三个角色一致。
-    idx = 1 if len(views) > 1 else 0
+    idx = int(cfg.get("view", 0))
+    if idx >= len(views):
+        idx = len(views) - 1
     subject = trim(views[idx])
     return subject
 
@@ -210,8 +232,21 @@ def to_pixel(subject, body_h=BODY_H, contrast=1.18):
     w, h = subject.size
     scale = body_h / float(h)
     nw = max(8, int(round(w * scale)))
-    small = subject.resize((nw, body_h), Image.LANCZOS)
-    # 小尺寸下细节会糊，先提一点对比度和饱和度，量化后轮廓更清楚
+    return _resample(subject, (nw, body_h), contrast)
+
+
+def fit_into(subject, max_w, max_h, contrast=1.18):
+    """等比缩放主体到 max_w x max_h 框内（宽高同时约束，长条图不会被裁）。"""
+    w, h = subject.size
+    scale = min(max_w / float(w), max_h / float(h))
+    nw = max(8, int(round(w * scale)))
+    nh = max(8, int(round(h * scale)))
+    return _resample(subject, (nw, nh), contrast)
+
+
+def _resample(subject, size, contrast):
+    """降采样 + 轻微对比/饱和/锐化：小尺寸下细节会糊，提一下量化后轮廓更清楚。"""
+    small = subject.resize(size, Image.LANCZOS)
     small = ImageEnhance.Contrast(small).enhance(contrast)
     small = ImageEnhance.Color(small).enhance(1.12)
     small = ImageEnhance.Sharpness(small).enhance(1.4)
@@ -241,12 +276,20 @@ def used_palette(im):
 
 
 # ---------------------------------------------------------------- 描边
-def add_outline(im, color, size=2):
-    a = im.getchannel("A")
+def add_outline(im, color, size=1):
+    """1px 外描边。像素角色只需要 1 圈，2px 会变成"贴纸黑框"。
+
+    主体通常已经被裁到 alpha 包围盒，四周没有留白；先补 size 圈透明边再膨胀，
+    否则贴边那一圈长不出描边，轮廓会缺一块（看起来像没抠干净的缺口）。
+    """
+    pad = size
+    canvas = Image.new("RGBA", (im.width + pad * 2, im.height + pad * 2), (0, 0, 0, 0))
+    canvas.alpha_composite(im, (pad, pad))
+    a = canvas.getchannel("A")
     grown = a.filter(ImageFilter.MaxFilter(size * 2 + 1))
-    base = Image.new("RGBA", im.size, (color[0], color[1], color[2], 255))
+    base = Image.new("RGBA", canvas.size, (color[0], color[1], color[2], 255))
     base.putalpha(grown)
-    base.alpha_composite(im)
+    base.alpha_composite(canvas)
     return base
 
 
@@ -336,7 +379,8 @@ def manual_fix(sprite, cfg, hair_rgb, cloth_rgb, eye_rgb):
     shade = cfg.get("shade", None)
     if shade is not None:
         lum2 = rgb.mean(axis=2)
-        dark = body & (lum2 < 150.0)
+        # 只给中间调上阴影色：最暗的那批像素是眼睛和线稿，一起染会把五官洗掉
+        dark = body & (lum2 < 150.0) & (lum2 > 60.0)
         t = np.clip((150.0 - lum2) / 150.0, 0.0, 1.0) * 0.55
         for i in range(3):
             rgb[:, :, i] = np.where(dark, rgb[:, :, i] * (1.0 - t) + shade[i] * t, rgb[:, :, i])
@@ -345,21 +389,7 @@ def manual_fix(sprite, cfg, hair_rgb, cloth_rgb, eye_rgb):
     out = np.dstack([np.clip(rgb, 0, 255), alpha]).astype(np.uint8)
     fixed = Image.fromarray(out, "RGBA")
 
-    # 4) 眼睛重绘
-    for key in ("eye_xy", "eye_xy2"):
-        ex = int(cfg[key][0] * w)
-        ey = int(cfg[key][1] * h)
-        for dx in (0, 1):
-            for dy in (0, 1):
-                px, py = ex + dx, ey + dy
-                if 0 <= px < w and 0 <= py < h and fixed.getpixel((px, py))[3] > 0:
-                    fixed.putpixel((px, py), (eye_rgb[0], eye_rgb[1], eye_rgb[2], 255))
-        hx, hy = ex + 1, ey - 1
-        if 0 <= hx < w and 0 <= hy < h and fixed.getpixel((hx, hy))[3] > 0:
-            fixed.putpixel((hx, hy), (250, 252, 255, 255))
-    log.append("eyes_repaint")
-
-    # 5) 去孤立像素
+    # 4) 去孤立像素
     a = np.array(fixed.getchannel("A"))
     solid = a > 0
     nb = np.zeros_like(a, dtype=np.int32)
@@ -374,20 +404,118 @@ def manual_fix(sprite, cfg, hair_rgb, cloth_rgb, eye_rgb):
     return fixed, log
 
 
+def paint_eyes(im, cfg, eye_rgb):
+    """量化之后重绘双眼：3 色块（虹膜 / 下眼睑暗部 / 高光）。
+
+    眼睛必须在最终量化之后画，否则瞳孔色会被并入浅色簇洗成灰（白毛角色尤其明显）。
+    """
+    if "eye_xy" not in cfg and "eye_xy2" not in cfg:
+        return im
+    ew = max(2, int(round(im.width * float(cfg.get("eye_frac", (0.05, 0.03))[0]))))
+    eh = max(2, int(round(im.height * float(cfg.get("eye_frac", (0.05, 0.03))[1]))))
+    dark = tuple(max(0, int(c * 0.55)) for c in eye_rgb)
+    px = im.load()
+    for key in ("eye_xy", "eye_xy2"):
+        if key not in cfg:
+            continue
+        ex = int(cfg[key][0] * im.width)
+        ey = int(cfg[key][1] * im.height)
+        for dx in range(ew):
+            for dy in range(eh):
+                x, y = ex + dx, ey + dy
+                if not (0 <= x < im.width and 0 <= y < im.height):
+                    continue
+                if px[x, y][3] == 0:
+                    continue
+                # 上下各 1px 深色眼睑，中间填虹膜，才不会读成"眼影色条"
+                c = dark if dy == 0 or dy == eh - 1 else eye_rgb
+                px[x, y] = (c[0], c[1], c[2], 255)
+        # 左上 2px 高光
+        for dx in range(1, min(3, ew - 1)):
+            x, y = ex + dx, ey + 1
+            if 0 <= x < im.width and 0 <= y < im.height and px[x, y][3] > 0:
+                px[x, y] = (250, 252, 255, 255)
+    return im
+
+
+# ---------------------------------------------------------------- 立绘 / 头像
+def clean_face(im, box):
+    """脸部清理：把脸范围内的高亮噪点压回主肤色。
+
+    参考图的睫毛/腮红是 1~2px 细线，缩到 96px 后变成零散灰点，看起来像脸上脏了一块。
+    全白角色（GPT）最明显，所以只对配了 face_clean 的角色启用。
+    """
+    w, h = im.size
+    x0, y0, x1, y1 = [int(round(v)) for v in
+                      (box[0] * w, box[1] * h, box[2] * w, box[3] * h)]
+    if x1 <= x0 or y1 <= y0:
+        return im
+    region = im.crop((x0, y0, x1, y1))
+    arr = np.array(region).astype(np.int32)
+    lum = arr[:, :, :3].mean(axis=2)
+    bright = (arr[:, :, 3] > 0) & (lum > 196)
+    px = arr[bright][:, :3]
+    if len(px) == 0:
+        return im
+    q = px // 8 * 8
+    keys, counts = np.unique(q, axis=0, return_counts=True)
+    skin = keys[counts.argmax()]
+    arr[:, :, :3] = np.where(bright[:, :, None], skin, arr[:, :, :3])
+    im.paste(Image.fromarray(arr.astype(np.uint8), "RGBA"), (x0, y0))
+    return im
+
+
+def build_portrait(subject, cfg, hair_rgb, cloth_rgb, eye_rgb):
+    """96x128 像素立绘：和 sprite 走同一套量化/描边，只是分辨率更高、带主题色描边。
+
+    立绘是 UI 里最大的角色展示面，所以保留完整身体（不是面部特写），
+    这样卡片、开场对话、结算三处可以共用同一张图。
+    """
+    # 立绘专用修正（脸部清理 / 眼睛锚点）不参与 64px 战斗帧，避免小尺寸下五官被糊死
+    pcfg = dict(cfg)
+    pcfg.update(cfg.get("portrait", {}))
+    pcfg.pop("portrait", None)
+    small = fit_into(subject, PORTRAIT_W - 6, PORTRAIT_H - 8,
+                     float(pcfg.get("contrast", 1.18)))
+    quant = quantize24(small)
+    fixed, _log = manual_fix(quant, pcfg, hair_rgb, cloth_rgb,
+                             pcfg.get("eye_color", eye_rgb))
+    fixed = quantize24(fixed)
+    if "face_clean" in pcfg:
+        fixed = clean_face(fixed, pcfg["face_clean"])
+    fixed = paint_eyes(fixed, pcfg, pcfg.get("eye_color", eye_rgb))
+    fixed = add_outline(fixed, cfg["outline"], size=1)
+    canvas = Image.new("RGBA", (PORTRAIT_W, PORTRAIT_H), (0, 0, 0, 0))
+    canvas.alpha_composite(fixed, ((PORTRAIT_W - fixed.width) // 2,
+                                   PORTRAIT_H - 6 - fixed.height))
+    return canvas
+
+
+def build_avatar(portrait, outline, size=AVATAR_SIZE):
+    """从立绘上裁头部做 32x32 头像：HUD 里 30px 的位置放全身会糊成一团。"""
+    head = portrait.crop((0, 0, PORTRAIT_W, int(PORTRAIT_H * 0.55)))
+    box = head.getbbox()
+    if box:
+        head = head.crop(box)
+    w, h = head.size
+    k = min((size - 4) / float(w), (size - 4) / float(h))
+    small = head.resize((max(1, int(round(w * k))), max(1, int(round(h * k)))),
+                        Image.LANCZOS)
+    small = quantize24(small)
+    small = add_outline(small, outline, size=1)
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    canvas.alpha_composite(small, ((size - small.width) // 2,
+                                   (size - small.height) // 2))
+    return canvas
+
+
 # ---------------------------------------------------------------- 帧生成
-def paste_frame(sprite, ox=0, oy=0, scale=1.0, rot=0.0):
+def paste_frame(sprite, ox=0, oy=0):
     """把主体贴到 64x64 画布，脚底对齐 FEET_Y。"""
-    s = sprite
-    if scale != 1.0:
-        nw = max(2, int(round(s.width * scale)))
-        nh = max(2, int(round(s.height * scale)))
-        s = s.resize((nw, nh), Image.NEAREST)
-    if rot:
-        s = s.rotate(rot, resample=Image.NEAREST, expand=False)
     canvas = Image.new("RGBA", (FRAME, FRAME), (0, 0, 0, 0))
-    x = (FRAME - s.width) // 2 + ox
-    y = FEET_Y - s.height + oy
-    canvas.alpha_composite(s, (x, y))
+    x = (FRAME - sprite.width) // 2 + ox
+    y = FEET_Y - sprite.height + oy
+    canvas.alpha_composite(sprite, (x, y))
     return canvas
 
 
@@ -402,28 +530,45 @@ def shear_top(sprite, amount):
     return out
 
 
-def build_frames(sprite):
-    """idle 4 / walk 6 / attack 3 / roll 4。"""
+def squash(sprite, h_scale=1.0, w_scale=1.0):
+    """整数像素级压扁/拉宽（NEAREST，不产生半透明过渡像素）。"""
+    if h_scale == 1.0 and w_scale == 1.0:
+        return sprite
+    nw = max(2, int(round(sprite.width * w_scale)))
+    nh = max(2, int(round(sprite.height * h_scale)))
+    return sprite.resize((nw, nh), Image.NEAREST)
+
+
+def build_frames(sprite, outline):
+    """idle 4 / walk 6 / attack 3 / roll 4
+
+    像素动画规约：
+    - 只用整数位移和整数像素的压扁/拉宽，禁用非整数缩放（会产生糊边和重影）
+    - 不做整体旋转：64px 的 Q 版角色转 90 度会变成"躺倒的人"，观感极差
+    - 描边在每一帧变换完成后再加：先描边再缩放会把 1px 环缩没（NEAREST 降采样会丢掉边缘行）
+    """
+    def finish(part, ox=0, oy=0):
+        return paste_frame(add_outline(part, outline, size=1), ox, oy)
+
     frames = {}
-    bob = [0, -1, 0, 1]
-    frames["idle"] = [paste_frame(sprite, 0, oy) for oy in bob]
+    # idle：只做上下压扁，脚底始终贴地（不整体平移，避免站着也"飘"起来）
+    frames["idle"] = [finish(squash(sprite, h)) for h in (1.0, 0.97, 1.0, 0.98)]
 
-    walk = [(0, 0), (-1, -1), (0, -2), (1, -1), (0, 0), (-1, 1)]
-    frames["walk"] = [paste_frame(sprite, ox, oy) for ox, oy in walk]
+    # walk：左右 1px 换步 + 最多 1px 起伏 + 轻微压扁，读起来像小跑
+    walk = [(0, 0, 1.00), (-1, -1, 0.98), (0, -1, 0.96),
+            (1, -1, 0.98), (0, 0, 1.00), (1, 0, 0.99)]
+    frames["walk"] = [finish(squash(sprite, h), ox, oy) for ox, oy, h in walk]
 
-    lean = shear_top(sprite, 3)
+    # attack：上半身前倾（错切），帧间只做整数位移，不再缩放
     frames["attack"] = [
-        paste_frame(lean, 0, 0, 1.0),
-        paste_frame(lean, 2, -1, 1.04),
-        paste_frame(lean, 3, 0, 1.02),
+        finish(shear_top(sprite, 3), 0, 0),
+        finish(shear_top(sprite, 5), 1, -1),
+        finish(shear_top(sprite, 4), 0, 0),
     ]
 
-    frames["roll"] = [
-        paste_frame(sprite, 0, 0),
-        paste_frame(sprite, 0, 2, 0.92, 90),
-        paste_frame(sprite, 0, 2, 0.92, 180),
-        paste_frame(sprite, 0, 0, 0.98, 270),
-    ]
+    # roll：团身 -> 压扁 -> 更扁 -> 起身，脚底始终贴地
+    frames["roll"] = [finish(squash(sprite, h, w))
+                      for h, w in ((0.88, 1.06), (0.70, 1.18), (0.56, 1.28), (0.90, 1.04))]
     return frames
 
 
@@ -445,7 +590,9 @@ def write_gpl(path, colors):
 
 def main():
     os.makedirs(SPRITE_DIR, exist_ok=True)
+    os.makedirs(PORTRAIT_DIR, exist_ok=True)
     preview_rows = []
+    portrait_rows = []
     report = []
 
     for name, cfg in CHARACTERS.items():
@@ -459,34 +606,49 @@ def main():
         small = to_pixel(subject, BODY_H, float(cfg.get("contrast", 1.18)))
         quant = quantize24(small)
         fixed, log = manual_fix(quant, cfg, hair_rgb, cloth_rgb, eye_rgb)
-        fixed = add_outline(fixed, cfg["outline"], size=2)
-
-        frames = build_frames(fixed)
+        # manual_fix 里的 tint/rim light 会产生大量中间色（GPT 能到 300+ 色），
+        # 再量化一次压回真正的像素调色板，这是"像素风"和"插画缩小"的分界线
+        fixed = quantize24(fixed)
+        # 虹膜要画在最终量化之后，否则会被并进浅色簇
+        fixed = paint_eyes(fixed, cfg, eye_rgb)
+        # 描边不在主体上预加：每帧变换后再描，避免缩放丢掉 1px 环
+        frames = build_frames(fixed, cfg["outline"])
         out_dir = os.path.join(SPRITE_DIR, name)
         os.makedirs(out_dir, exist_ok=True)
         for anim, fl in frames.items():
             sheet(fl).save(os.path.join(out_dir, anim + ".png"))
 
-        # portrait_icon 32x32
-        icon = fixed.resize((30, 30), Image.LANCZOS)
+        # portrait_icon 32x32：等比缩到 30px 内再居中，避免压扁变胖
+        iw, ih = fixed.size
+        k = 30.0 / max(iw, ih)
+        icon = fixed.resize((max(1, int(round(iw * k))), max(1, int(round(ih * k)))),
+                            Image.LANCZOS)
         icon = quantize24(icon)
         icon = add_outline(icon, cfg["outline"], size=1)
         canvas = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
-        canvas.alpha_composite(icon, (1, 1))
+        canvas.alpha_composite(icon, ((32 - icon.width) // 2, (32 - icon.height) // 2))
         canvas.save(os.path.join(out_dir, "portrait_icon.png"))
 
-        # 每角色独立调色板（禁止混用）
-        pal = used_palette(fixed)
-        pal = pal[:PALETTE_SIZE]
+        # 每角色独立调色板（禁止混用）：主体色 + 描边色
+        pal = used_palette(fixed)[:PALETTE_SIZE]
+        pal.append(tuple(cfg["outline"]))
         write_gpl(os.path.join(out_dir, "palette.gpl"), pal)
 
-        report.append("%-9s 主体%dx%d -> %dpx 高 | 主色 发%s 衣%s 瞳%s | 修正:%s | 调色板 %d 色"
-                      % (name, bw, bh, BODY_H, hair_rgb, cloth_rgb, eye_rgb, ",".join(log), len(pal)))
+        # 96x128 像素立绘 + 32x32 头像（UI 用，NEAREST 放大）
+        portrait = build_portrait(subject, cfg, hair_rgb, cloth_rgb, eye_rgb)
+        portrait.save(os.path.join(PORTRAIT_DIR, name + "_pixel.png"))
+        avatar = build_avatar(portrait, cfg["outline"])
+        avatar.save(os.path.join(PORTRAIT_DIR, name + "_pixel_avatar.png"))
+        portrait_rows.append((name, portrait, avatar))
+
+        report.append("%-9s 主体%dx%d -> %dpx 高 | 立绘%dx%d | 主色 发%s 衣%s 瞳%s | 修正:%s | 调色板 %d 色"
+                      % (name, bw, bh, BODY_H, PORTRAIT_W, PORTRAIT_H,
+                         hair_rgb, cloth_rgb, eye_rgb, ",".join(log), len(pal)))
         preview_rows.append((name, sheet(frames["idle"]), sheet(frames["walk"]),
                              sheet(frames["attack"]), sheet(frames["roll"])))
 
     # 接触表：方便肉眼检查（不参与游戏运行）
-    pw = FRAME * 6
+    pw = FRAME * sum(len(frames[a]) for a in ("idle", "walk", "attack", "roll")) + 8
     sheet_img = Image.new("RGBA", (pw + 12, (FRAME + 6) * len(preview_rows) + 6),
                           (24, 26, 34, 255))
     for i, (name, idle, walk, attack, roll) in enumerate(preview_rows):
@@ -496,6 +658,19 @@ def main():
             sheet_img.alpha_composite(s, (x, y))
             x += s.width + 2
     sheet_img.save(os.path.join(ROOT, "tools", "_preview_sprites.png"))
+
+    # 立绘接触表：96x128 原大 + 2x 放大，检查缩到 UI 尺寸后是否还认得出角色
+    scale = 2
+    cell_w = PORTRAIT_W * scale + AVATAR_SIZE * scale + 18
+    portrait_img = Image.new("RGBA", (cell_w + 12, (PORTRAIT_H * scale + 8) * len(portrait_rows) + 6),
+                             (24, 26, 34, 255))
+    for i, (_name, portrait, avatar) in enumerate(portrait_rows):
+        y = 6 + i * (PORTRAIT_H * scale + 8)
+        big = portrait.resize((PORTRAIT_W * scale, PORTRAIT_H * scale), Image.NEAREST)
+        portrait_img.alpha_composite(big, (6, y))
+        av = avatar.resize((AVATAR_SIZE * scale, AVATAR_SIZE * scale), Image.NEAREST)
+        portrait_img.alpha_composite(av, (6 + PORTRAIT_W * scale + 8, y))
+    portrait_img.save(os.path.join(ROOT, "tools", "_preview_portraits.png"))
 
     for line in report:
         print(line)

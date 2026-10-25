@@ -129,14 +129,10 @@ func _build_nodes() -> void:
 	anim = AnimatedSprite2D.new()
 	anim.sprite_frames = GameConfig.build_sprite_frames(char_id)
 	anim.offset = Vector2(0, -29)
-	anim.self_modulate = Color(1.32, 1.32, 1.38)
+	# 像素帧自带 1px 描边后不要再提亮，否则描边被冲淡、整体发白
+	anim.self_modulate = Color(1, 1, 1)
 	anim.light_mask = 0   # 角色不参与 2D 光照，避免被自己的点光源打爆成白色
 	anim.play("idle")
-	# 暗色描边：浅色地面上白色系角色也能和背景分开
-	if ResourceLoader.exists("res://shaders/sprite_outline.gdshader"):
-		var om := ShaderMaterial.new()
-		om.shader = load("res://shaders/sprite_outline.gdshader")
-		anim.material = om
 	breath.add_child(anim)
 
 	# 配饰：鲸尾 / 龙翼 / 向日葵（程序化绘制，Tween 驱动）
@@ -154,8 +150,7 @@ func _build_nodes() -> void:
 	gun.z_index = 2
 	gun.set_script(load("res://scripts/player/hand_device.gd"))
 	add_child(gun)
-	gun.position = Vector2(0, -12)
-	gun.draw_size = 20.0
+	gun.position = Vector2(0, -16)
 
 	var light := PointLight2D.new()
 	if ResourceLoader.exists("res://assets/fx/light_radial.png"):
@@ -200,12 +195,13 @@ func _build_weapon() -> void:
 		weapon.setup(self)
 
 
-## 武器外观：贴图武器或程序化外观
+## 武器外观：32×32 像素贴图（可选 96×32 三帧），按整数尺寸绘制
 func set_held(tex_path: String, rot_deg: float = 0.0, col: Color = Color(1, 1, 1, 1),
-		proc: String = "", glow: Color = Color(0, 0, 0, 0)) -> void:
+		proc: String = "", glow: Color = Color(0, 0, 0, 0), size: float = 32.0,
+		grip: Vector2 = Vector2.ZERO) -> void:
 	if gun == null or not is_instance_valid(gun):
 		return
-	gun.set_visual(tex_path, rot_deg, col, proc)
+	gun.set_visual(tex_path, rot_deg, col, proc, size, grip)
 	gun.set_glow(glow)
 	gun.visible = true
 
@@ -269,7 +265,12 @@ func _physics_process(delta: float) -> void:
 	_update_facing()
 	_update_lean(delta)
 	gun.set_aim(aim)
-	gun.position = Vector2(0, -16) + aim * 17.0
+	var pos := Vector2(0, -11) + aim * 16.0
+	# 朝上瞄准时把 32px 武器抬到头顶上方，避免糊住整张脸
+	if aim.y < -0.35:
+		pos.y -= 12.0
+	gun.position = pos
+	gun.z_index = 2
 
 	if roll_t > 0.0:
 		velocity = roll_dir * GameConfig.ROLL_SPEED
@@ -463,8 +464,10 @@ func _update_jiggle(delta: float) -> void:
 	_jiggle_v += (target - _jiggle) * 90.0 * delta
 	_jiggle_v *= maxf(0.0, 1.0 - 9.0 * delta)
 	_jiggle += _jiggle_v * delta
-	accent.rotation = _jiggle * 0.6
-	accent.position = Vector2(_jiggle * 3.0, absf(_jiggle) * 2.0)
+	# 平移只走整数像素，且不能覆盖配饰自己的挂点（home），否则翅膀/花会掉到脚底
+	accent.rotation = 0.0
+	if accent.has_method("set_shake"):
+		accent.call("set_shake", Vector2(_jiggle * 3.0, absf(_jiggle) * 2.0))
 	if absf(_jiggle) < 0.002 and absf(_jiggle_v) < 0.01:
 		_jiggle = 0.0
 		_jiggle_v = 0.0

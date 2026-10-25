@@ -12,10 +12,13 @@ var _swing_t: float = 0.0
 var _zone: Node = null
 
 
+const TEX := "res://assets/weapons/excl_hammer.png"
+
+
 func setup(p: Node) -> void:
 	super.setup(p)
 	mode_name = "法槌"
-	p.set_held("", 0.0, Color(1, 1, 1, 1), "hammer", Color(0.95, 0.80, 0.45, 1.0))
+	p.set_held(TEX, 0.0, Color(1, 1, 1, 1), "", Color(0.95, 0.80, 0.45, 1.0))
 
 
 func _process(delta: float) -> void:

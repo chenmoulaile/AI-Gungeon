@@ -12,6 +12,8 @@ const AmbientScript = preload("res://scripts/fx/ambient_particles.gd")
 var cleared: bool = false
 var door_open: bool = false
 var is_boss: bool = false
+## -1 = 跟随 GameState.floor_index；>=1 时强制用该层主题（训练场等固定场景用，避免继承上一局的配色）
+var floor_override: int = -1
 
 var _gate: StaticBody2D = null
 var _t: float = 0.0
@@ -32,8 +34,9 @@ var _obstacle_nodes: Array = []
 
 
 func _ready() -> void:
-	_theme = FloorTheme.boss_theme(FloorTheme.get_theme(GameState.floor_index)) if is_boss \
-		else FloorTheme.get_theme(GameState.floor_index)
+	var fi: int = floor_override if floor_override > 0 else GameState.floor_index
+	_theme = FloorTheme.boss_theme(FloorTheme.get_theme(fi)) if is_boss \
+		else FloorTheme.get_theme(fi)
 	_build_floor_pattern()
 	_build_decor()
 	_build_lighting()
