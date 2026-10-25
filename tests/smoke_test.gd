@@ -40,6 +40,8 @@ func _run() -> void:
 	for cid in ["deepseek", "gpt", "claude"]:
 		await _test_character(cid)
 	await _test_boss()
+	await _test_boss_pool()
+	await _test_miniboss()
 	await _test_shop()
 	await _test_death()
 
@@ -235,6 +237,63 @@ func _test_boss() -> void:
 	await _wait(1.5)
 	_check(GameState.floor_index == 2, "进入第 2 层（floor=%d）" % GameState.floor_index)
 	g.queue_free()
+	await _frames(3)
+
+
+## v0.10.1：三层各一只 Boss，且镜像回声的镜盾免伤
+func _test_boss_pool() -> void:
+	print("\n[Boss 池]")
+	var expect := ["echo", "mirror", "twins"]
+	for f in [1, 2, 3]:
+		var g = await _new_game("deepseek")
+		g._debug_set_floor(f)
+		g.debug_start(FloorMap.KIND_BOSS)
+		await _wait(0.3)
+		_check(g.boss != null, "第 %d 层 Boss 生成" % f)
+		if g.boss != null:
+			var key := String(g.boss.boss_key)
+			_check(key == expect[f - 1], "第 %d 层 Boss = %s（实际 %s）"
+				% [f, expect[f - 1], key])
+			var intro = g.ui_layer.get_child(g.ui_layer.get_child_count() - 1)
+			var intro_name := ""
+			if intro != null and "boss_name" in intro:
+				intro_name = String(intro.boss_name)
+			_check(intro_name == String(g.boss.display_name),
+				"第 %d 层登场标题与 Boss 一致（%s）" % [f, intro_name])
+		await _dismiss_overlay(g)
+		if f == 2 and g.boss != null:
+			GameState.player.invuln = 999.0
+			var mb = g.boss
+			mb.shield_t = 1.0
+			var hp0: float = mb.hp
+			mb.take_damage(25.0)
+			_check(is_equal_approx(mb.hp, hp0), "镜像回声镜盾期间免伤（hp %.1f）" % mb.hp)
+			mb.shield_t = 0.0
+			mb.take_damage(5.0)
+			_check(mb.hp < hp0, "镜盾结束后可正常受伤（hp %.1f）" % mb.hp)
+		g.queue_free()
+		await _frames(3)
+
+
+## v0.10.1：迷你首领 = 精英标记 + 血量/体积/掉落再强化
+func _test_miniboss() -> void:
+	print("\n[迷你首领]")
+	var normal = load("res://scenes/enemies/enemy_chaser.tscn").instantiate()
+	add_child(normal)
+	await _frames(2)
+	var mini = load("res://scenes/enemies/enemy_chaser.tscn").instantiate()
+	mini.miniboss = true
+	add_child(mini)
+	await _frames(2)
+	_check(mini.miniboss and mini.elite, "迷你首领同时带精英标记")
+	_check(mini.max_hp > normal.max_hp * 2.2,
+		"迷你首领血量显著高于普通（%.1f vs %.1f）" % [mini.max_hp, normal.max_hp])
+	_check(mini.radius > normal.radius and mini.coin_value >= normal.coin_value + 8,
+		"迷你首领体积与掉落提升（半径 %.1f / 金币 %d）" % [mini.radius, mini.coin_value])
+	GameState.unregister_enemy(normal)
+	GameState.unregister_enemy(mini)
+	normal.queue_free()
+	mini.queue_free()
 	await _frames(3)
 
 
