@@ -528,9 +528,9 @@ func _show_intro_dialog(deferred_wave: bool = false) -> void:
 		portrait = "res://assets/portraits/%s_full.png" % GameState.char_id
 	dlg.setup(portrait, d.display_name,
 		[d.blurb, "武器「%s」：%s" % [d.weapon_name, d.weapon_desc],
-			"技能「%s」：%s" % [d.skill_name, d.skill_desc],
-			"天赋「%s」：%s" % [d.passive_name, d.passive_desc],
-			"清空 5 个房间，第 5 间是 Boss。走吧。"])
+		 "技能「%s」：%s" % [d.skill_name, d.skill_desc],
+		 "天赋「%s」：%s" % [d.passive_name, d.passive_desc],
+		 "清空 5 个房间，第 5 间是 Boss。走吧。"])
 	get_tree().paused = true
 	dlg.finished.connect(func() -> void:
 		get_tree().paused = false
