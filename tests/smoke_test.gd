@@ -117,9 +117,26 @@ func _test_character(cid: String) -> void:
 	await _wait(1.3)
 	var beams2 := get_tree().get_nodes_in_group("beams")
 	var buff_ok: bool = p.buff_timer > 0.0
-	_check(charged or beams2.size() > 0 or buff_ok or p.shield_hits > 0,
-		"%s: 技能生效（蓄力 %s / 光束 %d / 增益 %s / 护盾 %d）"
-		% [cid, str(charged), beams2.size(), str(buff_ok), p.shield_hits])
+	var fish_n := get_tree().get_nodes_in_group("fish_minions").size()
+	var summon_ok: bool = cid == "deepseek" and fish_n > 0
+	_check(charged or beams2.size() > 0 or buff_ok or p.shield_hits > 0 or summon_ok,
+		"%s: 技能生效（蓄力 %s / 光束 %d / 增益 %s / 护盾 %d / 小肥鱼 %d）"
+		% [cid, str(charged), beams2.size(), str(buff_ok), p.shield_hits, fish_n])
+	if cid == "deepseek":
+		_check(fish_n > 0 and float(p.token) < 80.0,
+			"deepseek: 鲸群集结消耗 Token 并召唤小肥鱼（Token %.0f / 鱼 %d）"
+			% [float(p.token), fish_n])
+
+	# DeepSeek 天赋：移动不消耗 Token
+	if cid == "deepseek":
+		var tk0 := float(p.token)
+		p._token_hold = 999.0
+		Input.action_press("move_left")
+		await _wait(0.35)
+		Input.action_release("move_left")
+		_check(float(p.token) >= tk0 - 0.01, "deepseek: 移动不扣除 Token（%.1f）"
+			% float(p.token))
+		p._token_hold = 0.0
 
 	# 翻滚
 	var before: Vector2 = p.global_position
@@ -134,9 +151,18 @@ func _test_character(cid: String) -> void:
 	# 专属副武器（Q）
 	if p.sub != null:
 		Input.action_press("sub_weapon")
-		await _frames(4)
-		Input.action_release("sub_weapon")
-		await _wait(0.2)
+		if cid == "deepseek":
+			await _wait(0.6)
+			_check(bool(p.sub._charging) and float(p.charge_ratio) > 0.3,
+				"deepseek: 铁盆长按蓄力（%.0f%%）" % (float(p.charge_ratio) * 100.0))
+			Input.action_release("sub_weapon")
+			await _frames(4)
+			_check(not bool(p.sub._charging) and float(p.charge_ratio) <= 0.01,
+				"deepseek: 松手挥出并清空蓄力")
+		else:
+			await _frames(4)
+			Input.action_release("sub_weapon")
+			await _wait(0.2)
 		_check(float(p.sub.cd_left) > 0.0, "%s: 副武器「%s」进入冷却（%.1fs）"
 			% [cid, String(p.sub.display_name), float(p.sub.cd_left)])
 	else:

@@ -10,6 +10,7 @@ const ResultScene = preload("res://scenes/ui/result.tscn")
 const CollectionScene = preload("res://scenes/ui/collection_menu.tscn")
 const TrainingScene = preload("res://scenes/training/training_room.tscn")
 const SettingsScene = preload("res://scenes/ui/settings_menu.tscn")
+const AboutScene = preload("res://scenes/ui/about_menu.tscn")
 
 const PauseScript = preload("res://scripts/ui/pause_menu.gd")
 
@@ -52,6 +53,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _pause_menu != null and is_instance_valid(_pause_menu):
 		_close_pause()
 		get_viewport().set_input_as_handled()
+		return
+	# 对话 / Boss 登场会主动暂停游戏，此时 ESC 归对话框推进，不能再抢暂停
+	if get_tree().paused:
 		return
 	if current != null and is_instance_valid(current) and current.get("is_gameplay") == true:
 		_open_pause()
@@ -127,7 +131,7 @@ func show_menu() -> void:
 	m.open_settings.connect(open_settings)
 	m.open_collection.connect(func() -> void: Transition.play("fade", show_collection))
 	m.open_training.connect(func() -> void: Transition.play("fade", show_training))
-	m.open_about.connect(open_settings)
+	m.open_about.connect(func() -> void: Transition.play("fade", show_about))
 	_swap(m)
 
 
@@ -179,6 +183,12 @@ func show_collection() -> void:
 	var c: Node = CollectionScene.instantiate()
 	c.closed.connect(func() -> void: Transition.play("fade", show_menu))
 	_swap(c)
+
+
+func show_about() -> void:
+	var a: Node = AboutScene.instantiate()
+	a.closed.connect(func() -> void: Transition.play("fade", show_menu))
+	_swap(a)
 
 
 func open_settings() -> void:

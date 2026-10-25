@@ -65,7 +65,9 @@ func _draw() -> void:
 		Color(UiKit.TEXT.r, UiKit.TEXT.g, UiKit.TEXT.b, ta))
 	UiKit.text_center(self, cx, 222, "像素地牢 · 非官方同人", UiKit.F_SMALL,
 		Color(UiKit.TEXT_DIM.r, UiKit.TEXT_DIM.g, UiKit.TEXT_DIM.b, ta))
-	UiKit.text_center(self, cx, 240, "v0.7.0-pixel", UiKit.F_SMALL,
+	UiKit.text_center(self, cx, 240,
+		"v%s" % str(ProjectSettings.get_setting("application/config/version", "0.9.0")),
+		UiKit.F_SMALL,
 		Color(UiKit.TEXT_DIM.r, UiKit.TEXT_DIM.g, UiKit.TEXT_DIM.b, ta * 0.9))
 	if fmod(_t, 0.9) < 0.6:
 		UiKit.keycap(self, Vector2(cx - 9, 300), "A", 18)

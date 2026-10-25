@@ -3,7 +3,6 @@ extends "res://scripts/weapons/weapon_base.gd"
 ## 按住左键：从书本前方射出持续光束，1s 内宽度 3→13、伤害同步提升；松开进入短冷却
 
 const BeamScript = preload("res://scripts/weapons/beam.gd")
-const TEX := "res://assets/weapons/claude_starter.png"
 const GROW := 1.0
 const MIN_DPS := 26.0
 const MAX_DPS := 78.0
@@ -17,7 +16,8 @@ var _release_cd: float = 0.0
 func setup(p: Node) -> void:
 	super.setup(p)
 	mode_name = "法典之书"
-	p.set_held(TEX, 0.0)
+	# 程序化像素书：厚书脊 + 打开的双页，光束从书页前方发出
+	p.set_held("", 0.0, Color.WHITE, "book", Color("#FFB066"), 20.0)
 
 
 func fire(_dir: Vector2) -> void:
@@ -44,15 +44,17 @@ func _process(delta: float) -> void:
 		beam.length = 520.0
 		beam.width = lerpf(3.0, 13.0, ratio)
 		beam.dps = lerpf(MIN_DPS, MAX_DPS, ratio) * damage_mult()
-		beam.set_beam(player.global_position + Vector2(0, -16), player.aim)
+		var origin: Vector2 = player.global_position + Vector2(0, -16) + player.aim * 10.0
+		if player.gun != null and is_instance_valid(player.gun):
+			origin = player.gun.to_global(player.gun.muzzle_local())
+		beam.set_beam(origin, player.aim)
 		player.fire_anim = 0.1
 		# 角色周围漂浮的发光书页
 		_page_t -= delta
 		if _page_t <= 0.0:
 			_page_t = 0.18
 			var ang := randf() * TAU
-			var pos: Vector2 = player.global_position + Vector2(0, -16) \
-				+ Vector2(cos(ang), sin(ang)) * randf_range(20.0, 30.0)
+			var pos: Vector2 = origin + Vector2(cos(ang), sin(ang)) * randf_range(14.0, 26.0)
 			GameFeel.burst(pos, Color(1.0, 0.92, 0.72), 2, 20.0, 0.4)
 	elif beam != null:
 		_stop()

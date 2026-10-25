@@ -50,6 +50,11 @@ var hurt_stun: float = 0.0
 var focus_target: Node = null
 var focus_stacks: int = 0
 var tokens: int = 0
+## DeepSeek 天赋「Token 账户」：蓝条资源，只影响 DeepSeek
+var token: float = 100.0
+var token_max: float = 100.0
+var token_regen: float = 6.0
+var _token_hold: float = 0.0
 var buffs: Dictionary = {}
 var buff_timer: float = 0.0
 var shield_hits: int = 0
@@ -88,6 +93,8 @@ func _ready() -> void:
 		max_hp = cs.max_hp + int(GameState.stat("max_hp_bonus", 0))
 	GameState.max_hp = max_hp
 	hp = GameState.hp if GameState.hp > 0 else max_hp
+	if char_id == "deepseek":
+		token = token_max
 	_build_nodes()
 	_build_weapon()
 	_build_subweapon()
@@ -144,13 +151,15 @@ func _build_nodes() -> void:
 	if accent.has_method("setup"):
 		accent.setup(char_id)
 
-	# 手持装置：精确指向瞄准方向
+	# 手持装置：挂在 pivot 下，随躯干倾斜一起动，减少“贴图浮在身体外”的割裂感
 	gun = Node2D.new()
 	gun.name = "Gun"
 	gun.z_index = 2
 	gun.set_script(load("res://scripts/player/hand_device.gd"))
-	add_child(gun)
+	pivot.add_child(gun)
 	gun.position = Vector2(0, -16)
+	if gun.has_method("set_trim"):
+		gun.set_trim(GameConfig.char_color(char_id))
 
 	var light := PointLight2D.new()
 	if ResourceLoader.exists("res://assets/fx/light_radial.png"):
@@ -231,7 +240,7 @@ func _build_subweapon() -> void:
 	var path := ""
 	match char_id:
 		"deepseek":
-			path = "res://scripts/weapons/sub_deep_retrieval.gd"
+			path = "res://scripts/weapons/sub_iron_basin.gd"
 		"gpt":
 			path = "res://scripts/weapons/sub_thought_chain.gd"
 		"claude":
@@ -265,12 +274,17 @@ func _physics_process(delta: float) -> void:
 	_update_facing()
 	_update_lean(delta)
 	gun.set_aim(aim)
-	var pos := Vector2(0, -11) + aim * 16.0
-	# 朝上瞄准时把 32px 武器抬到头顶上方，避免糊住整张脸
+	# 抵消躯干倾斜，武器仍精确指向准星（pivot 只做轻微 lean）
+	gun.rotation -= pivot.rotation
+	# 握把抬到胸口高度：原来 -11 在腰部，长武器会像“挂在胯上”
+	var pos := Vector2(0, -24) + aim * 16.0
+	# 朝上瞄准时把武器抬到头顶上方，避免糊住整张脸；长杖同时切到身后
 	if aim.y < -0.35:
 		pos.y -= 12.0
+		gun.z_index = -1
+	else:
+		gun.z_index = 2
 	gun.position = pos
-	gun.z_index = 2
 
 	if roll_t > 0.0:
 		velocity = roll_dir * GameConfig.ROLL_SPEED
@@ -305,6 +319,12 @@ func _physics_process(delta: float) -> void:
 
 func _tick_timers(delta: float) -> void:
 	invuln = maxf(0.0, invuln - delta)
+	# Token 自然回复：移动不消耗，施法/受击后短暂停一下
+	if char_id == "deepseek" and alive:
+		if _token_hold > 0.0:
+			_token_hold = maxf(0.0, _token_hold - delta)
+		else:
+			token = minf(token_max, token + token_regen * delta)
 	roll_t = maxf(0.0, roll_t - delta)
 	roll_cd = maxf(0.0, roll_cd - delta)
 	fire_anim = maxf(0.0, fire_anim - delta)
@@ -670,6 +690,7 @@ func take_damage(amount: int) -> void:
 	invuln = GameConfig.INVULN_TIME
 	hp -= amount * DMG_PER_HIT
 	_regen_delay = REGEN_DELAY
+	_token_hold = maxf(_token_hold, 0.8)
 	GameState.floor_clean = false
 	GameState.hp = maxi(0, hp)
 	GameState.hp_changed.emit(GameState.hp, GameState.max_hp)
@@ -734,6 +755,44 @@ func record_hit(e: Node) -> void:
 
 func on_kill() -> void:
 	tokens = mini(20, tokens + 1)
+	# 大肥鱼天赋：击杀回一点 Token，鼓励用铁盆补经济
+	if char_id == "deepseek":
+		add_token(2.0)
+
+
+# ---------------- Token 账户（DeepSeek 天赋） ----------------
+func token_ratio() -> float:
+	return clampf(token / maxf(1.0, token_max), 0.0, 1.0)
+
+
+func can_afford(cost: float) -> bool:
+	if char_id != "deepseek":
+		return true
+	return token + 0.001 >= cost
+
+
+## 扣 Token；不足返回 false，调用方负责提示
+func spend_token(cost: float) -> bool:
+	if char_id != "deepseek":
+		return true
+	if token + 0.001 < cost:
+		return false
+	token = maxf(0.0, token - cost)
+	_token_hold = maxf(_token_hold, 0.55)
+	return true
+
+
+func add_token(amount: float) -> void:
+	if char_id != "deepseek":
+		return
+	token = minf(token_max, token + amount)
+
+
+## 轻量 HUD 提示（不依赖具体场景层级）
+func notify(text: String, dur: float = 1.6) -> void:
+	var h := get_tree().get_first_node_in_group("hud")
+	if h != null and h.has_method("show_toast"):
+		h.show_toast(text, dur)
 
 
 func add_buff(kind: String, value: float, dur: float) -> void:

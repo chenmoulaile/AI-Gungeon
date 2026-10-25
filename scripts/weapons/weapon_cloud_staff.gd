@@ -2,7 +2,6 @@ extends "res://scripts/weapons/weapon_base.gd"
 ## GPT 初始武器「云端龙息杖」
 ## 左键挥杖发射蓝色云团飞弹，飞弹带轻微追踪
 
-const TEX := "res://assets/weapons/gpt_starter.png"
 const DMG := 5.0
 const RATE := 5.5
 
@@ -10,7 +9,8 @@ const RATE := 5.5
 func setup(p: Node) -> void:
 	super.setup(p)
 	mode_name = "云端龙息"
-	p.set_held(TEX, 0.0)
+	# 程序化长杖：56px 杖身 + 云晶杖头，弹体从杖尖发出
+	p.set_held("", 0.0, Color.WHITE, "staff", Color("#B06BFF"), 64.0)
 
 
 func fire(dir: Vector2) -> void:
@@ -18,6 +18,8 @@ func fire(dir: Vector2) -> void:
 		return
 	cooldown = 1.0 / maxf(0.4, RATE * fire_rate_mult())
 	var origin: Vector2 = player.global_position + Vector2(0, -16) + dir * 12.0
+	if player.gun != null and is_instance_valid(player.gun):
+		origin = player.gun.to_global(player.gun.muzzle_local())
 	var b: Node = spawn_bullet(origin, dir, DMG, 380.0, Color("#8fd0ff"),
 		{"radius": 5.0, "life": 1.9, "tier": "light", "trail": true,
 		"homing": 1.1, "homing_time": 0.7})

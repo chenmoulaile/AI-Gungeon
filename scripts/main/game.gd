@@ -46,6 +46,7 @@ var ui_layer: CanvasLayer
 var tutorial = null
 
 var wave_index: int = 0
+var _debug_safe: bool = false
 var wave_total: int = 2
 var alive_count: int = 0
 var room_cleared: bool = false
@@ -64,14 +65,18 @@ func _ready() -> void:
 	GameState.bullets_root = bullet_layer
 	GameState.run_ended.connect(_on_run_ended)
 	_spawn_player()
-	_start_room(GameState.room_index)
-	ScreenFx.set_battle(true)
-	BaCursor.set_battle(true)
 	# 网页验收模式：跳过开场对话框，免得遮住截图
 	var dbg := _debug_query()
-	if not intro_shown and dbg == "" and GameState.floor_index == 1 and GameState.room_index == 1:
+	_debug_safe = dbg.contains("safe")
+	var wants_intro := not intro_shown and dbg == "" \
+		and GameState.floor_index == 1 and GameState.room_index == 1
+	# 开场介绍期间不生成第一波敌人：介绍播完再刷，避免“看着介绍挨打”
+	_start_room(GameState.room_index, wants_intro)
+	ScreenFx.set_battle(true)
+	BaCursor.set_battle(true)
+	if wants_intro:
 		intro_shown = true
-		_show_intro_dialog()
+		_show_intro_dialog(wants_intro)
 	_check_debug_query(dbg)
 
 
@@ -99,11 +104,35 @@ func _check_debug_query(q: String = "") -> void:
 		call_deferred("_debug_spawn_enemies")
 	if q.contains("bullets"):
 		call_deferred("_debug_spawn_bullets")
+	if q.contains("boss"):
+		call_deferred("_debug_go_boss")
+	if q.contains("view"):
+		call_deferred("_debug_view_actor")
 
 
 func _debug_set_floor(fi: int) -> void:
 	GameState.floor_index = fi
 	_start_room(1)
+
+
+## ?boss=1：网页验收直接进 Boss 房，看战斗内像素化
+func _debug_go_boss() -> void:
+	_start_room(5)
+	if get_tree().paused:
+		get_tree().paused = false
+	for n in ui_layer.get_children():
+		if n.has_method("queue_free") and String(n.name).begins_with("BossIntro"):
+			n.queue_free()
+
+
+## ?boss=1&view=1：把玩家挪到 Boss 旁并冻结本体，方便网页截图验收像素化（仅调试）
+func _debug_view_actor() -> void:
+	if boss == null or not is_instance_valid(boss):
+		return
+	player.global_position = boss.global_position + Vector2(-160, 40)
+	player.grant_invuln(999.0)
+	boss.set_physics_process(false)
+	boss.set_process(false)
 
 
 func _debug_spawn_enemies() -> void:
@@ -252,7 +281,7 @@ func _count_for(kind: int) -> int:
 			return 3
 
 
-func _start_room(index: int) -> void:
+func _start_room(index: int, defer_wave: bool = false) -> void:
 	GameState.room_index = index
 	busy = false
 	room_cleared = false
@@ -290,7 +319,8 @@ func _start_room(index: int) -> void:
 		MusicManager.play("combat")
 		wave_total = _wave_total_for(room_kind) + int(SeedManager.diff("wave"))
 		hud.show_toast("B%d · 房间 %d" % [GameState.floor_index, index], 1.4)
-		_spawn_wave()
+		if not defer_wave and not _debug_safe:
+			_spawn_wave()
 	ChallengeManager.on_room_start(GameState.floor_index)
 	RunSave.save_run()
 	if tutorial != null and is_instance_valid(tutorial):
@@ -389,9 +419,11 @@ func _spawn_boss() -> void:
 
 
 ## 开局对话：立绘 + 打字机
-func _show_intro_dialog() -> void:
+func _show_intro_dialog(deferred_wave: bool = false) -> void:
 	var d = GameState.char_data
 	if d == null:
+		if deferred_wave:
+			_spawn_wave()
 		return
 	var dlg = PortraitDialogScene.instantiate()
 	dlg.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -402,12 +434,15 @@ func _show_intro_dialog() -> void:
 	dlg.setup(portrait, d.display_name,
 		[d.blurb, "武器「%s」：%s" % [d.weapon_name, d.weapon_desc],
 		 "技能「%s」：%s" % [d.skill_name, d.skill_desc],
+		 "天赋「%s」：%s" % [d.passive_name, d.passive_desc],
 		 "清空 5 个房间，第 5 间是 Boss。走吧。"])
 	get_tree().paused = true
 	dlg.finished.connect(func() -> void:
 		get_tree().paused = false
 		if is_instance_valid(dlg):
-			dlg.queue_free())
+			dlg.queue_free()
+		if deferred_wave:
+			_spawn_wave())
 
 
 func _show_boss_intro() -> void:

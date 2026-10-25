@@ -29,6 +29,7 @@ var _t: float = 0.0
 
 
 func _ready() -> void:
+	add_to_group("hud")
 	set_anchors_preset(Control.PRESET_FULL_RECT)
 	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -121,6 +122,7 @@ func _draw() -> void:
 	_draw_exclusive()
 	var p = GameState.player
 	if p != null and is_instance_valid(p):
+		_draw_talent(p)
 		_draw_weapon(p)
 		_draw_mode(p)
 	_draw_upgrades()
@@ -157,6 +159,38 @@ func _draw_hearts() -> void:
 		UiKit.TEXT_DIM)
 	if ratio <= 0.3 and fmod(_t, 0.6) < 0.3:
 		UiKit.corner_brackets(self, bar.grow(2), UiKit.DANGER, 3)
+
+
+# ---------------- 左上：角色天赋 ----------------
+## DeepSeek 蓝条 Token / GPT 上下文窗口 / Claude 细致阅读
+func _draw_talent(p) -> void:
+	var r := Rect2(8, 58, 196, 18)
+	var title := "TALENT"
+	var value := ""
+	var col := UiKit.CYAN
+	var ratio := 1.0
+	match String(p.char_id):
+		"deepseek":
+			title = "TOKEN"
+			ratio = float(p.token_ratio())
+			value = "%d/%d" % [int(round(float(p.token))), int(p.token_max)]
+			col = UiKit.CYAN
+			if ratio <= 0.2:
+				col = UiKit.DANGER if fmod(_t, 0.5) < 0.25 else UiKit.GOLD
+		"gpt":
+			title = "CONTEXT"
+			ratio = clampf(float(p.tokens) / 20.0, 0.0, 1.0)
+			value = "FULL" if int(p.tokens) >= 20 else "%d/20" % int(p.tokens)
+			col = UiKit.PURPLE
+		_:
+			title = "TALENT"
+			ratio = 1.0
+			value = "细致阅读"
+			col = UiKit.GOLD
+	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.90), UiKit.BORDER, Color(0, 0, 0, 0), false)
+	UiKit.text(self, r.position + Vector2(6, 13), title, 12, col)
+	UiKit.bar(self, Rect2(r.position.x + 60, r.position.y + 6, 76, 7), ratio, col)
+	UiKit.text_right(self, r.end.x - 6, r.position.y + 13, value, 12, col)
 
 
 # ---------------- 左下：金币 ----------------
@@ -225,39 +259,69 @@ func _draw_exclusive() -> void:
 
 # ---------------- 右下：武器 + 键帽冷却 ----------------
 func _draw_weapon(p) -> void:
-	var r := Rect2(396, 314, 236, 38)
+	var r := Rect2(396, 312, 236, 42)
 	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.88), UiKit.BORDER, UiKit.BORDER_HI, true)
 	var w = p.weapon
-	var icon_rect := Rect2(r.position + Vector2(6, 7), Vector2(24, 24))
+	var icon_rect := Rect2(r.position + Vector2(6, 9), Vector2(24, 24))
 	if not UiKit.draw_icon(self, "res://assets/icons/weapons/%s.png" % GameState.char_id, icon_rect):
 		_draw_gun_placeholder(icon_rect, GameConfig.char_color(GameState.char_id))
 	var nm := "武器"
 	if w != null and GameState.char_data != null:
 		nm = String(GameState.char_data.weapon_name)
-	UiKit.text(self, Vector2(r.position.x + 36, r.position.y + 15), UiKit.fit(nm, 96, 12),
+	UiKit.text(self, Vector2(r.position.x + 36, r.position.y + 15), UiKit.fit(nm, 118, 12),
 		12, UiKit.TEXT)
-	UiKit.text(self, Vector2(r.position.x + 36, r.position.y + 31), "左键射击", 12,
-		Color(0.42, 0.48, 0.58))
+	var hint := "左键射击 · Q 副武器"
+	var hint_col := Color(0.42, 0.48, 0.58)
+	match String(p.char_id):
+		"deepseek":
+			hint = "大白饭 -7 · 铁盆"
+		"gpt":
+			hint = "龙息 · 思维链"
+		"claude":
+			hint = "光束 · 对齐"
+	if float(p.charge_ratio) > 0.0:
+		hint = "铁盆蓄力 %d%%" % int(round(float(p.charge_ratio) * 100.0))
+		hint_col = UiKit.GOLD
+	UiKit.text(self, Vector2(r.position.x + 36, r.position.y + 31),
+		UiKit.fit(hint, 118, 12), 12, hint_col)
 
-	# E / Q：8 段像素环 + 键帽字
-	var e_c := Vector2(r.position.x + 176, r.position.y + 16)
-	var q_c := Vector2(r.position.x + 210, r.position.y + 16)
+	# E / Q：像素键帽 + 3px 冷却条（8 段散点环放大后像噪点，已弃用）
+	var e_c := Vector2(r.position.x + 170, r.position.y + 16)
+	var q_c := Vector2(r.position.x + 208, r.position.y + 16)
 	if w != null:
 		var cd: float = float(w.skill_cd_left)
 		var total: float = 8.0
 		if p.data != null:
 			total = maxf(0.5, p.data.skill_cd)
-		_ring(e_c, 12.0, clampf(1.0 - cd / total, 0.0, 1.0),
-			GameConfig.char_color(GameState.char_id), "E", cd <= 0.0, cd, _skill_pulse)
+		_key(e_c, clampf(1.0 - cd / total, 0.0, 1.0),
+			GameConfig.char_color(GameState.char_id), "E", cd <= 0.0, _skill_pulse)
 	var sub = p.sub
 	if sub != null and is_instance_valid(sub):
 		var sready: bool = sub.ready()
 		if sready and not _sub_was_ready:
 			_sub_pulse = 0.45
 		_sub_was_ready = sready
-		_ring(q_c, 10.0, sub.ratio(), sub.color, "Q", sready, float(sub.cd_left), _sub_pulse)
+		_key(q_c, sub.ratio(), sub.color, "Q", sready, _sub_pulse)
 	else:
-		_ring(q_c, 10.0, 0.0, Color(0.4, 0.45, 0.55), "Q", false, 0.0, 0.0)
+		_key(q_c, 0.0, Color(0.4, 0.45, 0.55), "Q", false, 0.0)
+
+
+## 单个键帽：20×20 硬框 + 字母 + 底部 16×3 冷却条；就绪时白色角括号脉冲
+func _key(c: Vector2, ratio: float, col: Color, key: String, ready: bool,
+		pulse: float) -> void:
+	var cap := Rect2((c - Vector2(10, 10)).round(), Vector2(20, 20))
+	UiKit.frame(self, cap, Color(0.09, 0.13, 0.21) if ready else Color(0.07, 0.09, 0.14),
+		col if ready else UiKit.BORDER, Color(0, 0, 0, 0), false)
+	UiKit.text_center(self, c.x, c.y + 4.0, key, 12,
+		UiKit.WHITE if ready else UiKit.TEXT_DIM)
+	var bar := Rect2(cap.position.x + 2, cap.end.y + 2, 16, 3)
+	draw_rect(bar, UiKit.VOID)
+	var lit: int = int(round(clampf(ratio, 0.0, 1.0) * 16.0))
+	if lit > 0:
+		draw_rect(Rect2(bar.position, Vector2(lit, 3)),
+			col if ready else col.darkened(0.45))
+	if ready and pulse > 0.0:
+		UiKit.corner_brackets(self, cap.grow(1), Color(1, 1, 1, pulse * 1.2), 3)
 
 
 func _draw_gun_placeholder(rect: Rect2, accent: Color) -> void:
@@ -266,17 +330,6 @@ func _draw_gun_placeholder(rect: Rect2, accent: Color) -> void:
 	draw_rect(Rect2(c + Vector2(4, 7), Vector2(13, 4)), accent)
 	draw_rect(Rect2(c + Vector2(14, 10), Vector2(4, 7)), accent)
 	draw_rect(Rect2(c + Vector2(7, 11), Vector2(5, 3)), accent.darkened(0.25))
-
-
-func _ring(c: Vector2, radius: float, ratio: float, col: Color, key: String,
-		ready: bool, cd: float, pulse: float) -> void:
-	UiKit.ring(self, c, radius + 4.0, ratio, col if ready else col.darkened(0.2), 4.0, UiKit.BORDER)
-	UiKit.text_center(self, c.x, c.y + 4.0, key, 12, UiKit.TEXT if ready else UiKit.TEXT_DIM)
-	if ready and pulse > 0.0:
-		UiKit.corner_brackets(self, Rect2(c - Vector2(radius + 5, radius + 5),
-			Vector2(radius + 5, radius + 5) * 2), Color(1, 1, 1, pulse * 1.5), 4)
-	elif not ready:
-		UiKit.text_center(self, c.x, c.y + 18.0, "%.1f" % cd, 12, UiKit.TEXT_DIM)
 
 
 func _draw_mode(p) -> void:

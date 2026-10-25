@@ -136,7 +136,8 @@ func _draw_blocking() -> void:
 	UiKit.scanlines(self, box.grow(-2), 0.05)
 	draw_line(box.position + Vector2(12, 24), Vector2(box.end.x - 12, box.position.y + 24),
 		UiKit.BORDER, 1.0)
-	UiKit.text(self, box.position + Vector2(12, 18), "DIALOGUE", UiKit.F_SMALL, UiKit.TEXT_DIM)
+	UiKit.text(self, box.position + Vector2(12, 18), "PAUSED // DIALOGUE", UiKit.F_SMALL,
+		UiKit.GOLD)
 	var full: String = str(lines[line_index]) if line_index < lines.size() else ""
 	UiKit.text_block(self, box.position + Vector2(14, 46),
 		full.substr(0, int(typed)), box.size.x - 28, UiKit.F_BODY, UiKit.TEXT, 6)

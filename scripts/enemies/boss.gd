@@ -47,12 +47,14 @@ func _setup() -> void:
 	var light := PointLight2D.new()
 	if ResourceLoader.exists("res://assets/fx/light_radial.png"):
 		light.texture = load("res://assets/fx/light_radial.png")
-	light.energy = 1.1
-	light.texture_scale = 2.4
-	light.color = Color(0.78, 0.45, 1.0)
+	light.energy = 0.85
+	light.texture_scale = 1.5
+	light.color = Color(0.72, 0.45, 1.0)
 	light.shadow_enabled = true
 	light.shadow_filter = Light2D.SHADOW_FILTER_NONE
 	add_child(light)
+	# 本体不参与 2D 光照：否则自己的紫色光会把像素体染成洋红，看着像没做像素化
+	light_mask = 0
 	atk_cd = 1.8
 	_roll_moves()
 
@@ -283,6 +285,7 @@ func _do_summon() -> void:
 
 
 # ---------------- 绘制 ----------------
+## Boss 全像素化：阶梯晶体本体 + 2×2 旋转环 + 像素眼，不使用任何平滑圆/弧
 func _draw_body() -> void:
 	var c := accent
 	match phase:
@@ -290,26 +293,83 @@ func _draw_body() -> void:
 			c = Color("#ff7ad9")
 		3:
 			c = Color("#ff5b5b")
+	var edge := Color("#14081F")
+
+	# 外圈：三圈像素块，内圈 3×3 + 外两圈 2×2，转速不同，形成“回响”环
 	for k in 3:
-		var rr := radius + 6.0 + k * 5.0
-		var a0 := t * (0.8 + k * 0.5)
-		draw_arc(Vector2.ZERO, rr, a0, a0 + PI * 1.3, 20,
-			Color(c.r, c.g, c.b, 0.45 - k * 0.1), 2.0, true)
-	var pts := PackedVector2Array()
-	for i in 8:
-		var a := TAU * i / 8.0 + t * 0.5
-		var rr := radius * (1.0 if i % 2 == 0 else 0.58)
-		pts.append(Vector2(cos(a), sin(a)) * rr)
-	draw_colored_polygon(pts, c)
-	var outline := pts.duplicate()
-	outline.append(pts[0])
-	draw_polyline(outline, Color(0, 0, 0, 0.9), 2.0)
+		var rr: float = radius + 7.0 + k * 5.0
+		var count: int = 12 + k * 4
+		var spin: float = t * (0.55 + k * 0.42)
+		var a_ring: float = 0.78 - k * 0.16
+		var sz: float = 3.0 if k == 0 else 2.0
+		for i in count:
+			var a := spin + TAU * float(i) / float(count)
+			var px := roundf(cos(a) * rr * 0.5) * 2.0
+			var py := roundf(sin(a) * rr * 0.5) * 2.0
+			draw_rect(Rect2(px - sz * 0.5, py - sz * 0.5, sz, sz),
+				Color(c.r, c.g, c.b, a_ring))
+
+	# 本体：12 行阶梯矩形，拼成带尖顶的晶体
+	var widths := [8.0, 18.0, 30.0, 42.0, 52.0, 58.0, 58.0, 52.0, 44.0, 34.0, 22.0, 10.0]
+	var rects: Array = []
+	for i in widths.size():
+		var w := float(widths[i])
+		rects.append(Rect2(-w * 0.5, -30.0 + float(i) * 4.0, w, 4.0))
+	_px_rects(rects, c.darkened(0.18), edge)
+
+	# 四角尖刺：让轮廓更凶
+	var horns: Array = [
+		Rect2(-32.0, -14.0, 6.0, 6.0),
+		Rect2(26.0, -14.0, 6.0, 6.0),
+		Rect2(-30.0, 8.0, 4.0, 8.0),
+		Rect2(26.0, 8.0, 4.0, 8.0),
+		Rect2(-4.0, -36.0, 8.0, 6.0),
+	]
+	_px_rects(horns, c.darkened(0.05), edge)
+
+	# 晶体切面：左上高光、右下暗面
+	draw_rect(Rect2(-22.0, -22.0, 14.0, 4.0), c.lightened(0.22))
+	draw_rect(Rect2(-26.0, -18.0, 8.0, 4.0), c.lightened(0.10))
+	draw_rect(Rect2(8.0, 2.0, 14.0, 4.0), c.darkened(0.36))
+	draw_rect(Rect2(12.0, 6.0, 8.0, 4.0), c.darkened(0.36))
+	draw_rect(Rect2(-2.0, 10.0, 10.0, 4.0), c.darkened(0.30))
+
+	# 像素眼：菱形眼白 + 竖瞳
+	_px_rects([
+		Rect2(-3.0, -11.0, 6.0, 2.0),
+		Rect2(-7.0, -9.0, 14.0, 2.0),
+		Rect2(-9.0, -7.0, 18.0, 6.0),
+		Rect2(-7.0, -1.0, 14.0, 2.0),
+		Rect2(-3.0, 1.0, 6.0, 2.0),
+	], Color("#F7F1FF"), Color("#3A2350"))
+	draw_rect(Rect2(-2.0, -7.0, 4.0, 6.0), Color("#140A22"))
+	draw_rect(Rect2(-2.0, -5.0, 1.0, 1.0), Color("#FFFFFF"))
+	draw_rect(Rect2(1.0, -2.0, 1.0, 1.0), c.lightened(0.45))
+
+	# 眼下的裂纹
+	draw_rect(Rect2(-16.0, 5.0, 6.0, 2.0), c.darkened(0.48))
+	draw_rect(Rect2(10.0, 5.0, 6.0, 2.0), c.darkened(0.48))
+	draw_rect(Rect2(-10.0, 11.0, 4.0, 2.0), c.darkened(0.48))
+	draw_rect(Rect2(6.0, 11.0, 4.0, 2.0), c.darkened(0.48))
+
 	if telegraph > 0.0:
 		var k: float = 1.0 - telegraph / 0.75
 		var warn := Color(1.0, 0.35, 0.4, 0.55 * (1.0 - k * 0.6))
-		draw_arc(Vector2.ZERO, radius + 14.0 + k * 26.0, 0.0, TAU, 40, warn, 2.0, true)
-		draw_circle(Vector2.ZERO, radius * 0.5, Color(1.0, 0.3, 0.35, 0.25))
+		var rr := radius + 14.0 + k * 26.0
+		for i in 24:
+			var a := TAU * float(i) / 24.0
+			var px := roundf(cos(a) * rr * 0.5) * 2.0
+			var py := roundf(sin(a) * rr * 0.5) * 2.0
+			draw_rect(Rect2(px - 2.0, py - 2.0, 4.0, 4.0), warn)
+		# 中心蓄力方块
+		var ex := roundf(radius * 0.5)
+		draw_rect(Rect2(-ex, -ex, ex * 2.0, ex * 2.0), Color(1.0, 0.3, 0.35, 0.16))
+
 	if charge_t > 0.0:
-		draw_line(Vector2.ZERO, charge_dir * (radius + 30.0), Color(1.0, 0.3, 0.25, 0.5), 3.0)
-	draw_circle(Vector2.ZERO, radius * 0.44, Color(1, 1, 1, 0.95))
-	draw_circle(Vector2.ZERO, radius * 0.24, Color(0.1, 0.02, 0.15, 1.0))
+		for i in 5:
+			var p := charge_dir * (radius + 8.0 + float(i) * 9.0)
+			var sz := maxf(2.0, 6.0 - float(i))
+			var a := 0.55 - float(i) * 0.09
+			draw_rect(Rect2(roundf(p.x * 0.5) * 2.0 - sz * 0.5,
+				roundf(p.y * 0.5) * 2.0 - sz * 0.5, sz, sz),
+				Color(1.0, 0.30, 0.25, maxf(0.08, a)))

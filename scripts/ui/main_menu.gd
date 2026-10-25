@@ -88,7 +88,11 @@ func _unhandled_input(event: InputEvent) -> void:
 		var k := event as InputEventKey
 		match k.physical_keycode:
 			KEY_ENTER, KEY_SPACE:
+				# Enter 只做“确认 / 下一步”，不是某个菜单项的独立快捷键
 				_activate(_focus)
+				get_viewport().set_input_as_handled()
+			KEY_F:
+				start_game.emit()
 				get_viewport().set_input_as_handled()
 			KEY_DOWN, KEY_S:
 				_move_focus(1)
@@ -154,7 +158,7 @@ func _draw() -> void:
 		var rr := Rect2(b.position, b.size)
 		if i == _focus and not b.disabled:
 			UiKit.corner_brackets(self, rr.grow(1), UiKit.GOLD, 5)
-		var key: String = ["ENTER", "V", "T", "C", "O", "F1"][i]
+		var key: String = ["F", "V", "T", "C", "O", "F1"][i]
 		var kw := UiKit.measure(key, 12) + 8
 		var kr := Rect2(rr.end.x + 10, rr.position.y + 4, maxf(18.0, kw), 16)
 		draw_rect(Rect2(kr.position + Vector2(0, 1), kr.size), UiKit.SHADOW)
@@ -162,6 +166,9 @@ func _draw() -> void:
 		draw_rect(kr, UiKit.BORDER, false, 1.0)
 		UiKit.text_center(self, kr.get_center().x, kr.get_center().y + 4, key, 12,
 			UiKit.GOLD if i == _focus else UiKit.TEXT_DIM)
+
+	UiKit.text(self, Vector2(MENU_X, 293), "W/S 选择 · Enter 下一步 · F 开始", 12,
+		Color(0.55, 0.62, 0.75))
 
 	_draw_diorama(Rect2(376, 92, 240, 184))
 

@@ -338,14 +338,17 @@ func _draw_locked_card(r: Rect2) -> void:
 
 
 func _draw_detail() -> void:
-	var r := Rect2(24, 240, 592, 48)
+	var r := Rect2(24, 240, 592, 50)
 	UiKit.frame(self, r, UiKit.DEEP, UiKit.BORDER, UiKit.BORDER_HI, true)
 	var d: CharacterData = _data[_sel]
 	var st: CharacterStats = _stats[_sel]
 	UiKit.text(self, Vector2(36, 258), d.display_name, 24, d.accent, false)
-	UiKit.text(self, Vector2(36, 278),
+	UiKit.text(self, Vector2(36, 274),
 		UiKit.fit(d.title + " · 武器 " + d.weapon_name + " · 技能 " + d.skill_name, 320, 12),
 		12, UiKit.TEXT_DIM)
+	UiKit.text(self, Vector2(36, 287),
+		UiKit.fit("天赋「%s」：%s" % [d.passive_name, d.passive_desc], 552, 12),
+		12, Color(0.72, 0.78, 0.92))
 
 	# 属性：HP / SPD / CD 三列，数值与条留 6px 间隙
 	var bx := 388.0
