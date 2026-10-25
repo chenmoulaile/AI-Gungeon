@@ -15,7 +15,7 @@ func _ready() -> void:
 	get_tree().paused = false
 	await get_tree().process_frame
 	print("start room=", GameState.room_index, " paused=", get_tree().paused)
-	g._start_room(5)
+	g.debug_start(FloorMap.KIND_BOSS)
 	await get_tree().create_timer(0.5).timeout
 	# 关 Boss 登场
 	for k in 14:

@@ -209,25 +209,51 @@ func _draw_coins() -> void:
 		Color(0.45, 0.5, 0.6))
 
 
-# ---------------- 右上：楼层 + 小地图 ----------------
+# ---------------- 右上：楼层 + 分支小地图 ----------------
 func _draw_room_info() -> void:
-	var s := "B%d - %02d" % [GameState.floor_index, GameState.room_index]
-	UiKit.text_right(self, 632, 20, s, 12, UiKit.CYAN)
-	# 小地图 48×32：3×2 房间格
-	var mr := Rect2(584, 24, 48, 32)
-	UiKit.frame(self, mr, UiKit.VOID, UiKit.BORDER, Color(0, 0, 0, 0), false)
-	var total := 5
-	for i in total:
-		var gx := int(i % 3)
-		var gy := int(i / 3)
-		var cell := Rect2(mr.position + Vector2(2 + gx * 15, 2 + gy * 15), Vector2(13, 13))
-		var here: bool = (i + 1) == GameState.room_index
-		draw_rect(cell, UiKit.RAISED if here else Color(0.10, 0.13, 0.21))
+	var map := GameState.ensure_map()
+	var panel := Rect2(452, 2, 180, 54)
+	UiKit.frame(self, panel, Color(0.06, 0.09, 0.15, 0.90), UiKit.BORDER, UiKit.BORDER_HI, true)
+	UiKit.text(self, Vector2(panel.position.x + 6, panel.position.y + 13),
+		"B%d · %02d/%02d" % [GameState.floor_index, GameState.node_id + 1,
+			FloorMap.NODE_COUNT], 12, UiKit.CYAN)
+	UiKit.text_right(self, panel.end.x - 6, panel.position.y + 13, "MAP", 12,
+		Color(0.42, 0.48, 0.58))
+	var origin := Vector2(panel.position.x + 22.0, 0.0)
+	# 连线先画，节点盖住端点
+	for id in FloorMap.NODE_COUNT:
+		var n := map.node_at(id)
+		if n.is_empty():
+			continue
+		var a := _node_pos(n, origin)
+		for nid in map.next_of(id):
+			var nn := map.node_at(int(nid))
+			if nn.is_empty():
+				continue
+			draw_line(a, _node_pos(nn, origin), Color(0.35, 0.45, 0.60, 0.55), 1.0)
+	for id in FloorMap.NODE_COUNT:
+		var n := map.node_at(id)
+		if n.is_empty():
+			continue
+		var c := _node_pos(n, origin)
+		var col := Color(FloorMap.kind_color(String(n["kind"])))
+		var cell := Rect2(c - Vector2(3, 3), Vector2(6, 6))
+		var here: bool = id == GameState.node_id
 		if here:
-			draw_rect(cell, UiKit.CYAN, false, 1.0)
-			draw_rect(Rect2(cell.get_center() - Vector2(1, 1), Vector2(3, 3)), UiKit.WHITE)
+			draw_rect(Rect2(cell.position - Vector2(1, 1), Vector2(8, 8)), UiKit.GOLD, false, 1.0)
+			draw_rect(cell, col)
+			draw_rect(Rect2(c + Vector2(-1, -1), Vector2(2, 2)), UiKit.WHITE)
+		elif GameState.visited_nodes.has(id):
+			draw_rect(cell, Color(col.r, col.g, col.b, 0.5))
 		else:
-			draw_rect(cell, UiKit.BORDER, false, 1.0)
+			draw_rect(cell, Color("#161C2C"))
+			draw_rect(cell, Color(col.r, col.g, col.b, 0.55), false, 1.0)
+
+
+func _node_pos(n: Dictionary, origin: Vector2) -> Vector2:
+	var lanes := [27.0, 39.0, 51.0]
+	return origin + Vector2(float(int(n["layer"])) * 30.0,
+		float(lanes[clampi(int(n["lane"]), 0, 2)]))
 
 
 # ---------------- 左下：专武解锁 ----------------

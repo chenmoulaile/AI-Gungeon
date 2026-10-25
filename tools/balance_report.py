@@ -92,9 +92,14 @@ def threat(floor_index, kind_count=3, per_room=5, waves=2.5):
 
 # ---------------- 经济 ----------------
 avg_coin_per_enemy = sum(e["coin_value"] for e in enemies.values()) / len(enemies)
-per_floor = avg_coin_per_enemy * 5 * 2.5 * 4 + econ["room_clear_coins"] * 4
-prices = [22, 24, 26, 28, 30, 32, 34]
-avg_price = sum(prices) / len(prices)
+# v0.10 分支地图：每层最多 3 场战斗（入口 / 岔口 / 高潮），事件房与商店不出怪
+combat_rooms = 3
+per_floor = (avg_coin_per_enemy * 5 * 2.5 * combat_rooms
+             + econ["room_clear_coins"] * combat_rooms + 10 + 5)  # 层末 +10 与约 5 金利息
+# 稀有度定价 18/30/48；货架基础权重 白 4 / 蓝 2 / 紫 1
+tier_prices = [18, 30, 48]
+tier_weights = [4 * 4, 8 * 2, 6 * 1]
+avg_price = sum(p * w for p, w in zip(tier_prices, tier_weights)) / sum(tier_weights)
 
 lines = []
 lines.append("# 理论平衡检查（只读，未改数值）\n")
@@ -118,7 +123,7 @@ for f in (1, 2, 3):
     lines.append("| B%d | %.0f | %.1f | %.1f |" % (f, th, td, ratio))
 lines.append("")
 lines.append("## 经济曲线\n")
-lines.append("每层平均金币约 **%.0f**，商店均价 **%.0f**（每层 1 次商店、3 件货）。" % (per_floor, avg_price))
+lines.append("每层平均金币约 **%.0f**，商店加权均价 **%.0f**（白 18 / 蓝 30 / 紫 48，权重 4:2:1）。" % (per_floor, avg_price))
 lines.append("")
 lines.append("## 调整建议（未执行）\n")
 ds_real = ds_single_real
@@ -130,7 +135,7 @@ lines.append("1. DeepSeek 单体 %.0f、GPT %.0f、Claude %.0f：极差 %.0f%%�
 lines.append("2. Claude 有效生命最高（护盾回血），建议把护盾单次回复从 2 点降到 1 点，或把吸收数从 6 降到 5。")
 lines.append("3. GPT 三种模式里图像模式单体最高，语音模式最低，建议把语音锥形伤害从 %.0f 提到 %.0f。"
              % (gpt["mode3_damage"], gpt["mode3_damage"] * 1.35))
-lines.append("4. 经济：每层收入 %.0f、均价 %.0f，第 2 层即可买 2 件，建议把均价提到 30–34 区间。" % (per_floor, avg_price))
+lines.append("4. 经济：每层收入 %.0f、加权均价 %.0f，首层即可买 3–4 件白档；紫档 48 金需要跨层存款或利息支持，属于有意设计。" % (per_floor, avg_price))
 lines.append("")
 
 os.makedirs(os.path.join(ROOT, "docs"), exist_ok=True)

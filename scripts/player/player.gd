@@ -613,7 +613,7 @@ func _try_roll() -> void:
 	if cs3 != null:
 		rcd = cs3.roll_cd
 	roll_cd = rcd * GameState.stat("roll_cd_mult", 1.0)
-	grant_invuln(0.22)
+	grant_invuln(GameConfig.ROLL_TIME)
 	if anim.sprite_frames.has_animation("roll"):
 		anim.play("roll")
 	_anim_state = "roll"
@@ -751,7 +751,6 @@ func take_damage(amount: int) -> void:
 	# 受击硬直：不接受翻滚，但仍然可以移动
 	hurt_stun = HURT_STUN
 	ChallengeManager.on_damage()
-	InputBuffer.clear("roll")
 
 	GameFeel.flash(anim, Color(2.6, 0.6, 0.7), 0.14)
 	# 后仰 3px 再回弹

@@ -184,11 +184,18 @@ func _test_character(cid: String) -> void:
 	var cleared := await _clear_room(g)
 	_check(cleared, "%s: 清场后开门" % cid)
 
-	# 走进门
+	# 走进门：入口是分支岔口，会弹出二选一
 	p.global_position = g.room.door_zone().get_center()
 	await _wait(0.8)
-	_check(GameState.room_index == 2 or GameState.floor_index > 1,
-		"%s: 进入下一房间（房间 %d）" % [cid, GameState.room_index])
+	var choice = null
+	for c in g.ui_layer.get_children():
+		if c.name == "RoomChoice":
+			choice = c
+	if choice != null:
+		choice._pick(0)
+		await _wait(0.5)
+	_check(GameState.node_id in [1, 2] and GameState.room_index == GameState.node_id + 1,
+		"%s: 门后二选一进入分支节点（节点 %d）" % [cid, GameState.node_id])
 
 	g.queue_free()
 	await _frames(3)
@@ -197,7 +204,7 @@ func _test_character(cid: String) -> void:
 func _test_boss() -> void:
 	print("\n[Boss]")
 	var g = await _new_game("deepseek")
-	g._start_room(5)
+	g.debug_start(FloorMap.KIND_BOSS)
 	await _wait(0.3)
 	_check(g.boss != null, "Boss 生成")
 	GameState.player.invuln = 999.0
@@ -234,15 +241,11 @@ func _test_boss() -> void:
 func _test_shop() -> void:
 	print("\n[商店]")
 	var g = await _new_game("claude")
-	g._start_room(4)
-	await _wait(0.3)
+	g.debug_start(FloorMap.KIND_SHOP)
+	await _wait(1.0)
 	GameState.player.invuln = 999.0
 	GameState.add_coins(200)
-	var cleared := await _clear_room(g)
-	_check(cleared, "第 4 间房清空")
-	g.player.global_position = g.room.door_zone().get_center()
-	await _wait(0.6)
-	_check(get_tree().paused, "第 4 间房后进入商店（游戏暂停）")
+	_check(get_tree().paused, "进入商店（游戏暂停）")
 	var shop = null
 	for c in g.ui_layer.get_children():
 		if c.name == "Shop":
@@ -255,12 +258,19 @@ func _test_shop() -> void:
 		_check(GameState.upgrades.size() == before + 1, "购买藏品成功（%d -> %d）"
 			% [before, GameState.upgrades.size()])
 		_check(GameState.coins < 200, "金币被扣除（剩余 %d）" % GameState.coins)
+		var coins_before: int = GameState.coins
+		var rar_before: int = shop._reroll_cost
+		shop._msg_t = 0.0
+		shop._reroll()
+		await _frames(3)
+		_check(GameState.coins == coins_before - rar_before and shop._reroll_cost > rar_before,
+			"刷新货架并提高下次价格（剩余 %d）" % GameState.coins)
 		shop.closed.emit()
 		shop.queue_free()
 		get_tree().paused = false
 		await _wait(1.0)
-		_check(GameState.room_index == 5, "商店结束后进入第 5 间（Boss 房，当前 %d）"
-			% GameState.room_index)
+		_check(GameState.node_id == FloorMap.BOSS_ID, "商店结束后进入 Boss 节点（节点 %d）"
+			% GameState.node_id)
 	_check(GameState.combos.size() >= 0, "组合效果系统可用")
 	g.queue_free()
 	await _frames(3)

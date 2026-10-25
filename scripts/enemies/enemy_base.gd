@@ -204,6 +204,8 @@ func _die() -> void:
 	var shard_n: int = 10 if elite else 8
 	GameFeel.shards(global_position + Vector2(0, -radius * 0.5), accent, shard_n, 160.0, 0.4)
 	GameFeel.screen_shake(0.18 if elite else 0.12)
+	# 击杀顿帧：0.10s，不受轻击冷却限制
+	GameFeel.hit_stop(0.1, 0.06)
 	_drop_coins()
 	died.emit(self)
 	# 0.1s 闪白后淡出，避免"瞬间消失"

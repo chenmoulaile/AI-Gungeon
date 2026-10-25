@@ -33,6 +33,16 @@ const COMBOS := [
 
 var upgrades: Dictionary = {}   # id -> Upgrade
 
+## 稀有度（v0.10）：0 白（纯数值）/ 1 蓝（条件触发）/ 2 紫（质变钩子）
+const RARITY_PRICE := [18, 30, 48]
+const RARITY_NAMES := ["白", "蓝", "紫"]
+const RARITY_COLORS := ["#D8E0F0", "#63A9FF", "#B06BFF"]
+## 带钩子的条件触发件 → 蓝档；mutation 的质变件 → 紫档；其余白档
+const BLUE_IDS := [
+	"sharp_round", "rapid_cycle", "feather_boots", "crit_lens",
+	"roll_core", "extra_heart", "split_prism", "scholar_page",
+]
+
 
 func _ready() -> void:
 	_load_all()
@@ -76,6 +86,51 @@ func all_ids() -> Array:
 	return upgrades.keys()
 
 
+func rarity_of(up: Upgrade) -> int:
+	if up == null:
+		return 0
+	if up.mutation:
+		return 2
+	if BLUE_IDS.has(up.id):
+		return 1
+	return 0
+
+
+func rarity_of_id(id: String) -> int:
+	return rarity_of(upgrades.get(id, null))
+
+
+func price_of(up: Upgrade) -> int:
+	return int(RARITY_PRICE[rarity_of(up)])
+
+
+func pick_by_rarity(owned: Array, want: int) -> Upgrade:
+	var exact: Array = []
+	var fallback: Array = []
+	for id in upgrades.keys():
+		if owned.has(id):
+			continue
+		var r := rarity_of_id(String(id))
+		if r == want:
+			exact.append(id)
+		if r >= want:
+			fallback.append(id)
+	var pool: Array = exact if not exact.is_empty() else fallback
+	if pool.is_empty():
+		for id in upgrades.keys():
+			if not owned.has(id):
+				pool.append(id)
+	if pool.is_empty():
+		return null
+	SeedManager.shuffle(pool)
+	return upgrades[String(pool[0])]
+
+
+## 精英房必掉：至少蓝档，尽量不掉已持有的
+func roll_rare(owned: Array, min_rarity: int = 1) -> Upgrade:
+	return pick_by_rarity(owned, min_rarity)
+
+
 func get_combo(combo_name: String) -> Dictionary:
 	for c in COMBOS:
 		if c["name"] == combo_name:
@@ -92,8 +147,10 @@ func roll_offers(n: int, owned: Array) -> Array:
 			continue
 		var w := 1
 		var related := false
-		# 已持有某角色 1 件专属藏品时，该角色另一件权重 ×2
 		var up: Upgrade = upgrades[id]
+		# 稀有度基础权重：白 4 / 蓝 2 / 紫 1，白档更容易上架
+		w = maxi(w, [4, 2, 1][rarity_of(up)])
+		# 已持有某角色 1 件专属藏品时，该角色另一件权重 ×2
 		if up != null and up.char_tag != "" and up.char_tag == GameState.char_id:
 			for owned_id in owned:
 				var ou: Upgrade = upgrades.get(owned_id, null)

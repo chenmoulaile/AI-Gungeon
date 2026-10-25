@@ -89,15 +89,15 @@ func _run() -> void:
 
 	# 三层主题
 	GameState.floor_index = 1
-	g._start_room(1)
+	g._debug_set_floor(1)
 	await _wait(1.6)
 	await _shot("floor1")
 	GameState.floor_index = 2
-	g._start_room(1)
+	g._debug_set_floor(2)
 	await _wait(1.6)
 	await _shot("floor2")
 	GameState.floor_index = 3
-	g._start_room(1)
+	g._debug_set_floor(3)
 	await _wait(1.6)
 	await _shot("floor3")
 	# 层间转场卡片
@@ -109,12 +109,33 @@ func _run() -> void:
 	card.queue_free()
 
 	# Boss 房（沿用第 3 层主题的强化版）
-	g._start_room(5)
+	g.debug_start(FloorMap.KIND_BOSS)
 	await _frames(20)
 	await _shot("boss_intro")
 	await _close_overlay(g)
 	await _frames(30)
 	await _shot("boss_fight")
+
+	# 事件房三选一
+	g.debug_start(FloorMap.KIND_EVENT)
+	await _wait(0.7)
+	await _shot("event_room")
+	for c in g.ui_layer.get_children():
+		if c.name == "EventRoom":
+			c._skip()
+	await _wait(0.5)
+
+	# 门后二选一
+	GameState.node_id = FloorMap.START_ID
+	GameState.room_index = FloorMap.START_ID + 1
+	g.busy = false
+	g._show_choice()
+	await _wait(0.5)
+	await _shot("room_choice")
+	for c in g.ui_layer.get_children():
+		if c.name == "RoomChoice":
+			c._pick(0)
+	await _wait(0.6)
 
 	# 暂停菜单
 	var pm = load("res://scripts/ui/pause_menu.gd").new()

@@ -57,7 +57,7 @@ func _run() -> void:
 
 	for floor_i in [2, 3]:
 		GameState.floor_index = floor_i
-		g._start_room(1)
+		g.debug_start("")
 		g.busy = true
 		await _frames(2)
 		for e in GameState.enemies.duplicate():

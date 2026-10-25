@@ -223,7 +223,7 @@ func impact(preset: String, world_pos: Vector2, node: Node, dir: Vector2,
 func get_bullet() -> Node:
 	var b: Node = null
 	while _bullet_pool.size() > 0:
-		var cand: Node = _bullet_pool.pop_back()
+		var cand = _bullet_pool.pop_back()
 		if is_instance_valid(cand):
 			b = cand
 			break

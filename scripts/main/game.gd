@@ -34,6 +34,8 @@ const PortraitDialogScene = preload("res://scenes/ui/portrait_dialog.tscn")
 const SettingsScene = preload("res://scenes/ui/settings_menu.tscn")
 const TutorialScript = preload("res://scripts/ui/tutorial_hint.gd")
 const FloorCardScript = preload("res://scripts/ui/floor_card.gd")
+const EventRoomScript = preload("res://scripts/ui/event_room.gd")
+const RoomChoiceScript = preload("res://scripts/ui/room_choice.gd")
 
 enum Kind {SMALL, MIXED, ELITE, BREATHER, CLIMAX, BOSS}
 
@@ -68,10 +70,15 @@ func _ready() -> void:
 	# 网页验收模式：跳过开场对话框，免得遮住截图
 	var dbg := _debug_query()
 	_debug_safe = dbg.contains("safe")
+	GameState.ensure_map()
+	# 如果续玩时停在上一次商店节点，直接进 Boss，避免把商店节点当房间刷怪
+	if String(GameState.floor_map.node_at(GameState.node_id).get("kind", "")) == FloorMap.KIND_SHOP:
+		GameState.node_id = FloorMap.BOSS_ID
+		GameState.room_index = GameState.node_id + 1
 	var wants_intro := not intro_shown and dbg == "" \
-		and GameState.floor_index == 1 and GameState.room_index == 1
+		and GameState.floor_index == 1 and GameState.node_id == FloorMap.START_ID
 	# 开场介绍期间不生成第一波敌人：介绍播完再刷，避免“看着介绍挨打”
-	_start_room(GameState.room_index, wants_intro)
+	_start_node(GameState.node_id, wants_intro)
 	ScreenFx.set_battle(true)
 	BaCursor.set_battle(true)
 	if wants_intro:
@@ -112,12 +119,28 @@ func _check_debug_query(q: String = "") -> void:
 
 func _debug_set_floor(fi: int) -> void:
 	GameState.floor_index = fi
-	_start_room(1)
+	GameState.floor_map = FloorMap.generate(fi, SeedManager.seed_string)
+	GameState.node_id = FloorMap.START_ID
+	GameState.room_index = GameState.node_id + 1
+	GameState.visited_nodes = []
+	_start_node(GameState.node_id)
+
+
+## 调试/自测直达：按节点类型跳房（boss / elite / event / shop / small ...）
+func debug_start(kind: String) -> void:
+	var map := GameState.ensure_map()
+	if kind == FloorMap.KIND_SHOP:
+		_open_shop(map.find_first(FloorMap.KIND_SHOP))
+		return
+	var id := map.START_ID if kind == "" else map.find_first(kind)
+	if id < 0:
+		return
+	_start_node(id)
 
 
 ## ?boss=1：网页验收直接进 Boss 房，看战斗内像素化
 func _debug_go_boss() -> void:
-	_start_room(5)
+	debug_start(FloorMap.KIND_BOSS)
 	if get_tree().paused:
 		get_tree().paused = false
 	for n in ui_layer.get_children():
@@ -238,18 +261,21 @@ func _spawn_player() -> void:
 
 
 # ---------------- 房间节奏 ----------------
-func _kind_for(index: int) -> int:
-	if index >= 5:
-		return Kind.BOSS
-	match index:
-		1:
+func _kind_for_node(kind: String) -> int:
+	match kind:
+		FloorMap.KIND_SMALL:
 			return Kind.SMALL
-		2:
-			return Kind.ELITE if GameState.floor_index >= 2 else Kind.MIXED
-		3:
+		FloorMap.KIND_MIXED:
+			return Kind.MIXED
+		FloorMap.KIND_ELITE:
+			return Kind.ELITE
+		FloorMap.KIND_EVENT:
 			return Kind.BREATHER
-		_:
+		FloorMap.KIND_CLIMAX:
 			return Kind.CLIMAX
+		FloorMap.KIND_BOSS:
+			return Kind.BOSS
+	return Kind.MIXED
 
 
 func _wave_total_for(kind: int) -> int:
@@ -281,14 +307,25 @@ func _count_for(kind: int) -> int:
 			return 3
 
 
-func _start_room(index: int, defer_wave: bool = false) -> void:
-	GameState.room_index = index
+func _start_node(node_id: int, defer_wave: bool = false) -> void:
+	var map := GameState.ensure_map()
+	var node := map.node_at(node_id)
+	if node.is_empty():
+		return
+	var kind_s := String(node["kind"])
+	if kind_s == FloorMap.KIND_SHOP:
+		_open_shop(node_id)
+		return
+	GameState.node_id = node_id
+	GameState.room_index = node_id + 1
+	if not GameState.visited_nodes.has(node_id):
+		GameState.visited_nodes.append(node_id)
 	busy = false
 	room_cleared = false
 	wave_index = 0
 	alive_count = 0
-	is_boss_room = (index == 5)
-	room_kind = _kind_for(index)
+	room_kind = _kind_for_node(kind_s)
+	is_boss_room = room_kind == Kind.BOSS
 	boss = null
 	_clear_layer(enemy_layer)
 	_clear_layer(bullet_layer)
@@ -315,28 +352,64 @@ func _start_room(index: int, defer_wave: bool = false) -> void:
 	if is_boss_room:
 		MusicManager.play("boss")
 		_spawn_boss()
+	elif room_kind == Kind.BREATHER:
+		# 事件房：没有敌人，进门即开门，三选一由弹出界面处理
+		MusicManager.play("explore")
+		hud.show_toast("B%d · %s" % [GameState.floor_index, String(node["name"])], 1.4)
+		room.open_door()
+		room_cleared = true
+		busy = true
+		call_deferred("_show_event_room")
 	else:
 		MusicManager.play("combat")
 		wave_total = _wave_total_for(room_kind) + int(SeedManager.diff("wave"))
-		hud.show_toast("B%d · 房间 %d" % [GameState.floor_index, index], 1.4)
+		hud.show_toast("B%d · %s" % [GameState.floor_index, String(node["name"])], 1.4)
 		if not defer_wave and not _debug_safe:
 			_spawn_wave()
 	ChallengeManager.on_room_start(GameState.floor_index)
 	RunSave.save_run()
 	if tutorial != null and is_instance_valid(tutorial):
-		tutorial.on_room_start(index)
+		tutorial.on_room_start(GameState.room_index)
+
+
+## 事件房三选一：无敌人、可跳过；关掉界面后开门
+func _show_event_room() -> void:
+	if not is_inside_tree():
+		return
+	var node := GameState.ensure_map().node_at(GameState.node_id)
+	if String(node.get("kind", "")) != FloorMap.KIND_EVENT:
+		busy = false
+		return
+	var ev = EventRoomScript.new()
+	ev.process_mode = Node.PROCESS_MODE_ALWAYS
+	ui_layer.add_child(ev)
+	DialogueManager.clear()
+	get_tree().paused = true
+	ev.closed.connect(func() -> void:
+		if is_instance_valid(ev):
+			ev.queue_free()
+		get_tree().paused = false
+		if player != null and is_instance_valid(player):
+			player.lock_input(0.3)
+		busy = false
+		hud.show_toast("事件结束 · 向右离开", 1.8))
 
 
 func _spawn_wave() -> void:
 	if busy or room == null or not is_instance_valid(room):
 		return
 	wave_index += 1
-	var count: int = _count_for(room_kind)
+	# 同屏数量封顶 10：超出部分转成精英化，而不是继续堆数量
+	var want: int = _count_for(room_kind)
+	var count: int = mini(want, 10)
+	var overflow: int = maxi(0, want - count)
 	var types := _wave_types()
 	for i in count:
 		var scene: PackedScene = _scene_for(String(types[i % types.size()]))
 		var e = scene.instantiate()
 		if room_kind == Kind.ELITE and SeedManager.randf() < 0.45:
+			e.elite = true
+		if overflow > 0 and i < overflow:
 			e.elite = true
 		if room_kind == Kind.CLIMAX:
 			e.hp_scale = 0.85
@@ -498,9 +571,24 @@ func _on_room_cleared() -> void:
 		hud.show_toast("房间清空 · 回复 %d 点生命 · 向右离开" % heal, 2.4)
 	else:
 		hud.show_toast("房间清空 · 向右离开", 2.2)
+	if room_kind == Kind.ELITE:
+		_grant_elite_reward()
 	ChallengeManager.on_room_cleared()
 	if tutorial != null and is_instance_valid(tutorial):
 		tutorial.on_room_cleared()
+
+
+## 精英房必掉：至少蓝档藏品；藏品集齐时改发金币
+func _grant_elite_reward() -> void:
+	var up := UpgradeDB.roll_rare(GameState.upgrades, 1)
+	if up == null:
+		GameState.add_coins(30)
+		hud.show_toast("精英战利品 · 藏品已集齐，改发 30 金币", 2.8)
+		return
+	GameState.add_upgrade(up.id)
+	hud.show_toast("精英战利品 · %s（%s档）" % [up.title,
+		String(UpgradeDB.RARITY_NAMES[UpgradeDB.rarity_of(up)])], 3.0)
+	Sfx.play("relic", -2.0, 1.1)
 
 
 func _on_boss_dead() -> void:
@@ -543,25 +631,69 @@ func _update_dense_warning() -> void:
 
 
 func _advance() -> void:
+	if busy:
+		return
 	busy = true
-	var idx := GameState.room_index
+	var map := GameState.ensure_map()
 	if is_boss_room:
 		if GameState.floor_clean:
 			GameState.excl_clean_floor = true
 		GameState.floor_clean = true
+		var interest := GameState.floor_interest()
 		GameState.floor_index += 1
-		GameState.add_coins(10)
+		GameState.add_coins(10 + interest)
+		if interest > 0:
+			hud.show_toast("层末结算 · 清场 +10 · 存款利息 +%d" % interest, 2.6)
 		await get_tree().create_timer(0.9).timeout
 		if not is_inside_tree():
 			return
 		await _floor_interlude()
 		if not is_inside_tree():
 			return
-		_start_room(1)
-	elif idx == 4:
-		_open_shop()
+		GameState.floor_map = FloorMap.generate(GameState.floor_index, SeedManager.seed_string)
+		GameState.visited_nodes = []
+		_start_node(FloorMap.START_ID)
+	elif map.is_choice(GameState.node_id):
+		_show_choice()
 	else:
-		_start_room(idx + 1)
+		var nx := map.next_of(GameState.node_id)
+		if nx.is_empty():
+			busy = false
+			return
+		_goto_node(int(nx[0]))
+
+
+## 门后二选一：暂停游戏，弹出两条路线，选完直接进入对应节点
+func _show_choice() -> void:
+	var map := GameState.ensure_map()
+	var ids := map.next_of(GameState.node_id)
+	if ids.size() < 2:
+		busy = false
+		return
+	var ui = RoomChoiceScript.new()
+	ui.process_mode = Node.PROCESS_MODE_ALWAYS
+	ui_layer.add_child(ui)
+	ui.setup(ids, GameState.floor_index)
+	DialogueManager.clear()
+	get_tree().paused = true
+	ui.chosen.connect(func(id: int) -> void:
+		if is_instance_valid(ui):
+			ui.queue_free()
+		get_tree().paused = false
+		if player != null and is_instance_valid(player):
+			player.lock_input(0.3)
+		_goto_node(id))
+
+
+func _goto_node(id: int) -> void:
+	var node := GameState.ensure_map().node_at(id)
+	if node.is_empty():
+		busy = false
+		return
+	if String(node["kind"]) == FloorMap.KIND_SHOP:
+		_open_shop(id)
+	else:
+		_start_node(id)
 
 
 ## 层间转场：层名 + 序号，1.2s 仪式感，结束后进该层第一间房
@@ -578,10 +710,19 @@ func _floor_interlude() -> void:
 	await get_tree().create_timer(0.15).timeout
 
 
-func _open_shop() -> void:
+func _open_shop(shop_node_id: int = -1) -> void:
 	busy = true
 	MusicManager.play("explore")
 	DialogueManager.clear()
+	var map := GameState.ensure_map()
+	var sid := shop_node_id
+	if sid < 0:
+		sid = map.find_first(FloorMap.KIND_SHOP)
+	if sid >= 0:
+		GameState.node_id = sid
+		GameState.room_index = sid + 1
+		if not GameState.visited_nodes.has(sid):
+			GameState.visited_nodes.append(sid)
 	await Transition.cover("slide", 0.28)
 	if not is_inside_tree():
 		return
@@ -591,7 +732,8 @@ func _open_shop() -> void:
 	get_tree().paused = true
 	shop.closed.connect(func() -> void:
 		get_tree().paused = false
-		Transition.play("circle", func() -> void: _start_room(5), 0.3))
+		var boss_id := GameState.ensure_map().BOSS_ID
+		Transition.play("circle", func() -> void: _goto_node(boss_id), 0.3))
 	Transition.reveal(0.24)
 
 

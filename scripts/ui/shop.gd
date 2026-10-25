@@ -21,6 +21,11 @@ var _t: float = 0.0
 var _coins_shown: float = 0.0
 var _show_tip: bool = false
 var _skip_btn: BaButton = null
+var _reroll_btn: BaButton = null
+var _heal_btn: BaButton = null
+var _reroll_cost: int = 5
+var _heal_used: bool = false
+var _last_coins: int = -1
 
 
 func _ready() -> void:
@@ -31,15 +36,99 @@ func _ready() -> void:
 	_maybe_add_exclusive()
 	_show_tip = not MetaProgress.tutorial_flag("seen_shop_tip")
 	_coins_shown = float(GameState.coins)
+	_last_coins = GameState.coins
 	_relayout()
-	_skip_btn = BaButton.new()
-	add_child(_skip_btn)
-	_skip_btn.setup("跳过  [ESC]", Rect2(276, 284, 88, 24), "ghost", "", UiKit.F_BODY)
-	_skip_btn.pressed.connect(_close)
+	_build_service_buttons()
 	BaCursor.set_battle(false)
 	var tw := create_tween()
 	tw.tween_property(self, "_enter", 0.0, 0.18).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	Sfx.play("ui")
+
+
+func _build_service_buttons() -> void:
+	_heal_btn = BaButton.new()
+	add_child(_heal_btn)
+	_heal_btn.setup("治疗 [H]", Rect2(40, 286, 140, 24), "ghost", "res://assets/icons/extra_heart.png", UiKit.F_BODY)
+	_heal_btn.pressed.connect(_heal)
+
+	_reroll_btn = BaButton.new()
+	add_child(_reroll_btn)
+	_reroll_btn.setup("刷新 [R]", Rect2(194, 286, 140, 24), "ghost", "", UiKit.F_BODY)
+	_reroll_btn.pressed.connect(_reroll)
+
+	_skip_btn = BaButton.new()
+	add_child(_skip_btn)
+	_skip_btn.setup("跳过  [ESC]", Rect2(440, 286, 100, 24), "ghost", "", UiKit.F_BODY)
+	_skip_btn.pressed.connect(_close)
+	_update_buttons()
+
+
+func _heal_cost() -> int:
+	return mini(30, 15 + (GameState.floor_index - 1) * 5)
+
+
+func _update_buttons() -> void:
+	if _heal_btn == null or _reroll_btn == null:
+		return
+	var hc := _heal_cost()
+	_heal_btn.sub_label = "满血" if GameState.hp >= GameState.max_hp else ("已用" if _heal_used else "%d 金" % hc)
+	_heal_btn.disabled = _heal_used or GameState.hp >= GameState.max_hp or GameState.coins < hc
+	_heal_btn.label = "治疗 [H]" if not _heal_used else "已治疗 [H]"
+	_heal_btn.queue_redraw()
+	_reroll_btn.label = "刷新 [R]"
+	_reroll_btn.sub_label = "%d 金" % _reroll_cost
+	_reroll_btn.disabled = GameState.coins < _reroll_cost
+	_reroll_btn.queue_redraw()
+	_last_coins = GameState.coins
+
+
+func _heal() -> void:
+	if _msg_t > 0.0 or _heal_used:
+		return
+	if GameState.hp >= GameState.max_hp:
+		_msg = "生命已满"
+		_msg_t = 1.4
+		return
+	var cost := _heal_cost()
+	if GameState.coins < cost:
+		_msg = "金币不足 · 需要 %d" % cost
+		_msg_t = 1.4
+		Sfx.play("hurt", -12.0, 1.5)
+		return
+	GameState.coins -= cost
+	GameState.coins_changed.emit(GameState.coins)
+	GameState.heal(25)
+	_heal_used = true
+	_msg = "回复 25 点生命 · 已支付 %d" % cost
+	_msg_t = 1.8
+	Sfx.play("relic", -6.0, 1.1)
+	_update_buttons()
+
+
+func _reroll() -> void:
+	if _msg_t > 0.0:
+		return
+	if GameState.coins < _reroll_cost:
+		_msg = "金币不足 · 刷新需要 %d" % _reroll_cost
+		_msg_t = 1.4
+		Sfx.play("hurt", -12.0, 1.5)
+		return
+	GameState.coins -= _reroll_cost
+	GameState.coins_changed.emit(GameState.coins)
+	var keep: Array = []
+	for o in offers:
+		if String((o as Upgrade).id) == "excl_weapon":
+			keep.append(o)
+	offers = keep + UpgradeDB.roll_offers(3, GameState.upgrades)
+	_reroll_cost += 5
+	_msg = "货架已刷新 · 下一次 %d 金" % _reroll_cost
+	_msg_t = 1.4
+	Sfx.play("ui")
+	_relayout()
+	_hover = -1
+	for i in _hover_k.size():
+		_hover_k[i] = 0.0
+	_update_buttons()
 
 
 ## 达成局内任务后，商店出现专属武器
@@ -86,6 +175,8 @@ func _process(delta: float) -> void:
 	if absf(_coins_shown - float(GameState.coins)) > 0.01:
 		_coins_shown = move_toward(_coins_shown, float(GameState.coins),
 			maxf(1.0, absf(float(GameState.coins) - _coins_shown) * 8.0) * delta)
+	if int(GameState.coins) != _last_coins:
+		_update_buttons()
 	var mouse := get_local_mouse_position()
 	var prev := _hover
 	_hover = -1
@@ -129,6 +220,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.physical_keycode in [KEY_1, KEY_2, KEY_3, KEY_4]:
 			_buy(event.physical_keycode - KEY_1)
 			get_viewport().set_input_as_handled()
+		elif event.physical_keycode == KEY_R:
+			_reroll()
+			get_viewport().set_input_as_handled()
+		elif event.physical_keycode == KEY_H:
+			_heal()
+			get_viewport().set_input_as_handled()
 
 
 func _buy(index: int) -> void:
@@ -154,6 +251,7 @@ func _buy(index: int) -> void:
 		offers.remove_at(index)
 		_relayout()
 		_hover = -1
+		_update_buttons()
 
 
 func _buy_exclusive(index: int) -> void:
@@ -170,6 +268,7 @@ func _buy_exclusive(index: int) -> void:
 	offers.remove_at(index)
 	_relayout()
 	_hover = -1
+	_update_buttons()
 
 
 func _close() -> void:
@@ -189,7 +288,7 @@ func _draw() -> void:
 	UiKit.dither_rect(self, Rect2(16, 8, GameConfig.BASE_W - 32, 2), UiKit.PANEL, 2)
 
 	UiKit.text(self, Vector2(32, 36), "算力商店", UiKit.F_H2, UiKit.TEXT)
-	UiKit.text(self, Vector2(32, 52), "每层限时一次 · 藏品可叠加", UiKit.F_SMALL, UiKit.TEXT_DIM)
+	UiKit.text(self, Vector2(32, 52), "每层一次 · 可刷新 / 治疗 / 买藏品", UiKit.F_SMALL, UiKit.TEXT_DIM)
 	_draw_coin(Vector2(548, 22), 12)
 	UiKit.text_right(self, 612, 36, str(int(round(_coins_shown))), UiKit.F_H2, UiKit.GOLD)
 
@@ -206,7 +305,7 @@ func _draw() -> void:
 		UiKit.text_center(self, GameConfig.BASE_W * 0.5, 156, "货架已空", UiKit.F_H2, UiKit.TEXT_DIM)
 		UiKit.text_center(self, GameConfig.BASE_W * 0.5, 180, "下次刷新会补货", UiKit.F_SMALL, UiKit.TEXT_DIM)
 
-	_draw_merchant(Vector2(26, 300))
+	_draw_merchant(Vector2(596, 296))
 
 	if _msg_t > 0.0:
 		var w := UiKit.measure(_msg, 12) + 28.0
@@ -216,7 +315,7 @@ func _draw() -> void:
 			Color(UiKit.DANGER.r, UiKit.DANGER.g, UiKit.DANGER.b, clampf(_msg_t, 0.0, 1.0)))
 
 	UiKit.text_center(self, GameConfig.BASE_W * 0.5, 332,
-		"点击石台购买 · 数字键 1-4 快捷购买 · ESC 跳过", UiKit.F_SMALL, UiKit.TEXT_DIM)
+		"点击石台购买 · 1-4 购买 · R 刷新 · H 治疗 · ESC 跳过", UiKit.F_SMALL, UiKit.TEXT_DIM)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 
@@ -230,15 +329,13 @@ func _draw_card(i: int, r: Rect2, up: Upgrade) -> void:
 	if can:
 		draw_line(rr.position + Vector2(1, 1),
 			Vector2(rr.end.x - 2, rr.position.y + 1), UiKit.BORDER_HI)
-	# 顶部铭牌色条：角色专属=角色色，普通=青
-	var strip := UiKit.CYAN
-	if up.char_tag == "gpt":
-		strip = UiKit.PURPLE
-	elif up.char_tag == "claude":
-		strip = UiKit.ORANGE
-	elif up.char_tag == "deepseek":
-		strip = Color("#4453C4")
+	# 顶部稀有度色条：白 / 蓝 / 紫
+	var rar := _rarity_of(up)
+	var strip := Color(UpgradeDB.RARITY_COLORS[rar])
 	draw_rect(Rect2(rr.position.x + 1, rr.position.y + 1, rr.size.x - 2, 3), strip)
+	var rname: String = "专" if up.id == "excl_weapon" else String(UpgradeDB.RARITY_NAMES[rar])
+	UiKit.text(self, Vector2(rr.end.x - 18, rr.position.y + 16), rname, UiKit.F_SMALL,
+		strip if can else Color(strip.r, strip.g, strip.b, 0.45), false)
 
 	# 图标凹槽 36×36 + 32×32 图标
 	var slot := Rect2(rr.position.x + (rr.size.x - 36) * 0.5, rr.position.y + 12, 36, 36)
@@ -277,10 +374,16 @@ func _draw_card(i: int, r: Rect2, up: Upgrade) -> void:
 		UiKit.corner_brackets(self, rr.grow(1), UiKit.GOLD, 5)
 
 	if _forms_combo(up.id):
-		var star := rr.position + Vector2(rr.size.x - 10, 9)
+		var star := rr.position + Vector2(10, 9)
 		draw_rect(Rect2(star + Vector2(0, 2), Vector2(2, 2)), UiKit.GOLD)
 		draw_rect(Rect2(star + Vector2(-2, 0), Vector2(6, 2)), UiKit.GOLD)
 		draw_rect(Rect2(star + Vector2(0, -2), Vector2(2, 6)), UiKit.GOLD)
+
+
+func _rarity_of(up: Upgrade) -> int:
+	if up.id == "excl_weapon":
+		return 2
+	return UpgradeDB.rarity_of(up)
 
 
 func _forms_combo(uid: String) -> bool:

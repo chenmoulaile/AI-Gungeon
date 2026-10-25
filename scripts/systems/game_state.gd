@@ -19,6 +19,11 @@ var max_hp: int = PLAYER_MAX_HP
 var coins: int = 0
 var floor_index: int = 1
 var room_index: int = 1
+## 当前层的分支地图与所在节点（v0.10）
+var floor_map: FloorMap = null
+var node_id: int = 0
+## 已走过的节点（HUD 小地图用；存档不保存，续玩从当前节点重新记录）
+var visited_nodes: Array = []
 var kills: int = 0
 var run_time: float = 0.0
 var coins_earned: int = 0
@@ -64,6 +69,9 @@ func start_run(id: String, seed_text: String = "") -> void:
 	coins = 0
 	floor_index = 1
 	room_index = 1
+	node_id = 0
+	floor_map = FloorMap.generate(1, SeedManager.seed_string)
+	visited_nodes = [0]
 	kills = 0
 	run_time = 0.0
 	upgrades = []
@@ -98,6 +106,11 @@ func restore_run(d: Dictionary) -> void:
 	SeedManager.rng.seed = hash(SeedManager.seed_string)
 	floor_index = int(d.get("floor", 1))
 	room_index = int(d.get("room", 1))
+	# 地图由种子确定性重建；room 存档是 1 基显示序号，节点是 0 基
+	floor_map = FloorMap.generate(floor_index, SeedManager.seed_string)
+	node_id = clampi(room_index - 1, FloorMap.START_ID, FloorMap.BOSS_ID)
+	room_index = node_id + 1
+	visited_nodes = [node_id]
 	coins = int(d.get("coins", 0))
 	kills = int(d.get("kills", 0))
 	run_time = float(d.get("time", 0.0))
@@ -334,8 +347,23 @@ func on_enemy_killed(tag: String = "") -> void:
 
 
 func enemy_scale() -> float:
-	# 每层敌人血量 +20%
-	return pow(1.2, float(floor_index - 1))
+	# v0.10：1.2 幂 × 线性项，并封顶 6 倍（无限层不再指数爆炸）
+	var f := float(floor_index - 1)
+	return minf(6.0, pow(1.2, f) * (1.0 + 0.05 * f))
+
+
+## 层末存款利息：每 50 金币 +5，单层封顶 15（鼓励留钱）
+func floor_interest() -> int:
+	return mini(15, (coins / 50) * 5)
+
+
+## 保证当前层地图存在（续玩/调试/章节跳转都走这里）
+func ensure_map() -> FloorMap:
+	if floor_map == null or floor_map.floor_index != floor_index:
+		floor_map = FloorMap.generate(floor_index, SeedManager.seed_string)
+		node_id = FloorMap.START_ID
+		room_index = node_id + 1
+	return floor_map
 
 
 ## 专武是否已达成解锁条件
