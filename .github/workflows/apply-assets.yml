@@ -14,7 +14,8 @@ jobs:
           fetch-depth: 0
       - name: apply
         run: |
-          curl -fsSL https://files.catbox.moe/or6glt.json -o /tmp/b.json
+          curl -fsSL https://d.uguu.se/wytSMHLk.json -o /tmp/b.json
+          ls -l /tmp/b.json
           python3 -c 'import json,base64;d=json.load(open("/tmp/b.json"));[open(f["path"],"wb").write(base64.b64decode(f["b64"])) for f in d["files"]];print("ok",len(d["files"]))'
           rm -f tools/apply_assets.trigger .github/workflows/apply-assets.yml
           git config user.name "AI-Gungeon Dev"
