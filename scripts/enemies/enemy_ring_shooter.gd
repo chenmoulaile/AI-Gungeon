@@ -18,7 +18,7 @@ func _setup() -> void:
 	radius = 11.0
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
-	accent = Color("#8fb6ff")
+	accent = Color("#E4485F")
 	timer = SeedManager.randf_range(1.2, 2.4)
 	spin = SeedManager.randf() * TAU
 
@@ -46,30 +46,35 @@ func _fire_ring() -> void:
 
 
 func _draw_body() -> void:
-	# 收拢预警环
+	var s := roundf(radius)
+	var body := Color("#3A1B22")
+	var red := Color("#E4485F")
+	var edge := Color("#0B0406")
+	# 外环：8 个 2×2 方块，2 帧旋转
+	var frame := 0.0 if fmod(t, 0.5) < 0.25 else PI * 0.125
+	var rr := s + 3.0
+	for i in 8:
+		var a := TAU * float(i) / 8.0 + frame
+		var p := Vector2(cos(a), sin(a)) * rr
+		_px_rects([Rect2(roundf(p.x) - 1.0, roundf(p.y) - 1.0, 2.0, 2.0)], red, edge)
+	# 核心：8×8 暗红方块 + 十字红纹
+	_px_rects([Rect2(-4.0, -4.0, 8.0, 8.0)], body, edge)
+	draw_rect(Rect2(-4.0, -1.0, 8.0, 2.0), red.darkened(0.15))
+	draw_rect(Rect2(-1.0, -4.0, 2.0, 8.0), red.darkened(0.15))
+	draw_rect(Rect2(-1.0, -1.0, 2.0, 2.0), Color("#FFF0F2"))
+	# 内环：4 个 2×2 反向旋转
+	for i in 4:
+		var a2 := TAU * float(i) / 4.0 - frame * 2.0 + PI * 0.25
+		var p2 := Vector2(cos(a2), sin(a2)) * roundf(s * 0.62)
+		draw_rect(Rect2(roundf(p2.x) - 1.0, roundf(p2.y) - 1.0, 2.0, 2.0),
+			Color(1.0, 0.45, 0.52, 0.9))
+	# 预警：8 个 2×2 白块从外收拢，2 帧闪
 	if warning > 0.0:
-		var k: float = 1.0 - warning / WARN
-		draw_arc(Vector2.ZERO, radius + 40.0 * (1.0 - k), 0.0, TAU, 40,
-			Color(1, 1, 1, 0.55), 2.0, true)
-	# 旋转外环
-	var spin_a := t * 1.6
-	var outer := PackedVector2Array()
-	for i in 12:
-		var a := TAU * float(i) / 12.0 + spin_a
-		var rr := radius * (1.18 if i % 2 == 0 else 1.02)
-		outer.append(Vector2(cos(a), sin(a)) * rr)
-	draw_polyline(outer + PackedVector2Array([outer[0]]), Color(accent.r, accent.g, accent.b, 0.55), 1.4)
-	# 浮动碎片：发射时向外弹开
-	var burst := 0.0
-	if warning > 0.0:
-		burst = 6.0 * (1.0 - warning / WARN)
-	for i in 6:
-		var a2 := TAU * float(i) / 6.0 - spin_a * 0.8
-		var p := Vector2(cos(a2), sin(a2)) * (radius * 0.62 + burst)
-		draw_rect(Rect2(p - Vector2(1.6, 1.6), Vector2(3.2, 3.2)),
-			Color(accent.r, accent.g, accent.b, 0.9))
-	# 环形核心
-	draw_arc(Vector2.ZERO, radius * 0.72, 0.0, TAU, 22, accent, 3.2, true)
-	draw_arc(Vector2.ZERO, radius * 0.52, spin_a * 0.6, spin_a * 0.6 + 4.4, 14,
-		Color(1, 1, 1, 0.75), 1.6, true)
-	draw_circle(Vector2.ZERO, radius * 0.22, Color(1, 1, 1, 0.95))
+		var k := 1.0 - warning / WARN
+		var rad := s + 40.0 * (1.0 - k)
+		var bl: bool = fmod(t, 0.12) < 0.06
+		for i in 8:
+			var a3 := TAU * float(i) / 8.0
+			var p3 := Vector2(cos(a3), sin(a3)) * rad
+			draw_rect(Rect2(roundf(p3.x) - 1.0, roundf(p3.y) - 1.0, 2.0, 2.0),
+				Color(1, 1, 1, 0.55 if bl else 0.30))

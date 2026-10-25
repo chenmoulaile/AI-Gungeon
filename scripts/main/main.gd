@@ -23,7 +23,21 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	# Web：浏览器里点一下画面就把焦点交给 canvas，键鼠才会立刻响应
 	get_window().grab_focus()
+	# 网页验收：?enemies / ?bullets / ?floor=N 直接开局，跳过启动画面与菜单
+	var q := _web_debug_query()
+	if q.contains("enemies") or q.contains("bullets") or q.contains("floor="):
+		GameState.start_run("deepseek")
+		call_deferred("_start_game")
+		return
 	show_splash()
+
+
+func _web_debug_query() -> String:
+	var js = Engine.get_singleton("JavaScriptBridge")
+	if js == null:
+		return ""
+	var raw = js.eval("window.location.search", true)
+	return "" if raw == null else str(raw)
 
 
 func _input(event: InputEvent) -> void:

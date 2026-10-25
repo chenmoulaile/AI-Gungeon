@@ -45,7 +45,7 @@ func prepare() -> void:
 	else:
 		remove_from_group("bullets")
 		add_to_group("enemy_bullets")
-	rotation = dir.angle()
+	rotation = 0.0
 
 
 func _physics_process(delta: float) -> void:
@@ -229,7 +229,7 @@ func _check_bounds() -> void:
 				dir.x = -dir.x
 			if global_position.y < inner.position.y or global_position.y > inner.end.y:
 				dir.y = -dir.y
-			rotation = dir.angle()
+			rotation = 0.0
 			Sfx.play_at("bounce", global_position, -4.0, 1.0 - 0.15 * float(2 - bounce))
 			GameFeel.burst(global_position, color, 3, 70.0, 0.2)
 
@@ -241,7 +241,7 @@ func _bounce_off(r: Rect2) -> void:
 		dir.x = -dir.x
 	else:
 		dir.y = -dir.y
-	rotation = dir.angle()
+	rotation = 0.0
 	Sfx.play("ui", -6.0, 1.6)
 
 
@@ -249,38 +249,80 @@ func _despawn() -> void:
 	GameFeel.release_bullet(self)
 
 
+## 八方向整数单位向量：子弹朝向导出的方块不随角度旋转
+func _px8(v: Vector2) -> Vector2:
+	if v == Vector2.ZERO:
+		return Vector2.RIGHT
+	var step := roundf(v.angle() / (PI * 0.25))
+	return Vector2(roundf(cos(step * PI * 0.25)), roundf(sin(step * PI * 0.25)))
+
+
+## 像素菱形：逐行 1px，宽度按行渐变
+func _px_diamond(h: int, col: Color) -> void:
+	for i in range(-h, h + 1):
+		var w := 2 * (h - absi(i)) + 2
+		draw_rect(Rect2(-float(w) * 0.5, float(i), float(w), 1.0), col)
+
+
 func _draw() -> void:
 	if mine:
 		var k: float = 1.0 - clampf(mine_fuse / 1.5, 0.0, 1.0)
-		var blink: float = 1.0 if mine_fuse > 0.5 else (0.35 + 0.65 * absf(sin(_t * 18.0)))
-		draw_circle(Vector2.ZERO, radius + 4.0, Color(1.0, 0.4, 0.2, 0.18 * blink))
-		draw_circle(Vector2.ZERO, radius, Color(0.9, 0.3, 0.15, blink))
-		draw_arc(Vector2.ZERO, 8.0 + 26.0 * k, 0.0, TAU, 20, Color(1.0, 0.5, 0.3, 0.5), 1.0, true)
+		var blink: bool = true if mine_fuse > 0.5 else fmod(_t, 0.16) < 0.08
+		var hot := Color(1.0, 0.38, 0.22, 0.95 if blink else 0.35)
+		var sz := roundf(radius) * 2.0
+		draw_rect(Rect2(-sz * 0.5, -sz * 0.5, sz, sz), Color("#2A0E0A"))
+		draw_rect(Rect2(-sz * 0.5, -sz * 0.5, sz, sz), hot, false, 1.0)
+		draw_rect(Rect2(-2.0, -2.0, 4.0, 4.0), hot)
+		# 引信：4 个 2×2 角标由内向外收束
+		var r2 := 8.0 + 26.0 * k
+		for i in 4:
+			var a := TAU * float(i) / 4.0
+			var p := Vector2(cos(a), sin(a)) * r2
+			draw_rect(Rect2(roundf(p.x) - 1.0, roundf(p.y) - 1.0, 2.0, 2.0),
+				Color(1.0, 0.5, 0.3, 0.55))
 		return
 
+	var d := _px8(dir)
 	if trail and _trail_pts.size() > 1:
-		# 最多 3 个残影（半透明复制），不用粒子系统
+		# 最多 3 个 2px 残影方块，不做圆形复制
 		var ghosts: int = mini(3, _trail_pts.size() - 1)
 		for g in range(ghosts, 0, -1):
 			var gp: Vector2 = to_local(_trail_pts[g])
 			var gc := color
-			gc.a = 0.26 * (1.0 - float(g) / float(ghosts + 1))
-			draw_circle(gp, radius * (1.0 - 0.16 * float(g)), gc)
+			gc.a = 0.20 * (1.0 - float(g) / float(ghosts + 1))
+			var gs := 4.0 if g == 1 else 2.0
+			draw_rect(Rect2(roundf(gp.x) - gs * 0.5, roundf(gp.y) - gs * 0.5, gs, gs), gc)
 
-	if not friendly:
-		var glow := color
-		glow.a = 0.22
-		draw_circle(Vector2.ZERO, radius + 3.2, glow)
-		draw_circle(Vector2.ZERO, radius + 1.3, Color(0.1, 0.02, 0.06, 0.75))
-		draw_circle(Vector2.ZERO, radius, color)
-		# 锁定闪烁（追踪弹生成后 0.3s）
-		if _locked > 0.0:
-			var k2: float = 0.5 + 0.5 * sin(_t * 40.0)
-			draw_arc(Vector2.ZERO, radius + 4.0, 0.0, TAU, 16,
-				Color(1, 1, 1, 0.6 * k2), 1.0, true)
-		draw_circle(Vector2.ZERO, radius * 0.5, Color(1, 0.96, 0.98, 0.95))
+	if friendly:
+		# 玩家子弹：6×6 亮块 + 2 帧长尾
+		draw_rect(Rect2(-4.0, -4.0, 8.0, 8.0), color.darkened(0.72))
+		draw_rect(Rect2(-3.0, -3.0, 6.0, 6.0), color)
+		draw_rect(Rect2(-2.0, -2.0, 4.0, 4.0), Color(1, 1, 1, 0.95))
+		for i in 2:
+			var tp := -d * (5.0 + float(i) * 3.0)
+			var ts := 4.0 - float(i) * 2.0
+			draw_rect(Rect2(roundf(tp.x) - ts * 0.5, roundf(tp.y) - ts * 0.5, ts, ts),
+				Color(color.r, color.g, color.b, 0.35 - 0.12 * float(i)))
 	else:
-		draw_circle(Vector2.ZERO, radius + 1.2, Color(0, 0, 0, 0.45))
-		draw_circle(Vector2.ZERO, radius, color)
-		draw_circle(Vector2(-radius * 0.25, -radius * 0.25), radius * 0.45,
-			Color(1, 1, 1, 0.92))
+		# 敌方子弹：深红像素菱形 + 亮核
+		var h := maxi(1, int(roundf(radius)) - 2)
+		_px_diamond(h + 1, color.darkened(0.78))
+		_px_diamond(h, color)
+		var pulse: bool = fmod(_t, 0.16) < 0.08
+		draw_rect(Rect2(-1.0, -1.0, 2.0, 2.0),
+			Color(1, 1, 1, 0.95) if pulse else Color(1.0, 0.88, 0.92, 0.9))
+		# 锁定闪烁：4 个 2×2 白角标
+		if _locked > 0.0:
+			var bl: bool = fmod(_t, 0.1) < 0.05
+			var hh := float(h + 3)
+			for i in 4:
+				var a := TAU * float(i) / 4.0
+				var p := Vector2(cos(a), sin(a)) * hh
+				draw_rect(Rect2(roundf(p.x) - 1.0, roundf(p.y) - 1.0, 2.0, 2.0),
+					Color(1, 1, 1, 0.75 if bl else 0.35))
+		# 追踪弹：反向 2px 尾迹
+		if homing > 0.0:
+			for i in 2:
+				var tp2 := -d * (5.0 + float(i) * 3.0)
+				draw_rect(Rect2(roundf(tp2.x) - 1.0, roundf(tp2.y) - 1.0, 2.0, 2.0),
+					Color(color.r, color.g, color.b, 0.35 - 0.12 * float(i)))

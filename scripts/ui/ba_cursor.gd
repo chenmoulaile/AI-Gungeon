@@ -1,43 +1,48 @@
-extends CanvasLayer
-## 像素准星（Autoload: BaCursor）：1px 十字 + 四角括号，不旋转、不画圆弧。
-## 悬停可交互元素时变金色并加粗 1px；射击时十字外扩 2px。
+extends Node
+## 像素光标（Autoload: BaCursor）
+## 用真实 16x16 贴图作为系统光标：菜单=箭头，战斗=十字准星；悬停可交互元素时变金色。
+## 不再自绘准星——旧做法把系统光标涂成 1x1 透明，一旦自绘层失败就“完全没有鼠标”。
 
-const COLD := Color("#8A9BB8")
-const HOT := Color("#FFD166")
-const CORE := Color("#DCE7FF")
+const TEX_ARROW := "res://assets/ui/cursor_arrow.png"
+const TEX_ARROW_HOT := "res://assets/ui/cursor_arrow_hot.png"
+const TEX_CROSS := "res://assets/ui/cursor_cross.png"
+const TEX_CROSS_HOT := "res://assets/ui/cursor_cross_hot.png"
 
-var _drawer: Node2D = null
+const SHAPES := [
+	Input.CURSOR_ARROW, Input.CURSOR_POINTING_HAND, Input.CURSOR_IBEAM,
+	Input.CURSOR_CROSS, Input.CURSOR_DRAG, Input.CURSOR_CAN_DROP,
+	Input.CURSOR_MOVE, Input.CURSOR_WAIT,
+]
+
+var _tex: Dictionary = {}
+var _battle: bool = false
 var _hot: bool = false
 var _forced: float = 0.0
-var _battle: bool = false
-var _click: float = 0.0
-var _visible: bool = true
+var _shown: bool = true
+var _applied_key: String = ""
 
 
 func _ready() -> void:
-	layer = 200
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_drawer = Node2D.new()
-	_drawer.name = "CursorDraw"
-	add_child(_drawer)
-	_drawer.draw.connect(_on_draw)
-	_hide_system_cursor()
-	visible = true
+	_ensure_tex()
+	_apply()
 
 
-func _hide_system_cursor() -> void:
-	if DisplayServer.get_name() == "headless":
-		return
-	var img := Image.create_empty(1, 1, false, Image.FORMAT_RGBA8)
-	img.fill(Color(0, 0, 0, 0))
-	for shape in [Input.CURSOR_ARROW, Input.CURSOR_POINTING_HAND, Input.CURSOR_IBEAM,
-			Input.CURSOR_CROSS, Input.CURSOR_DRAG, Input.CURSOR_CAN_DROP]:
-		Input.set_custom_mouse_cursor(img, shape, Vector2.ZERO)
+func _ensure_tex() -> void:
+	for path in [TEX_ARROW, TEX_ARROW_HOT, TEX_CROSS, TEX_CROSS_HOT]:
+		var n: String = path.get_file().get_basename()
+		if _tex.has(n):
+			continue
+		if ResourceLoader.exists(path):
+			var tex: Texture2D = load(path) as Texture2D
+			if tex != null:
+				_tex[n] = tex
 
 
-## 战斗 / 菜单两种尺寸
+## 战斗 / 菜单两种光标
 func set_battle(on: bool) -> void:
 	_battle = on
+	_apply()
 
 
 ## 卡片等自绘区域用：每帧调用即可保持高亮
@@ -47,51 +52,46 @@ func force_hot(on: bool = true) -> void:
 
 
 func set_shown(on: bool) -> void:
-	_visible = on
-	if _drawer != null:
-		_drawer.visible = on
+	_shown = on
+	_apply()
 
 
 func _process(delta: float) -> void:
 	_forced = maxf(0.0, _forced - delta)
-	_click = maxf(0.0, _click - delta * 6.0)
 	var hc := get_viewport().gui_get_hovered_control()
 	var over_ui := hc != null and is_instance_valid(hc) and hc.is_visible_in_tree() \
 		and (hc.is_in_group("ui_hotspot") or hc.has_meta("hot"))
 	_hot = over_ui or _forced > 0.0
-	_drawer.position = get_viewport().get_mouse_position().round()
-	_drawer.queue_redraw()
+	_apply()
 
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT:
-		if (event as InputEventMouseButton).pressed:
-			_click = 1.0
-			if _hot:
-				Sfx.play("ui_confirm", -10.0)
+		if (event as InputEventMouseButton).pressed and _hot:
+			Sfx.play("ui_confirm", -10.0)
 
 
-func _on_draw() -> void:
-	if not _visible:
+func _apply() -> void:
+	var key := "%s|%s|%s" % [_battle, _hot, _shown]
+	if key == _applied_key:
 		return
-	var ci: CanvasItem = _drawer
-	var col := HOT if _hot else COLD
-	var gap: int = 3 + int(round(_click * 2.0))
-	var arm: int = 2 if _battle else 3
-	# 十字：中心留 1px 空隙
-	ci.draw_rect(Rect2(-arm, 0, arm, 1), col)
-	ci.draw_rect(Rect2(gap, 0, arm, 1), col)
-	ci.draw_rect(Rect2(0, -arm, 1, arm), col)
-	ci.draw_rect(Rect2(0, gap, 1, arm), col)
-	# 中心点
-	ci.draw_rect(Rect2(0, 0, 1, 1), CORE)
-	# 四角括号（L 形，向中心折）
-	var br := gap + 5
-	for sx in [-1, 1]:
-		for sy in [-1, 1]:
-			var cx: int = sx * br
-			var cy: int = sy * br
-			var hx: int = cx - 3 if sx > 0 else cx
-			var vy: int = cy - 3 if sy > 0 else cy
-			ci.draw_rect(Rect2(hx, cy, 3, 1), col)
-			ci.draw_rect(Rect2(cx, vy, 1, 3), col)
+	if DisplayServer.get_name() == "headless":
+		return
+	if not _shown:
+		Input.mouse_mode = Input.MOUSE_MODE_HIDDEN
+		_applied_key = key
+		return
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	if _tex.is_empty():
+		_ensure_tex()
+	var tex_name := ("cross" if _battle else "arrow") + ("_hot" if _hot else "")
+	var tex: Texture2D = _tex.get(tex_name)
+	if tex == null:
+		tex = _tex.get("arrow")
+	if tex == null:
+		# 贴图未就绪时保持系统默认光标，且不记录 key，下一帧继续重试
+		return
+	_applied_key = key
+	var hotspot := Vector2(8, 8) if _battle else Vector2(1, 1)
+	for shape in SHAPES:
+		Input.set_custom_mouse_cursor(tex, shape, hotspot)

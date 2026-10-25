@@ -19,7 +19,7 @@ func _setup() -> void:
 	radius = 9.0
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
-	accent = Color("#ff8fb1")
+	accent = Color("#3E6350")
 	timer = SeedManager.randf_range(1.0, 2.0)
 
 
@@ -54,27 +54,37 @@ func _ai(delta: float) -> void:
 
 
 func _draw_body() -> void:
-	# 瞄准线：预警时变粗并由白转红
+	var dir := _px_dir(aim_dir)
+	var s := roundf(radius)
+	var body := Color("#2E4A3C")
+	var dark := Color("#16281F")
+	var edge := Color("#050D08")
+	var red := Color("#FF4658")
+	# 预警瞄准线：1px，由白转红
 	if warning > 0.0:
 		var k: float = 1.0 - warning / WARN
-		var col := Color(1.0, 0.95 - 0.7 * k, 0.9 - 0.65 * k, 0.30 + 0.55 * k)
-		draw_line(Vector2.ZERO, aim_dir * 600.0, col, 1.0 + 2.0 * k)
-	draw_set_transform(Vector2.ZERO, aim_dir.angle(), Vector2.ONE)
-	# 细长数据狙击单元
-	var body := PackedVector2Array([
-		Vector2(radius * 1.5, 0.0), Vector2(radius * 0.5, -radius * 0.42),
-		Vector2(-radius * 1.1, -radius * 0.30), Vector2(-radius * 1.1, radius * 0.30),
-		Vector2(radius * 0.5, radius * 0.42)])
-	draw_colored_polygon(body, accent.darkened(0.1))
-	draw_polyline(body + PackedVector2Array([body[0]]), Color(0, 0, 0, 0.85), 1.4)
-	# 枪管
-	draw_rect(Rect2(radius * 1.4, -1.2, radius * 0.9, 2.4), Color(0.22, 0.10, 0.14))
-	# 散热鳍片
+		draw_line(Vector2.ZERO, aim_dir * 600.0,
+			Color(1.0, 0.92 - 0.62 * k, 0.86 - 0.58 * k, 0.28 + 0.55 * k), 1.0)
+	# 机体：细长三段深绿
+	_px_rects([
+		Rect2(-4.0, -s - 4.0, 8.0, 4.0),
+		Rect2(-5.0, -s, 10.0, 7.0),
+		Rect2(-3.0, -s + 7.0, 6.0, 4.0),
+	], body, edge)
+	# 散热鳍：1px 暗线
 	for i in 3:
-		var x := -radius * 0.7 + float(i) * radius * 0.42
-		draw_line(Vector2(x, -radius * 0.36), Vector2(x, radius * 0.36),
-			Color(0, 0, 0, 0.45), 1.0)
-	# 目镜
-	draw_circle(Vector2(radius * 0.15, 0.0), radius * 0.20, Color(1, 1, 1, 0.95))
-	draw_circle(Vector2(radius * 0.22, 0.0), radius * 0.10, Color(0.75, 0.10, 0.16))
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		draw_rect(Rect2(-3.0 + float(i) * 3.0, -s + 1.0, 1.0, 5.0), dark)
+	# 枪管：两节 4×4 / 2×2
+	var b1 := dir * (s + 3.0)
+	var b2 := dir * (s + 7.0)
+	_px_rects([
+		Rect2(roundf(b1.x) - 2.0, roundf(b1.y) - 2.0, 4.0, 4.0),
+		Rect2(roundf(b2.x) - 1.0, roundf(b2.y) - 1.0, 2.0, 2.0),
+	], dark, edge)
+	# 目镜：红色 3×2 + 白点
+	draw_rect(Rect2(-1.0, -s - 4.0, 3.0, 2.0), red)
+	draw_rect(Rect2(0.0, -s - 3.0, 1.0, 1.0), Color("#FFD9DE"))
+	# 蓄力：枪口 2 帧闪
+	if warning > 0.0 and fmod(t, 0.1) < 0.05:
+		draw_rect(Rect2(roundf(b2.x) - 1.0, roundf(b2.y) - 1.0, 2.0, 2.0),
+			Color(1.0, 0.75, 0.8, 0.95))

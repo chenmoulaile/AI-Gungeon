@@ -60,7 +60,7 @@ func _maybe_add_exclusive() -> void:
 		"gpt":
 			up.icon_path = "res://assets/icons/weapons/excl_codex.png"
 		_:
-			up.icon_path = "res://assets/icons/weapons/excl_hammer.png"
+			up.icon_path = "res://assets/icons/weapons/claude_code.png"
 	offers.insert(0, up)
 
 

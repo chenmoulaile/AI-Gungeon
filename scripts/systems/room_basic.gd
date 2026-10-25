@@ -23,7 +23,10 @@ var _obstacles: Array = []
 
 var _theme: Dictionary = {}
 var _fade: float = 1.0
-var _slabs: Array = []
+## 16×16 地砖：{"rect": Rect2, "tone": 0/1/2}，仅记录与底色不同的块
+var _tiles: Array = []
+## 2×2 像素细节（铜钉 / 焊盘 / 通风孔）
+var _studs: Array = []
 var _traces: Array = []
 var _pads: Array = []
 var _decor: Array = []
@@ -42,7 +45,6 @@ func _ready() -> void:
 	_build_lighting()
 	_build_walls()
 	_build_obstacles()
-	_build_floor_wave()
 	_spawn_ambient()
 	_fade = 1.0
 	var tw := create_tween()
@@ -52,65 +54,71 @@ func _ready() -> void:
 
 
 # ---------------- 主题数据 ----------------
-## 地面细节（裂纹 / 线路 / 石板）用固定种子生成，重绘不会跳变
+## 地面细节用固定种子生成，重绘不会跳变
+## 16×16 像素地砖：底 a，20% 用 b，6% 压暗；再撒 2×2 细节
 func _build_floor_pattern() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash("%s_%d_%d" % [String(_theme.get("id", "x")), GameState.floor_index,
 		GameState.room_index])
 	var r := GameConfig.room_rect()
-	var inner := Rect2(r.position + Vector2(GameConfig.WALL, GameConfig.WALL),
-		r.size - Vector2(GameConfig.WALL * 2.0, GameConfig.WALL * 2.0))
+	var tile := 16.0
+	var cols := int(ceil(r.size.x / tile))
+	var rows := int(ceil(r.size.y / tile))
+	var kind := String(_theme.get("decor", "shelf"))
 
-	match String(_theme.get("decor", "shelf")):
-		"shelf":
-			# 档案库：地板只做规则地砖，细节在 _draw 里按网格画
-			pass
+	for yy in rows:
+		for xx in cols:
+			var roll := rng.randf()
+			var tone := 0
+			if roll < 0.20:
+				tone = 1
+			elif roll < 0.26:
+				tone = 2
+			if tone != 0:
+				_tiles.append({"rect": Rect2(float(xx) * tile, float(yy) * tile, tile, tile),
+					"tone": tone})
+			elif rng.randf() < 0.14:
+				# 只在底色块上撒 2×2 细节，避免与亮块打架
+				var ox := float(xx) * tile + 2.0 + float(rng.randi_range(0, 5)) * 2.0
+				var oy := float(yy) * tile + 2.0 + float(rng.randi_range(0, 5)) * 2.0
+				_studs.append(Rect2(ox, oy, 2.0, 2.0))
+
+	match kind:
 		"rack":
-			# 数据中心：线路板走线 + 焊盘
-			for i in 26:
-				var x := inner.position.x + rng.randf() * inner.size.x
-				var y := inner.position.y + rng.randf() * inner.size.y
+			# 数据中心：沿 16px 网格的低频走线 + 焊盘
+			for i in 18:
+				var tx := rng.randi_range(1, cols - 3)
+				var ty := rng.randi_range(1, rows - 3)
+				var pts := PackedVector2Array([Vector2(float(tx) * tile, float(ty) * tile)])
 				var horiz := rng.randf() < 0.5
-				var ln := rng.randf_range(30.0, 120.0)
-				var pts := PackedVector2Array([Vector2(x, y)])
-				var cx := x
-				var cy := y
-				var segs := rng.randi_range(2, 4)
-				for s in segs:
-					var step := ln / float(segs)
+				for s in rng.randi_range(2, 4):
 					if horiz:
-						cx += step
+						tx += rng.randi_range(2, 5)
 					else:
-						cy += step
-					pts.append(Vector2(cx, cy))
+						ty += rng.randi_range(2, 5)
+					pts.append(Vector2(float(tx) * tile, float(ty) * tile))
 					horiz = not horiz
 				_traces.append(pts)
-				_pads.append(Vector2(x, y))
-		_:
-			# 核心区：不规则石板 + 裂纹
-			var cols := 6
-			var rows := 4
-			for yy in rows:
-				for xx in cols:
-					var w := inner.size.x / float(cols)
-					var h := inner.size.y / float(rows)
-					var jitter := 4.0
-					var rect := Rect2(inner.position.x + xx * w + rng.randf_range(-jitter, jitter),
-						inner.position.y + yy * h + rng.randf_range(-jitter, jitter),
-						w - 2.0, h - 2.0)
-					_slabs.append({"rect": rect, "tone": rng.randf_range(-0.045, 0.045)})
-			for i in 14:
-				var x2 := inner.position.x + rng.randf() * inner.size.x
-				var y2 := inner.position.y + rng.randf() * inner.size.y
+				_pads.append(pts[pts.size() - 1])
+		"conduit":
+			# 核心区：1px 阶梯裂纹
+			for i in 12:
+				var x2 := float(rng.randi_range(2, cols - 3)) * tile
+				var y2 := float(rng.randi_range(2, rows - 3)) * tile
 				var pts2 := PackedVector2Array([Vector2(x2, y2)])
-				var ang := rng.randf() * TAU
-				for s2 in rng.randi_range(3, 6):
-					ang += rng.randf_range(-0.9, 0.9)
-					var step2 := rng.randf_range(14.0, 34.0)
-					x2 += cos(ang) * step2
-					y2 += sin(ang) * step2
+				var horiz2 := rng.randf() < 0.5
+				for s2 in rng.randi_range(3, 5):
+					var step2 := float(rng.randi_range(2, 5)) * tile * 0.5
+					if horiz2:
+						x2 += step2
+					else:
+						y2 += step2
 					pts2.append(Vector2(x2, y2))
+					horiz2 = not horiz2
 				_traces.append(pts2)
+		_:
+			# 档案库：地砖 + 铜钉
+			pass
 
 
 ## 两侧装饰：书架 / 机柜 / 能量导管，全部贴墙，不阻挡通行
@@ -127,7 +135,7 @@ func _build_decor() -> void:
 				var y := r.position.y + w + 2.0 if side == 0 else r.end.y - w - 22.0
 				var x := r.position.x + w + 8.0
 				while x < r.end.x - w - 70.0:
-					var bw := rng.randf_range(52.0, 74.0)
+					var bw := float(rng.randi_range(52, 74))
 					_decor.append({"kind": "shelf", "rect": Rect2(x, y, bw, 20.0),
 						"seed": rng.randi()})
 					x += bw + 6.0
@@ -137,7 +145,7 @@ func _build_decor() -> void:
 				var y3 := r.position.y + w + 2.0 if side2 == 0 else r.end.y - w - 26.0
 				var x3 := r.position.x + w + 8.0
 				while x3 < r.end.x - w - 80.0:
-					var bw2 := rng.randf_range(40.0, 54.0)
+					var bw2 := float(rng.randi_range(40, 54))
 					_decor.append({"kind": "rack", "rect": Rect2(x3, y3, bw2, 24.0),
 						"seed": rng.randi()})
 					x3 += bw2 + 8.0
@@ -153,7 +161,7 @@ func _build_decor() -> void:
 					"seed": rng.randi()})
 				_decor.append({"kind": "node", "rect": Rect2(x4 + 12.0, r.end.y - w - 10.0, 8.0, 9.0),
 					"seed": rng.randi()})
-				x4 += rng.randf_range(90.0, 160.0)
+				x4 += float(rng.randi_range(90, 160))
 			_side_columns(rng, "vpipe")
 
 
@@ -177,24 +185,6 @@ func _spawn_ambient() -> void:
 	var col: Color = _theme.get("accent", Color(1, 1, 1))
 	col.a = 0.55
 	_ambient.setup(String(_theme.get("particle", "mote")), col)
-
-
-## 地面微波动：一层极淡的正弦亮带（GPU 绘制，不额外消耗 CPU）
-func _build_floor_wave() -> void:
-	if not ResourceLoader.exists("res://shaders/floor_wave.gdshader"):
-		return
-	var rect := ColorRect.new()
-	rect.name = "FloorWave"
-	rect.position = Vector2.ZERO
-	rect.size = Vector2(GameConfig.ROOM_W, GameConfig.ROOM_H)
-	rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var mat := ShaderMaterial.new()
-	mat.shader = load("res://shaders/floor_wave.gdshader")
-	mat.set_shader_parameter("tint", _theme.get("accent", Color(0.66, 0.80, 1.0)))
-	mat.set_shader_parameter("strength", 0.035 if is_boss else 0.05)
-	rect.material = mat
-	add_child(rect)
-	move_child(rect, 0)
 
 
 ## 0~3 个不可通行障碍（柱子/石台）+ 10% 概率一个可破坏木箱
@@ -414,154 +404,139 @@ func _draw() -> void:
 	_draw_fade(r)
 
 
+## 16×16 像素地砖：底色 + 亮/暗块 + 1px 砖缝 + 2×2 细节
 func _draw_floor(r: Rect2) -> void:
-	var a: Color = _theme.get("floor_a", Color(0.72, 0.78, 0.86))
-	var b: Color = _theme.get("floor_b", Color(0.68, 0.74, 0.83))
-	var line: Color = _theme.get("floor_line", Color(0.55, 0.62, 0.72))
+	var a: Color = _theme.get("floor_a", Color("#1B2A2E"))
+	var b: Color = _theme.get("floor_b", Color("#24383C"))
+	var line: Color = _theme.get("floor_line", Color("#0E1618"))
+	var accent: Color = _theme.get("accent", Color("#8A6A3A"))
+	var kind := String(_theme.get("decor", "shelf"))
 	draw_rect(r, a)
 
-	match String(_theme.get("decor", "shelf")):
-		"shelf":
-			var tile := 32.0
-			var cols := int(r.size.x / tile)
-			var rows := int(r.size.y / tile)
-			for y in rows:
-				for x in cols:
-					if (x + y) % 2 == 0:
-						draw_rect(Rect2(x * tile, y * tile, tile, tile), b)
-			for x2 in cols + 1:
-				draw_line(Vector2(x2 * tile, 0), Vector2(x2 * tile, r.size.y), line, 1.0)
-			for y2 in rows + 1:
-				draw_line(Vector2(0, y2 * tile), Vector2(r.size.x, y2 * tile), line, 1.0)
-		"rack":
-			# 线路板：48px 网格 + 少量走线
-			var step := 48.0
-			var gx := r.position.x
-			while gx < r.end.x:
-				draw_line(Vector2(gx, r.position.y), Vector2(gx, r.end.y),
-					Color(line.r, line.g, line.b, 0.35), 1.0)
-				gx += step
-			var gy := r.position.y
-			while gy < r.end.y:
-				draw_line(Vector2(r.position.x, gy), Vector2(r.end.x, gy),
-					Color(line.r, line.g, line.b, 0.35), 1.0)
-				gy += step
-		_:
-			# 裂纹石板：石板明度抖动
-			for s in _slabs:
-				var rect: Rect2 = s["rect"]
-				var tone: float = s["tone"]
-				var c := a.lightened(tone) if tone > 0.0 else a.darkened(-tone)
-				draw_rect(rect, c)
+	var dark := a.darkened(0.10)
+	for t in _tiles:
+		var tr: Rect2 = t["rect"]
+		draw_rect(tr, b if int(t["tone"]) == 1 else dark)
+
+	# 1px 砖缝，全部落在 16px 网格上
+	var tile := 16.0
+	var cols := int(ceil(r.size.x / tile))
+	var rows := int(ceil(r.size.y / tile))
+	for x in cols + 1:
+		draw_rect(Rect2(float(x) * tile, r.position.y, 1.0, r.size.y), line)
+	for y in rows + 1:
+		draw_rect(Rect2(r.position.x, float(y) * tile, r.size.x, 1.0), line)
+
+	# 2×2 像素细节：档案库铜钉 / 数据中心焊盘 / 核心区通风孔
+	var stud := accent.darkened(0.25)
+	if kind == "rack":
+		stud = accent.darkened(0.35)
+	elif kind == "conduit":
+		stud = accent.darkened(0.15)
+	for s in _studs:
+		var sr: Rect2 = s
+		draw_rect(sr, stud)
+		draw_rect(Rect2(sr.position, Vector2.ONE), stud.lightened(0.30))
 
 
 func _draw_floor_details() -> void:
-	var line: Color = _theme.get("floor_line", Color(0.55, 0.62, 0.72))
+	var line: Color = _theme.get("floor_line", Color("#0E1618"))
+	var accent: Color = _theme.get("accent", Color("#8A6A3A"))
 	match String(_theme.get("decor", "shelf")):
 		"rack":
-			var glow: Color = _theme.get("accent", Color(0.30, 0.85, 0.72))
+			# 线路：1px 折线，不加 3px 光晕
 			for pts in _traces:
 				var p: PackedVector2Array = pts
-				draw_polyline(p, Color(line.r, line.g, line.b, 0.55), 1.0)
-				draw_polyline(p, Color(glow.r, glow.g, glow.b, 0.10), 3.0)
+				draw_polyline(p, accent.darkened(0.30), 1.0)
 			for pad in _pads:
 				var pp: Vector2 = pad
-				draw_rect(Rect2(pp - Vector2(2, 2), Vector2(4, 4)),
-					Color(glow.r, glow.g, glow.b, 0.35))
+				draw_rect(Rect2(pp - Vector2(1.0, 1.0), Vector2(2.0, 2.0)), accent)
 		"conduit":
+			# 裂纹：1px 阶梯暗线
 			for pts2 in _traces:
 				var p2: PackedVector2Array = pts2
-				draw_polyline(p2, Color(line.r * 0.7, line.g * 0.6, line.b * 0.65, 0.75), 1.0)
+				draw_polyline(p2, line.darkened(0.30), 1.0)
 
 
 func _draw_decor() -> void:
+	var wall: Color = _theme.get("wall", Color("#162326"))
+	var top: Color = _theme.get("wall_top", Color("#2B3F44"))
+	var edge: Color = _theme.get("wall_edge", Color("#05090A"))
+	var accent: Color = _theme.get("accent", Color("#8A6A3A"))
+	var book_cols := [accent.darkened(0.15), Color("#6B5C8A"), Color("#4E7A78"),
+		accent.lightened(0.05)]
 	for d in _decor:
 		var rect: Rect2 = d["rect"]
 		var seed_v: int = d["seed"]
-		match String(d["kind"]):
+		var kind := String(d["kind"])
+		match kind:
 			"shelf":
-				draw_rect(rect, Color(0.26, 0.30, 0.40))
-				draw_rect(rect, Color(0.14, 0.17, 0.24), false, 1.0)
+				draw_rect(rect, top.darkened(0.18))
+				draw_rect(rect, edge, false, 1.0)
+				draw_rect(Rect2(rect.position, Vector2(rect.size.x, 1.0)), top.lightened(0.10))
 				var rng := RandomNumberGenerator.new()
 				rng.seed = seed_v
 				var x := rect.position.x + 3.0
-				var cols2 := [Color(0.55, 0.68, 0.92), Color(0.72, 0.58, 0.45),
-					Color(0.52, 0.76, 0.70), Color(0.80, 0.72, 0.45)]
 				while x < rect.end.x - 3.0:
-					var bw := rng.randf_range(3.0, 6.0)
-					var h := rng.randf_range(9.0, 14.0)
+					var bw := float(rng.randi_range(3, 6))
+					var h := float(rng.randi_range(9, 14))
 					draw_rect(Rect2(x, rect.end.y - 3.0 - h, bw, h),
-						cols2[rng.randi() % cols2.size()])
-					x += bw + 1.5
+						book_cols[rng.randi() % book_cols.size()])
+					x += bw + 1.0
 				draw_rect(Rect2(rect.position.x, rect.end.y - 3.0, rect.size.x, 3.0),
-					Color(0.20, 0.24, 0.32))
-			"rack":
-				draw_rect(rect, Color(0.13, 0.20, 0.24))
-				draw_rect(rect, Color(0.06, 0.10, 0.13), false, 1.0)
+					wall.darkened(0.10))
+			"rack", "vrack":
+				draw_rect(rect, wall.darkened(0.12))
+				draw_rect(rect, edge, false, 1.0)
 				var rng2 := RandomNumberGenerator.new()
 				rng2.seed = seed_v
-				var accent: Color = _theme.get("accent", Color(0.30, 0.85, 0.72))
 				for row in 3:
-					draw_rect(Rect2(rect.position.x + 3.0, rect.position.y + 4.0 + row * 6.0,
-						rect.size.x - 6.0, 2.0), Color(0.18, 0.28, 0.32))
-					var on: bool = fmod(_t * 1.6 + float(rng2.randi() % 10) * 0.3, 3.0) < 1.5
-					if on:
-						draw_rect(Rect2(rect.end.x - 6.0, rect.position.y + 4.0 + row * 6.0,
-							2.0, 2.0), accent)
-			"pipe":
-				draw_rect(rect, Color(0.20, 0.12, 0.17))
+					var ry := rect.position.y + 4.0 + float(row) * 6.0
+					draw_rect(Rect2(rect.position.x + 3.0, ry, rect.size.x - 6.0, 2.0),
+						top.darkened(0.10))
+					var blink := fmod(_t * 1.6 + float(rng2.randi() % 10) * 0.3, 3.0) < 1.5
+					if blink:
+						draw_rect(Rect2(rect.end.x - 6.0, ry, 2.0, 2.0), accent)
+			"pipe", "vpipe":
+				draw_rect(rect, wall)
+				draw_rect(rect, edge, false, 1.0)
 				draw_rect(Rect2(rect.position, Vector2(rect.size.x, 1.0)),
-					Color(0.34, 0.20, 0.27))
-				var pulse: float = 0.35 + 0.35 * sin(_t * 2.2)
-				draw_rect(rect, Color(0.95, 0.42, 0.45, 0.10 + pulse * 0.10))
+					top.lightened(0.08))
+				# 2 帧能量闪，不做平滑脉冲
+				if fmod(_t * 2.2 + float(seed_v % 5) * 0.5, 1.6) < 0.9:
+					draw_rect(rect.grow(-3.0), accent.darkened(0.20))
 			"node":
-				var glow2: Color = _theme.get("accent", Color(0.95, 0.42, 0.45))
-				var p3: float = 0.4 + 0.6 * absf(sin(_t * 2.6 + float(seed_v % 7)))
-				draw_rect(rect, Color(0.24, 0.14, 0.19))
-				draw_rect(rect.grow(-2.0), Color(glow2.r, glow2.g, glow2.b, 0.35 + 0.4 * p3))
+				draw_rect(rect, wall)
+				draw_rect(rect, edge, false, 1.0)
+				if fmod(_t * 2.6 + float(seed_v % 7) * 0.4, 1.8) < 0.9:
+					draw_rect(rect.grow(-2.0), accent.darkened(0.10))
 			"vshelf":
-				draw_rect(rect, Color(0.26, 0.30, 0.40))
-				draw_rect(rect, Color(0.14, 0.17, 0.24), false, 1.0)
+				draw_rect(rect, top.darkened(0.18))
+				draw_rect(rect, edge, false, 1.0)
 				var rng3 := RandomNumberGenerator.new()
 				rng3.seed = seed_v
-				var cols3 := [Color(0.55, 0.68, 0.92), Color(0.72, 0.58, 0.45),
-					Color(0.52, 0.76, 0.70), Color(0.80, 0.72, 0.45)]
 				for i in 3:
-					draw_rect(Rect2(rect.position.x + 2.0, rect.position.y + 2.0 + i * 5.5,
-						rect.size.x - 4.0, 4.0), cols3[rng3.randi() % cols3.size()].darkened(0.15))
-			"vrack":
-				draw_rect(rect, Color(0.13, 0.20, 0.24))
-				draw_rect(rect, Color(0.06, 0.10, 0.13), false, 1.0)
-				var accent2: Color = _theme.get("accent", Color(0.30, 0.85, 0.72))
-				for i2 in 3:
-					draw_rect(Rect2(rect.position.x + 3.0, rect.position.y + 4.0 + i2 * 6.0,
-						rect.size.x - 6.0, 2.0), Color(0.18, 0.28, 0.32))
-					if fmod(_t * 2.0 + float((seed_v + i2 * 3) % 9) * 0.4, 2.4) < 1.2:
-						draw_rect(Rect2(rect.end.x - 5.0, rect.position.y + 4.0 + i2 * 6.0,
-							2.0, 2.0), accent2)
-			"vpipe":
-				draw_rect(rect, Color(0.20, 0.12, 0.17))
-				var pulse2: float = 0.3 + 0.5 * absf(sin(_t * 2.0 + float(seed_v % 5)))
-				draw_rect(rect.grow(-3.0), Color(0.95, 0.42, 0.45, 0.25 + 0.35 * pulse2))
+					draw_rect(Rect2(rect.position.x + 2.0, rect.position.y + 2.0 + float(i) * 5.0,
+						rect.size.x - 4.0, 4.0), book_cols[rng3.randi() % book_cols.size()].darkened(0.15))
 
 
-func _draw_obstacles() -> void:
-	for o in _obstacles:
-		var rr: Rect2 = o
-		draw_rect(Rect2(rr.position + Vector2(4, 4), rr.size), Color(0, 0, 0, 0.22))
-		var base: Color = _theme.get("wall", Color(0.2, 0.22, 0.3))
-		draw_rect(rr, base.lightened(0.04))
-		draw_rect(rr, base.lightened(0.22), false, 2.0)
-		draw_rect(Rect2(rr.position, Vector2(rr.size.x, 6)), base.lightened(0.30))
-		draw_rect(Rect2(rr.position + Vector2(0, rr.size.y - 8), Vector2(rr.size.x, 8)),
-			base.darkened(0.28))
+## 2×2 像素抖动填充：用方格代替半透明渐变
+func _dither_fill(rect: Rect2, col: Color, step: float = 4.0) -> void:
+	var x := rect.position.x
+	while x + 2.0 <= rect.end.x:
+		var y := rect.position.y
+		while y + 2.0 <= rect.end.y:
+			draw_rect(Rect2(x, y, 2.0, 2.0), col)
+			y += step
+		x += step
 
 
 func _draw_walls(r: Rect2) -> void:
 	var w := GameConfig.WALL
-	var wall: Color = _theme.get("wall", Color(0.35, 0.42, 0.55))
-	var top: Color = _theme.get("wall_top", Color(0.47, 0.55, 0.68))
-	var edge: Color = _theme.get("wall_edge", Color(0.16, 0.20, 0.28))
+	var wall: Color = _theme.get("wall", Color("#162326"))
+	var top: Color = _theme.get("wall_top", Color("#2B3F44"))
+	var edge: Color = _theme.get("wall_edge", Color("#05090A"))
+	var band := 8.0
 	var gap_top: float = r.position.y + r.size.y * 0.5 - DOOR_H * 0.5
 	var walls := [
 		Rect2(r.position.x, r.position.y, r.size.x, w),
@@ -572,41 +547,63 @@ func _draw_walls(r: Rect2) -> void:
 	walls.append(Rect2(r.end.x - w, gap_top + DOOR_H, w, r.end.y - (gap_top + DOOR_H)))
 	for rect in walls:
 		draw_rect(rect, wall)
-		draw_line(rect.position, Vector2(rect.end.x, rect.position.y), top, 2.0)
-	# 墙体内缘 1px 暗色描边，强化空间感
+		# 上沿 8px 顶面 + 1px 亮边
+		draw_rect(Rect2(rect.position, Vector2(rect.size.x, band)), top)
+		draw_rect(Rect2(rect.position, Vector2(rect.size.x, 1.0)), top.lightened(0.14))
+		# 每 48px 一道 1px 接缝，破除大面积纯色
+		var sx: float = rect.position.x + 48.0
+		while sx < rect.end.x:
+			draw_rect(Rect2(sx, rect.position.y, 1.0, band), top.darkened(0.16))
+			sx += 48.0
+		# 内侧 1px 深底
+		draw_rect(Rect2(rect.position.x, rect.end.y - 1.0, rect.size.x, 1.0), edge)
+
+	# 地面内缘 1px 暗边 + 四角 2×2 缺口
 	var inner := Rect2(w, w, r.size.x - w * 2.0, r.size.y - w * 2.0)
-	draw_rect(inner, Color(edge.r, edge.g, edge.b, 0.75), false, 1.0)
+	draw_rect(inner, edge, false, 1.0)
+	for corner in [Vector2(w, w), Vector2(r.end.x - w - 2.0, w),
+			Vector2(w, r.end.y - w - 2.0), Vector2(r.end.x - w - 2.0, r.end.y - w - 2.0)]:
+		draw_rect(Rect2(corner, Vector2(2.0, 2.0)), edge)
 
 
 func _draw_door(r: Rect2) -> void:
 	var w := GameConfig.WALL
 	var gap_top: float = r.position.y + r.size.y * 0.5 - DOOR_H * 0.5
 	var dz := door_zone()
-	var accent: Color = _theme.get("accent", Color(0.95, 0.72, 0.24))
+	var accent: Color = _theme.get("accent", Color("#8A6A3A"))
+	var line: Color = _theme.get("floor_line", Color("#0E1618"))
+	var wall: Color = _theme.get("wall", Color("#162326"))
 	if door_open:
-		var a2: float = 0.35 + 0.25 * sin(_t * 4.0)
-		draw_rect(dz, Color(accent.r, accent.g, accent.b, 0.20))
-		draw_rect(dz, Color(accent.r, accent.g, accent.b, a2), false, 2.0)
+		# 2 帧闪烁的门框；地面光斑用 2×2 抖动
+		var glow := accent if fmod(_t * 4.0, 1.0) < 0.5 else accent.darkened(0.30)
+		draw_rect(dz, line)
+		draw_rect(dz, glow, false, 1.0)
 		for i in 3:
-			var yy := dz.position.y + 14.0 + i * 18.0
-			draw_line(Vector2(dz.position.x + 6, yy), Vector2(dz.end.x - 6, yy),
-				Color(accent.r, accent.g, accent.b, 0.55), 2.0)
+			var yy := dz.position.y + 14.0 + float(i) * 18.0
+			draw_rect(Rect2(dz.position.x + 6.0, yy, dz.size.x - 12.0, 2.0),
+				glow.darkened(0.15))
+		for i2 in 3:
+			_dither_fill(Rect2(dz.position.x - 26.0 + float(i2) * 6.0,
+				dz.position.y + 10.0 + float(i2) * 16.0, 22.0 - float(i2) * 6.0, 6.0),
+				accent.darkened(0.35), 4.0)
 	else:
-		draw_rect(Rect2(dz.position.x, gap_top, w, DOOR_H),
-			(_theme.get("wall", Color(0.35, 0.42, 0.55)) as Color).darkened(0.35))
-		draw_rect(Rect2(dz.position.x + 3, gap_top + 4, w - 6, DOOR_H - 8),
-			Color(accent.r, accent.g, accent.b, 0.55))
+		var panel := wall.darkened(0.30)
+		draw_rect(Rect2(dz.position.x, gap_top, w, DOOR_H), panel)
+		var frame := Rect2(dz.position.x + 3.0, gap_top + 4.0, w - 6.0, DOOR_H - 8.0)
+		draw_rect(frame, accent.darkened(0.35))
+		draw_rect(frame, accent.darkened(0.10), false, 1.0)
+		# 门闩：2×2 金色块
+		draw_rect(Rect2(dz.position.x + 6.0, gap_top + DOOR_H * 0.5 - 3.0, 2.0, 6.0),
+			accent)
 
 
-## Boss 房强化：边缘呼吸光晕
+## Boss 房强化：3 圈 1px 方框，2 帧闪烁
 func _draw_boss_glow(r: Rect2) -> void:
-	var accent: Color = _theme.get("accent", Color(0.95, 0.42, 0.45))
-	var pulse: float = 0.5 + 0.5 * sin(_t * 1.8)
-	for i in 5:
-		var d: float = 6.0 + i * 7.0
-		var a: float = (0.16 - i * 0.026) * (0.6 + 0.4 * pulse)
-		draw_rect(Rect2(d, d, r.size.x - d * 2.0, r.size.y - d * 2.0),
-			Color(accent.r, accent.g, accent.b, a), false, 2.0)
+	var accent: Color = _theme.get("accent", Color("#FF5D7A"))
+	var c := accent.darkened(0.20) if fmod(_t * 1.6, 1.0) < 0.5 else accent.darkened(0.45)
+	for i in 3:
+		var d := 6.0 + float(i) * 8.0
+		draw_rect(Rect2(d, d, r.size.x - d * 2.0, r.size.y - d * 2.0), c, false, 1.0)
 
 
 ## 进房间的 0.3s 淡入（用主题墙色，避免硬切）

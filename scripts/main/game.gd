@@ -1,4 +1,4 @@
-extends Node2D
+﻿extends Node2D
 ## 关卡循环：房间 -> 清场 -> 开门 -> 下一房间 -> 商店 -> Boss -> 下一层
 ## 房间节奏：小怪 -> 混合/精英 -> 喘息 -> Boss 前小高潮；波次之间留 1.5~2s 走位窗口
 
@@ -16,6 +16,7 @@ const SummonerScene = preload("res://scenes/enemies/enemy_summoner.tscn")
 const ShieldScene = preload("res://scenes/enemies/enemy_shield_bearer.tscn")
 const SplitterScene = preload("res://scenes/enemies/enemy_splitter.tscn")
 const SniperScene = preload("res://scenes/enemies/enemy_sniper.tscn")
+const BulletScript = preload("res://scripts/weapons/bullet.gd")
 
 ## 分层敌人池：第 1 层三种，第 2 层加环形射手/分裂体，第 3 层加召唤者/盾卫/狙击手
 const POOL_F1 := ["chaser", "charger", "shooter"]
@@ -66,31 +67,51 @@ func _ready() -> void:
 	_start_room(GameState.room_index)
 	ScreenFx.set_battle(true)
 	BaCursor.set_battle(true)
-	if not intro_shown and GameState.floor_index == 1 and GameState.room_index == 1:
+	# 网页验收模式：跳过开场对话框，免得遮住截图
+	var dbg := _debug_query()
+	if not intro_shown and dbg == "" and GameState.floor_index == 1 and GameState.room_index == 1:
 		intro_shown = true
 		_show_intro_dialog()
-	_check_debug_query()
+	_check_debug_query(dbg)
+
+
+func _debug_query() -> String:
+	var js = Engine.get_singleton("JavaScriptBridge")
+	if js == null:
+		return ""
+	var raw = js.eval("window.location.search", true)
+	return "" if raw == null else str(raw)
 
 
 ## 网页版验收用：URL 带 ?enemies=1 时在首房间摆满 9 种敌人（仅调试，不影响正常流程）
-func _check_debug_query() -> void:
-	var js = Engine.get_singleton("JavaScriptBridge")
-	if js == null:
+func _check_debug_query(q: String = "") -> void:
+	if q == "":
+		q = _debug_query()
+	if q == "":
 		return
-	var raw = js.eval("window.location.search", true)
-	if raw == null:
-		return
-	var q := str(raw)
+	# ?floor=2/3：网页验收时切换楼层主题（仅调试）
+	for part in q.trim_prefix("?").split("&"):
+		if part.begins_with("floor="):
+			var fi := int(part.trim_prefix("floor="))
+			if fi >= 1 and fi <= 3:
+				call_deferred("_debug_set_floor", fi)
 	if q.contains("enemies"):
 		call_deferred("_debug_spawn_enemies")
+	if q.contains("bullets"):
+		call_deferred("_debug_spawn_bullets")
+
+
+func _debug_set_floor(fi: int) -> void:
+	GameState.floor_index = fi
+	_start_room(1)
 
 
 func _debug_spawn_enemies() -> void:
-	await get_tree().create_timer(1.2).timeout
 	if player == null or not is_instance_valid(player):
 		return
-	player.invuln = 99999.0
 	busy = true
+	if tutorial != null and is_instance_valid(tutorial):
+		tutorial.visible = false
 	for e in GameState.enemies.duplicate():
 		if is_instance_valid(e):
 			e.queue_free()
@@ -103,7 +124,58 @@ func _debug_spawn_enemies() -> void:
 		e.position = Vector2(300 + (i % 3) * 120, 130 + int(i / 3) * 105)
 		e.died.connect(_on_enemy_died)
 		enemy_layer.add_child(e)
+		# 验收时放在箱子上方，避免被场景装饰挡住
+		e.z_index = 8
+		# 冻结：验收只看得清外形与配色，不让 AI 挤到玩家身上
+		e.set_physics_process(false)
+		e.set_process(false)
 		i += 1
+
+
+## 网页验收用：?bullets 时在玩家附近摆一排静态弹幕样例（仅调试）
+func _debug_spawn_bullets() -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	busy = true
+	if tutorial != null and is_instance_valid(tutorial):
+		tutorial.visible = false
+	for e in GameState.enemies.duplicate():
+		if is_instance_valid(e):
+			e.queue_free()
+	GameState.enemies.clear()
+	var samples := [
+		[Vector2(340, 300), true, Color("#8EE6FF"), 3.0, false, false],
+		[Vector2(392, 300), true, Color("#FFD166"), 4.0, true, false],
+		[Vector2(444, 300), false, Color("#FF5A63"), 5.0, false, false],
+		[Vector2(496, 300), false, Color("#FF5A63"), 3.0, false, true],
+		[Vector2(548, 300), false, Color("#E4485F"), 5.0, true, true],
+	]
+	for s in samples:
+		var b = BulletScript.new()
+		b.position = s[0]
+		bullet_layer.add_child(b)
+		b.friendly = bool(s[1])
+		b.color = s[2]
+		b.radius = float(s[3])
+		b.trail = bool(s[4])
+		b.destructible = bool(s[5])
+		b.homing = 1.0 if bool(s[5]) else 0.0
+		b.homing_time = 0.0
+		b.dir = Vector2.RIGHT
+		b.speed = 0.0
+		b.life = 9999.0
+		b.prepare()
+		b.set_physics_process(false)
+	# 地雷单独一个：需要 mine 标记
+	var m = BulletScript.new()
+	m.position = Vector2(600, 300)
+	bullet_layer.add_child(m)
+	m.friendly = false
+	m.mine = true
+	m.color = Color("#FF5A63")
+	m.speed = 0.0
+	m.prepare()
+	m.set_physics_process(false)
 
 
 func _build_layers() -> void:
@@ -300,6 +372,8 @@ func _scene_for(key: String) -> PackedScene:
 			return SniperScene
 		"shooter":
 			return ShooterScene
+		"spreader":
+			return SpreaderScene
 		_:
 			return ChaserScene
 
@@ -522,3 +596,4 @@ func _on_run_ended() -> void:
 	if not is_inside_tree():
 		return
 	run_over.emit()
+

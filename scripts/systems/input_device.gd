@@ -20,8 +20,7 @@ func _apply_device(v: bool) -> void:
 	if v == using_pad:
 		return
 	using_pad = v
-	if DisplayServer.get_name() != "headless":
-		Input.mouse_mode = Input.MOUSE_MODE_HIDDEN if v else Input.MOUSE_MODE_VISIBLE
+	# 不再隐藏系统鼠标：手柄轴漂移误判会让鼠标永久消失，光标显隐统一交给 BaCursor
 	device_changed.emit(v)
 
 

@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bulxqdrgmgl5n"
-path="res://.godot/imported/excl_hammer.png-cff1a13809c983428d47a0f4696396c1.ctex"
+uid="uid://2ccmlvnq3p0k"
+path="res://.godot/imported/excl_claude_code.png-ccab629e30bb83a8954cc7dd83f438db.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/icons/weapons/excl_hammer.png"
-dest_files=["res://.godot/imported/excl_hammer.png-cff1a13809c983428d47a0f4696396c1.ctex"]
+source_file="res://assets/weapons/excl_claude_code.png"
+dest_files=["res://.godot/imported/excl_claude_code.png-ccab629e30bb83a8954cc7dd83f438db.ctex"]
 
 [params]
 

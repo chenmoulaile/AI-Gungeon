@@ -76,15 +76,23 @@ CHARACTERS = {
         },
     },
     "claude": {
-        # 暂时没有正面三视图：旧图左格被裁，只能用中间侧视图
-        "ref": "claude_chibi.png",
-        "view": 1,
-        "eye_xy": (0.30, 0.46),
-        "eye_xy2": (0.38, 0.46),
+        # 2026-10-25 新三视图第 0 格是完整正面，改回正面朝向（旧图只有侧面可用）
+        "ref": "claude_chibi_3view_v2.png",
+        "view": 0,
+        "eye_xy": (0.37, 0.44),
+        "eye_xy2": (0.57, 0.44),
+        "eye_frac": (0.07, 0.05),
+        "eye_color": (198, 92, 36),
         "hair_region": (0.0, 0.0, 1.0, 0.55),
         "cloth_region": (0.0, 0.5, 1.0, 1.0),
         "outline": (74, 38, 24),
         "lift": 14,
+        "portrait": {
+            "eye_xy": (0.37, 0.44),
+            "eye_xy2": (0.57, 0.44),
+            "eye_frac": (0.07, 0.035),
+            "eye_color": (198, 92, 36),
+        },
     },
 }
 

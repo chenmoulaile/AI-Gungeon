@@ -14,7 +14,7 @@ func _setup() -> void:
 	radius = 13.0
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
-	accent = Color("#7de0c0")
+	accent = Color("#66C97A")
 
 
 func _ai(delta: float) -> void:
@@ -22,8 +22,8 @@ func _ai(delta: float) -> void:
 		return
 	var dir: Vector2 = (player.global_position - global_position).normalized()
 	position += dir * speed * slow_mult * delta
-	# 呼吸式缩放，暗示"要裂开"
-	scale = Vector2.ONE * (1.0 + 0.04 * sin(t * 3.0))
+	# 呼吸式缩放：2 帧整数，避免像素边缘抖动
+	scale = Vector2.ONE * (1.03 if sin(t * 3.0) > 0.0 else 1.0)
 
 
 func _die() -> void:
@@ -47,24 +47,29 @@ func _split() -> void:
 
 
 func _draw_body() -> void:
-	# 不规则团块聚合体：8 个外凸节点
-	var pts := PackedVector2Array()
-	for i in 8:
-		var a := TAU * float(i) / 8.0 + t * 0.35
-		var rr := radius * (1.05 + 0.22 * sin(t * 2.4 + float(i) * 1.7))
-		pts.append(Vector2(cos(a), sin(a)) * rr)
-	draw_colored_polygon(pts, accent)
-	draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0, 0, 0, 0.85), 1.6)
-	# 表面脉动裂纹
-	for i in 3:
-		var a2 := t * 0.9 + float(i) * 2.1
-		var p1 := Vector2(cos(a2), sin(a2)) * radius * 0.25
-		var p2 := Vector2(cos(a2 + 0.5), sin(a2 + 0.5)) * radius * 0.92
-		var pulse: float = 0.35 + 0.45 * absf(sin(t * 4.0 + float(i)))
-		draw_line(p1, p2, Color(1.0, 0.95, 0.75, pulse), 1.2)
-	# 内部小球（将要分裂的暗示）
-	draw_circle(Vector2(-radius * 0.28, -radius * 0.15), radius * 0.26,
-		Color(1, 1, 1, 0.30))
-	draw_circle(Vector2(radius * 0.30, radius * 0.18), radius * 0.22,
-		Color(1, 1, 1, 0.24))
-	draw_circle(Vector2.ZERO, radius * 0.18, Color(1, 1, 1, 0.9))
+	var s := roundf(radius)
+	var body := Color("#56B56A")
+	var dark := Color("#2F6B3C")
+	var hi := Color("#F2D45C")
+	var edge := Color("#07130A")
+	# 呼吸：2 帧宽度变化，不做连续缩放
+	var wide := 0.0 if fmod(t, 0.5) < 0.25 else 2.0
+	_px_rects([
+		Rect2(-8.0 - wide, -s - 2.0, 16.0 + wide * 2.0, 4.0),
+		Rect2(-s - 2.0, -s + 2.0, s * 2.0 + 4.0, 5.0),
+		Rect2(-s - 4.0 + wide, -s + 7.0, s * 2.0 + 8.0 - wide * 2.0, 6.0),
+		Rect2(-s - 1.0, -s + 13.0, s * 2.0 + 2.0, 4.0),
+		Rect2(-s + 3.0, -s + 17.0, s * 2.0 - 6.0, 3.0),
+	], body, edge)
+	# 脉络：1px 暗绿台阶
+	draw_rect(Rect2(-6.0, -s + 3.0, 3.0, 1.0), dark)
+	draw_rect(Rect2(-3.0, -s + 4.0, 1.0, 4.0), dark)
+	draw_rect(Rect2(-3.0, -s + 8.0, 5.0, 1.0), dark)
+	draw_rect(Rect2(2.0, -s + 9.0, 1.0, 3.0), dark)
+	# 两个将要分裂的黄色胚核（2 帧闪）
+	var cc := hi if fmod(t, 0.8) < 0.4 else hi.darkened(0.25)
+	draw_rect(Rect2(-6.0, -s + 8.0, 3.0, 3.0), cc)
+	draw_rect(Rect2(4.0, -s + 10.0, 2.0, 2.0), cc)
+	# 中央单眼
+	draw_rect(Rect2(-2.0, -s + 5.0, 4.0, 3.0), Color("#0B1A0E"))
+	draw_rect(Rect2(-1.0, -s + 6.0, 2.0, 1.0), hi)

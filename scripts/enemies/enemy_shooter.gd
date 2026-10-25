@@ -19,7 +19,7 @@ func _setup() -> void:
 	radius = 9.5
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
-	accent = Color("#ff9f43")
+	accent = Color("#FF5A63")
 	fire_cd = SeedManager.randf_range(1.0, 1.8)
 	if GameState.floor_index >= 2:
 		pattern = "spiral"
@@ -55,34 +55,41 @@ func _ai(delta: float) -> void:
 
 
 func _draw_body() -> void:
-	var ang := 0.0
+	var dir := Vector2.RIGHT
 	if player != null and is_instance_valid(player):
-		ang = (player.global_position - global_position).angle()
-	# 预警：红色瞄准线，越接近发射越亮
-	if telegraph > 0.0:
-		var kk := 1.0 - telegraph / 0.5
-		var c := Color(1.0, 0.22, 0.26, 0.25 + 0.55 * kk)
-		draw_line(Vector2.ZERO, Vector2(cos(ang), sin(ang)) * 320.0, c, 1.0 + 1.5 * kk)
-	draw_set_transform(Vector2.ZERO, ang, Vector2.ONE)
-	var s := radius
-	var rec := 0.0
-	if telegraph > 0.0:
-		rec = -2.5 * (1.0 - telegraph / 0.5)
-	# 断裂柱状炮台
-	for i in 3:
-		var y := -s + float(i) * s * 0.70
-		var w := s * (1.0 - 0.12 * float(i))
-		draw_rect(Rect2(-w + rec, y, w * 2.0, s * 0.62), accent.darkened(0.06 * float(i)))
-		draw_line(Vector2(-w + rec, y), Vector2(w + rec, y), Color(0, 0, 0, 0.55), 1.0)
-	draw_rect(Rect2(-s * 0.18 + rec, -s * 0.22, s * 0.42, s * 0.16), Color(0.10, 0.06, 0.04))
-	# 炮口
-	var mz := Vector2(s * 1.15 + rec, -1.0)
-	draw_rect(Rect2(mz.x - 2.0, mz.y - 3.0, 6.0, 6.0), Color(0.24, 0.17, 0.12))
-	draw_rect(Rect2(mz.x + 2.0, mz.y - 2.0, 3.0, 4.0), Color(1.0, 0.75, 0.35))
+		dir = _px_dir(player.global_position - global_position)
+	var s := roundf(radius)
+	var body := Color("#49505C")
+	var dark := Color("#2F353E")
+	var edge := Color("#0A0D13")
+	var red := Color("#FF5A63")
+	var bob := 0.0 if fmod(t, 0.9) < 0.45 else 1.0
+	# 三条支撑腿：两前一后，像素方柱
+	_px_rects([
+		Rect2(-s, -2.0 + bob, 4.0, 7.0),
+		Rect2(s - 4.0, -2.0 + bob, 4.0, 7.0),
+		Rect2(-2.0, bob, 4.0, 6.0),
+	], dark, edge)
+	# 炮台主体：上窄下宽的三层
+	_px_rects([
+		Rect2(-6.0, -s - 5.0 + bob, 12.0, 4.0),
+		Rect2(-s, -s - 1.0 + bob, s * 2.0, 6.0),
+		Rect2(-s + 1.0, -s + 5.0 + bob, s * 2.0 - 2.0, 3.0),
+	], body, edge)
+	# 单眼 3×3 + 深色瞳
+	draw_rect(Rect2(-1.0, -s + bob, 3.0, 3.0), red)
+	draw_rect(Rect2(0.0, -s + 1.0 + bob, 1.0, 1.0), Color("#2A0A0C"))
+	# 炮口：八方向整数偏移，双层方块
+	var mz := dir * (s + 4.0) + Vector2(0.0, -s * 0.35 + bob)
+	_px_rects([Rect2(roundf(mz.x) - 2.0, roundf(mz.y) - 2.0, 4.0, 4.0)],
+		Color("#616B79"), edge)
+	draw_rect(Rect2(roundf(mz.x) - 1.0, roundf(mz.y) - 1.0, 2.0, 2.0), red.darkened(0.25))
+	# 蓄力：1px 瞄准线 + 炮口 2 帧闪
 	if telegraph > 0.0:
 		var k := 1.0 - telegraph / 0.5
-		draw_arc(mz, 4.0 + 7.0 * k, 0.0, TAU, 16,
-			Color(1.0, 0.55 + 0.35 * k, 0.20, 0.85), 1.6, true)
-		draw_circle(mz, 1.6 + 2.4 * k, Color(1.0, 0.85, 0.5, 0.55))
-	glitch_fragments(4, s + 5.0)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		var line_col := Color(1.0, 0.30, 0.34, 0.16 + 0.40 * k)
+		draw_line(Vector2.ZERO, dir * (60.0 + 300.0 * k), line_col, 1.0)
+		if fmod(t, 0.1) < 0.05:
+			draw_rect(Rect2(roundf(mz.x) - 2.0, roundf(mz.y) - 2.0, 4.0, 4.0),
+				Color(1.0, 0.55, 0.30, 0.95))
+	glitch_fragments(4, s + 6.0)

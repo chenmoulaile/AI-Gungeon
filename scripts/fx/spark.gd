@@ -19,9 +19,9 @@ func burst(pos: Vector2, color: Color, count: int, speed: float, life: float) ->
 	for i in n:
 		var ang := randf() * TAU
 		var spd := speed * randf_range(0.45, 1.0)
-		var size := randf_range(1.0, 2.0)
+		var size := 2.0
 		if mode == "shard":
-			size = randf_range(2.0, 3.6)
+			size = float(randi_range(2, 3))
 		_parts.append({
 			"pos": Vector2.ZERO,
 			"vel": Vector2(cos(ang), sin(ang)) * spd,
@@ -65,16 +65,15 @@ func particle_count() -> int:
 	return _parts.size()
 
 
-func _draw() -> void:	for p in _parts:
+func _draw() -> void:
+	for p in _parts:
 		if p["life"] <= 0.0:
 			continue
 		var t: float = clampf(p["life"] / p["max"], 0.0, 1.0)
 		var c: Color = p["color"]
 		c.a = t
-		var sz: float = float(p["size"]) * (0.4 + t * 0.6)
-		if mode == "shard":
-			draw_set_transform(p["pos"], p["rot"], Vector2.ONE)
-			draw_rect(Rect2(-sz * 0.5, -sz * 0.5, sz, sz), c)
-			draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
-		else:
-			draw_rect(Rect2(p["pos"] - Vector2(sz, sz) * 0.5, Vector2(sz, sz)), c)
+		# 整数 2/3px 方块，不缩放、不旋转，避免像素边缘抖动
+		var sz: float = float(p["size"])
+		var pos: Vector2 = p["pos"]
+		draw_rect(Rect2(Vector2(roundf(pos.x), roundf(pos.y)) - Vector2(sz, sz) * 0.5,
+			Vector2(sz, sz)), c)

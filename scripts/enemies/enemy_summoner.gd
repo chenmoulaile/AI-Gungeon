@@ -17,7 +17,7 @@ func _setup() -> void:
 	radius = 11.0
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
-	accent = Color("#9be36b")
+	accent = Color("#7B57B0")
 	timer = SeedManager.randf_range(1.4, 2.6)
 
 
@@ -57,36 +57,37 @@ func _summon() -> void:
 
 
 func _draw_body() -> void:
-	var s := radius
-	# 破损方尖碑：上窄下宽的梯形，右上角缺一块
-	var body := PackedVector2Array([
-		Vector2(-s * 0.55, s * 1.15), Vector2(-s * 0.42, -s * 0.95),
-		Vector2(s * 0.10, -s * 1.35), Vector2(s * 0.46, -s * 0.70),
-		Vector2(s * 0.55, s * 1.15)])
-	draw_colored_polygon(body, accent.darkened(0.15))
-	draw_polyline(body + PackedVector2Array([body[0]]), Color(0, 0, 0, 0.85), 1.6)
-	# 表面裂纹
-	draw_line(Vector2(-s * 0.10, -s * 1.10), Vector2(s * 0.14, -s * 0.10),
-		Color(0.10, 0.04, 0.06, 0.75), 1.0)
-	draw_line(Vector2(s * 0.14, -s * 0.10), Vector2(-s * 0.18, s * 0.55),
-		Color(0.10, 0.04, 0.06, 0.65), 1.0)
-	# 缺口
-	draw_colored_polygon(PackedVector2Array([
-		Vector2(s * 0.10, -s * 1.35), Vector2(s * 0.52, -s * 0.60),
-		Vector2(s * 0.18, -s * 0.62)]), Color(0.06, 0.03, 0.05))
-	# 召唤纹路：召唤时高亮
-	var lit: float = 0.35 if warning <= 0.0 else 0.6 + 0.4 * sin(t * 18.0)
+	var s := roundf(radius)
+	var body := Color("#6D4B9E")
+	var dark := Color("#3A2656")
+	var edge := Color("#0D0714")
+	var gold := Color("#E9C05C")
+	var top := -17.0
+	# 破损方尖碑：上窄下宽，逐层像素台阶
+	_px_rects([
+		Rect2(-4.0, top, 7.0, 4.0),
+		Rect2(-6.0, top + 4.0, 12.0, 5.0),
+		Rect2(-9.0, top + 9.0, 18.0, 7.0),
+		Rect2(-11.0, top + 16.0, 22.0, 5.0),
+	], body, edge)
+	# 右上缺角：暗色 4×3 覆盖
+	draw_rect(Rect2(2.0, top + 4.0, 4.0, 3.0), edge)
+	# 裂纹：1px 台阶
+	draw_rect(Rect2(-2.0, top + 9.0, 1.0, 5.0), dark)
+	draw_rect(Rect2(-1.0, top + 14.0, 1.0, 4.0), dark)
+	draw_rect(Rect2(1.0, top + 5.0, 1.0, 3.0), dark)
+	# 金色召唤纹路：3 条 1px，蓄力时 2 帧闪
+	var lit: bool = warning <= 0.0 or fmod(t, 0.1) < 0.05
+	var rune := gold if lit else gold.darkened(0.35)
 	for i in 3:
-		var y := -s * 0.55 + float(i) * s * 0.55
-		draw_line(Vector2(-s * 0.30, y), Vector2(s * 0.30, y),
-			Color(0.75, 1.0, 0.70, lit), 1.2)
-	draw_circle(Vector2(0, -s * 0.55), s * 0.16, Color(0.85, 1.0, 0.75, lit))
+		var y := top + 7.0 + float(i) * 5.0
+		draw_rect(Rect2(-5.0, y, 10.0, 1.0), rune)
+		draw_rect(Rect2(-6.0 if i == 1 else -4.0, y - 1.0, 2.0, 2.0), rune)
+	# 胸口金核
+	draw_rect(Rect2(-1.0, top + 8.0, 2.0, 2.0), gold)
+	# 召唤预警：头顶 4 角像素阵 + 中心闪点
 	if warning > 0.0:
-		var k: float = 1.0 - warning / WARN
-		var yy := -s * 1.55
-		var r := 7.0 + 2.0 * sin(t * 18.0)
-		draw_arc(Vector2(0, yy), r, 0.0, TAU, 16, Color(0.7, 1.0, 0.6, 0.9), 1.5, true)
-		for i in 3:
-			var a2 := t * 3.0 + TAU * float(i) / 3.0
-			draw_circle(Vector2(0, yy) + Vector2(cos(a2), sin(a2)) * r, 1.4,
-				Color(0.85, 1.0, 0.7, 0.6 + 0.4 * k))
+		var yy := top - 10.0
+		_px_brackets(Color(0.86, 1.0, 0.72, 0.95), 6.0, yy)
+		if fmod(t, 0.12) < 0.06:
+			draw_rect(Rect2(-1.0, yy - 1.0, 2.0, 2.0), Color(1.0, 0.92, 0.62, 0.95))

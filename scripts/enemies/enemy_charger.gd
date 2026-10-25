@@ -20,7 +20,7 @@ func _setup() -> void:
 	radius = 10.0
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
-	accent = Color("#ff5f4d")
+	accent = Color("#E04A38")
 	timer = SeedManager.randf_range(0.4, 1.2)
 
 
@@ -78,36 +78,65 @@ func take_damage(dmg: float, dir: Vector2 = Vector2.ZERO, tier: String = "medium
 
 
 func _draw_body() -> void:
-	var c := accent
+	var s := roundf(radius)
+	var body := Color("#C9A24A")
+	var dark := Color("#8A6A2A")
+	var edge := Color("#1A1206")
+	var red := Color("#E04A38")
 	if state == "windup":
-		# 原地停顿 + 闪烁
-		var blink: bool = fmod(t, 0.12) < 0.06
-		c = Color(1.0, 0.85, 0.4) if blink else Color(1.0, 0.55, 0.30)
+		# 蓄力闪白：2 帧
+		body = Color("#F2D45C") if fmod(t, 0.1) < 0.05 else Color("#D9B34F")
 	elif state == "stun":
-		c = Color(0.55, 0.5, 0.5)
+		body = Color("#8A7A63")
 	var dir := dash_dir
 	if state == "idle" and player != null and is_instance_valid(player):
-		dir = (player.global_position - global_position).normalized()
-	draw_set_transform(Vector2.ZERO, dir.angle(), Vector2.ONE)
-	# 尾部碎片：冲锋前向尾部聚集
+		dir = player.global_position - global_position
+	dir = _px_dir(dir)
+	var perp := dir.orthogonal()
+	# 冲锋预警：1px 直线 + 像素箭头（2 帧闪）
+	if state == "windup":
+		var k := 1.0 - timer / WINDUP
+		var head := dir * 54.0
+		draw_line(Vector2.ZERO, head, Color(0.90, 0.24, 0.20, 0.30 + 0.45 * k), 1.0)
+		if fmod(t, 0.16) < 0.08:
+			var hx := roundf(head.x)
+			var hy := roundf(head.y)
+			draw_rect(Rect2(hx - 3.0, hy - 1.0, 6.0, 2.0), red)
+			draw_rect(Rect2(hx - 2.0, hy - 4.0, 4.0, 2.0), red)
+			draw_rect(Rect2(hx - 2.0, hy + 2.0, 4.0, 2.0), red)
+			draw_rect(Rect2(hx - 1.0, hy - 6.0, 2.0, 2.0), red)
+			draw_rect(Rect2(hx - 1.0, hy + 4.0, 2.0, 2.0), red)
+	# 尾部碎片：蓄力时向尾部聚集，全部 2×2 方块
 	var gather := 1.0 if state == "windup" else 0.30
-	for i in 4:
-		var d := -radius - 4.0 - float(i) * 6.0 * (1.0 - gather)
-		draw_rect(Rect2(d, -2.0 - float(i), 3.0, 3.0),
-			Color(1.0, 0.55, 0.30, 0.35 + 0.4 * gather))
-	# 尖锥数据冲撞体
-	var cone := PackedVector2Array([
-		Vector2(radius * 1.35, 0.0), Vector2(-radius * 0.45, -radius * 0.85),
-		Vector2(-radius * 0.95, 0.0), Vector2(-radius * 0.45, radius * 0.85)])
-	draw_colored_polygon(cone, c)
-	draw_polyline(cone + PackedVector2Array([cone[0]]), Color(0, 0, 0, 0.85), 1.6)
-	# 内部裂纹
-	draw_line(Vector2(-radius * 0.3, 0.0), Vector2(radius * 0.5, 0.0),
-		Color(0.1, 0.03, 0.02, 0.5), 1.0)
-	draw_circle(Vector2(radius * 0.35, 0.0), radius * 0.18, Color(1, 1, 1, 0.9))
+	for i in 3:
+		var p := -dir * (s + 4.0 + float(i) * 4.0 * (1.0 - gather)) + perp * float(i - 1) * 3.0
+		draw_rect(Rect2(roundf(p.x) - 1.0, roundf(p.y) - 1.0, 2.0, 2.0),
+			Color(0.95, 0.62, 0.30, 0.35 + 0.45 * gather))
+	# 双蹄
+	_px_rects([
+		Rect2(roundf(-s * 0.8 + perp.x * 4.0), roundf(-1.0 + perp.y * 4.0), 4.0, 6.0),
+		Rect2(roundf(-s * 0.8 - perp.x * 4.0), roundf(-1.0 - perp.y * 4.0), 4.0, 6.0),
+	], dark, edge)
+	# 主体：上下两段土黄方块
+	_px_rects([
+		Rect2(-roundf(s * 0.9), -s - 4.0, roundf(s * 1.8), 7.0),
+		Rect2(-roundf(s * 0.75), -s + 3.0, roundf(s * 1.5), 7.0),
+	], body, edge)
+	# 前撞角 + 两颗白獠牙
+	var hp := dir * (s + 1.0)
+	_px_rects([Rect2(roundf(hp.x) - 3.0, roundf(hp.y) - 3.0, 6.0, 6.0)],
+		body.lightened(0.06), edge)
+	for tip in [-1.0, 1.0]:
+		var tp: Vector2 = hp + perp * tip * 5.0 + dir * 3.0
+		draw_rect(Rect2(roundf(tp.x) - 1.0, roundf(tp.y) - 1.0, 2.0, 2.0),
+			Color("#FFF3D6"))
+	# 眼睛：朝向前方的 2×2 白点
+	var ep := dir * 2.0 + perp * 2.0
+	draw_rect(Rect2(roundf(ep.x) - 1.0, roundf(ep.y) - 1.0, 2.0, 2.0), Color(1, 1, 1, 0.95))
+	# 眩晕：3 个 2×2 像素星绕头
 	if state == "stun":
 		for i in 3:
 			var a2 := t * 6.0 + TAU * float(i) / 3.0
-			draw_circle(Vector2(cos(a2), sin(a2)) * (radius + 6.0), 1.6,
-				Color(1.0, 0.9, 0.5, 0.8))
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+			var sp := Vector2(cos(a2), sin(a2)) * (s + 6.0) + Vector2(0.0, -s * 0.8)
+			draw_rect(Rect2(roundf(sp.x) - 1.0, roundf(sp.y) - 1.0, 2.0, 2.0),
+				Color(1.0, 0.9, 0.5, 0.85))

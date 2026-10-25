@@ -51,7 +51,7 @@ func _spawn(initial: bool) -> Dictionary:
 				"pos": Vector2(v.position.x + randf() * v.size.x,
 					v.position.y + v.size.y - randf() * v.size.y * (0.0 if initial else 1.0)),
 				"vel": Vector2(randf_range(-6.0, 6.0), -randf_range(14.0, 26.0)),
-				"size": randf_range(1.4, 2.6),
+				"size": float(randi_range(2, 3)),
 				"life": randf() * 4.0 if initial else 0.0,
 				"max": 6.0,
 				"phase": randf() * TAU,
@@ -61,7 +61,7 @@ func _spawn(initial: bool) -> Dictionary:
 				"pos": Vector2(v.position.x + randf() * v.size.x,
 					v.position.y + randf() * v.size.y),
 				"vel": Vector2(randf_range(-4.0, 4.0), -randf_range(5.0, 9.0)),
-				"size": randf_range(1.4, 2.6),
+				"size": float(randi_range(2, 3)),
 				"life": randf() * 6.0 if initial else 0.0,
 				"max": 8.0,
 				"phase": randf() * TAU,
@@ -106,12 +106,12 @@ func _draw() -> void:
 				var flick: float = 0.45 + 0.55 * absf(sin(_t * 3.0 + float(p["phase"])))
 				c.a = color.a * fade * flick
 				var s: float = float(p["size"])
-				draw_rect(Rect2(pos - Vector2(s, s) * 0.5, Vector2(s, s)), c)
-				if flick > 0.85:
-					draw_circle(pos, s * 1.6, Color(c.r, c.g * 0.9, c.b * 0.8, c.a * 0.25))
+				var ip := Vector2(roundf(pos.x), roundf(pos.y))
+				draw_rect(Rect2(ip - Vector2(s, s) * 0.5, Vector2(s, s)), c)
 			_:
+				# 漂浮光点：2/3px 实心方块，不做圆光晕
 				var pulse: float = 0.55 + 0.45 * sin(_t * 1.6 + float(p["phase"]))
 				c.a = color.a * fade * pulse
 				var s2: float = float(p["size"])
-				draw_circle(pos, s2, c)
-				draw_circle(pos, s2 * 2.6, Color(c.r, c.g, c.b, c.a * 0.16))
+				var ip2 := Vector2(roundf(pos.x), roundf(pos.y))
+				draw_rect(Rect2(ip2 - Vector2(s2, s2) * 0.5, Vector2(s2, s2)), c)

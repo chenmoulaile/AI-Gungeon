@@ -18,7 +18,7 @@ func _setup() -> void:
 	radius = 12.0
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
-	accent = Color("#c9c2a8")
+	accent = Color("#7FA0BC")
 	melee_cd = SeedManager.randf_range(0.6, 1.2)
 
 
@@ -57,31 +57,39 @@ func take_damage(dmg: float, dir: Vector2 = Vector2.ZERO, tier: String = "medium
 
 
 func _draw_body() -> void:
-	var c := accent
+	var dir := _px_dir(shield_normal)
+	var perp := dir.orthogonal()
+	var s := roundf(radius)
+	var body := Color("#6E8AA6")
+	var plate := Color("#A8C6DD")
+	var edge := Color("#0A1016")
+	var white := Color("#E8F2FA")
+	var hot := Color("#FFB08A")
+	# 后方能量核心：2 帧亮
+	draw_rect(Rect2(-3.0, -3.0, 6.0, 6.0), Color("#2C3C4E"))
+	draw_rect(Rect2(-2.0, -2.0, 4.0, 4.0), hot if swing > 0.0 else white)
+	# 机体：偏向来向的方块
+	_px_rects([
+		Rect2(roundf(-s * 0.55 + dir.x * 2.0), roundf(-s * 0.8 + dir.y * 2.0),
+			roundf(s * 1.1), roundf(s * 1.6)),
+	], body, edge)
+	# 盾面：三块 6×6 沿侧向排开，明确朝向
+	var base := dir * (s + 3.0)
+	for i in [-1.0, 0.0, 1.0]:
+		var bp: Vector2 = base + perp * i * 8.0
+		_px_rects([Rect2(roundf(bp.x) - 3.0, roundf(bp.y) - 3.0, 6.0, 6.0)], plate, edge)
+		# 正面 1px 白边
+		var fp: Vector2 = bp + dir * 2.0
+		draw_rect(Rect2(roundf(fp.x) - 1.0, roundf(fp.y) - 1.0, 2.0, 2.0), white)
+	# 盾面裂纹：1px 台阶
+	draw_rect(Rect2(roundf(base.x) - 1.0, roundf(base.y) - 4.0, 1.0, 3.0), edge)
+	draw_rect(Rect2(roundf(base.x), roundf(base.y) + 1.0, 1.0, 3.0), edge)
+	# 挥击预警：4 个 2×2 红色角标由内向外（2 帧闪）
 	if swing > 0.0:
-		c = Color(1.0, 0.75, 0.55)
-	# 后方发光核心
-	draw_circle(Vector2.ZERO, radius * 0.46, Color(c.r, c.g, c.b, 0.85))
-	draw_circle(Vector2.ZERO, radius * 0.24, Color(1, 1, 1, 0.95))
-	# 厚重破碎盾面：正面朝向玩家
-	var base := shield_normal.angle()
-	var pts := PackedVector2Array()
-	for i in 7:
-		var a := base - 1.25 + float(i) * 0.42
-		var rr := radius + 7.0 + (2.0 if i % 2 == 0 else 0.0)
-		pts.append(Vector2(cos(a), sin(a)) * rr)
-	pts.append(Vector2(cos(base + 1.25), sin(base + 1.25)) * (radius * 0.72))
-	pts.append(Vector2(cos(base - 1.25), sin(base - 1.25)) * (radius * 0.72))
-	draw_colored_polygon(pts, Color(0.55, 0.60, 0.70))
-	draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0, 0, 0, 0.85), 1.6)
-	# 金属裂纹
-	for i in 2:
-		var a2 := base - 0.6 + float(i) * 1.1
-		var p1 := Vector2(cos(a2), sin(a2)) * (radius + 2.0)
-		var p2 := Vector2(cos(a2 + 0.15), sin(a2 + 0.15)) * (radius * 0.55)
-		draw_line(p1, p2, Color(0.15, 0.18, 0.24, 0.85), 1.2)
-	# 正面边缘高光
-	draw_arc(Vector2.ZERO, radius + 6.0, base - 1.2, base + 1.2, 16,
-		Color(0.92, 0.96, 1.0, 0.9), 1.4, true)
-	if swing > 0.0:
-		draw_arc(Vector2.ZERO, MELEE_RANGE, 0.0, TAU, 24, Color(1.0, 0.5, 0.35, 0.5), 2.0, true)
+		var kk := 1.0 - swing / WINDUP
+		var blink: bool = fmod(t, 0.16) < 0.08
+		for i in 4:
+			var a2 := TAU * float(i) / 4.0 + PI * 0.25
+			var rp := Vector2(cos(a2), sin(a2)) * (MELEE_RANGE * (0.45 + 0.25 * kk))
+			draw_rect(Rect2(roundf(rp.x) - 1.0, roundf(rp.y) - 1.0, 2.0, 2.0),
+				Color(1.0, 0.5, 0.32, 0.85 if blink else 0.55))

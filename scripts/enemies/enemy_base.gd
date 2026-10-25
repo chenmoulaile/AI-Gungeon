@@ -258,9 +258,43 @@ func shoot_at(dir: Vector2, speed: float = 155.0, bullet_radius: float = 3.8,
 
 
 # ---------------- 绘制 ----------------
+## 1px 深描边 + 实心像素块：先画全部外扩 1px 的描边，再统一填色，
+## 这样相邻块内部的描边会被后画的填色盖掉，只留下真正的轮廓。
+func _px_rects(rects: Array, body: Color, edge: Color) -> void:
+	for r in rects:
+		draw_rect((r as Rect2).grow(1.0), edge)
+	for r2 in rects:
+		draw_rect(r2 as Rect2, body)
+
+
+## 八方向整数单位向量：炮口/朝向用，避免旋转破坏像素网格
+func _px_dir(v: Vector2) -> Vector2:
+	if v == Vector2.ZERO:
+		return Vector2.RIGHT
+	var step := roundf(v.angle() / (PI * 0.25))
+	return Vector2(roundf(cos(step * PI * 0.25)), roundf(sin(step * PI * 0.25)))
+
+
+## 硬边像素阴影：3 行 2px 高的椭圆
+func _px_shadow() -> void:
+	var w := roundf(radius * 1.05)
+	var facs := [0.62, 0.92, 0.62]
+	var alphas := [0.30, 0.26, 0.18]
+	for i in 3:
+		var ww := roundf(w * float(facs[i]))
+		draw_rect(Rect2(-ww, roundf(radius * 0.62) + float(i) * 2.0, ww * 2.0, 2.0),
+			Color(0, 0, 0, float(alphas[i])))
+
+
+## 头顶状态方块（律令/精英）：4 角 2×2，不做圆环
+func _px_brackets(color: Color, half: float, y_off: float = 0.0) -> void:
+	for sx in [-1.0, 1.0]:
+		for sy in [-1.0, 1.0]:
+			draw_rect(Rect2(sx * half - 1.0, y_off + sy * half - 1.0, 2.0, 2.0), color)
+
+
 func _draw() -> void:
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2(1.0, 0.42))
-	draw_circle(Vector2(0, radius * 0.7), radius * 1.05, Color(0, 0, 0, 0.28))
+	_px_shadow()
 	draw_set_transform(Vector2(hit_off, 0), 0.0, Vector2.ONE)
 	_draw_body()
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
@@ -271,26 +305,31 @@ func _draw() -> void:
 			var wy: float = -radius - 6.0
 			draw_rect(Rect2(wx - 2.0, wy - 2.0, 4.0, 4.0), Color(1.0, 0.84, 0.30, 0.95))
 			draw_rect(Rect2(wx - 2.0, wy - 2.0, 4.0, 4.0), Color(0.42, 0.28, 0.04, 0.9), false, 1.0)
-	# 律令标记：头顶陶土色圆环
+	# 律令标记：头顶陶土色 4 角括号
 	if law_t > 0.0:
 		var ly: float = -radius - 13.0
-		draw_arc(Vector2(0, ly), 4.2, 0.0, TAU, 12, Color(0.98, 0.74, 0.44, 0.9), 1.2, true)
-		draw_circle(Vector2(0, ly), 1.4, Color(1.0, 0.90, 0.72, 0.95))
+		_px_brackets(Color(0.98, 0.74, 0.44, 0.95), 4.0, ly)
+		draw_rect(Rect2(-1.0, ly - 1.0, 2.0, 2.0), Color(1.0, 0.90, 0.72, 0.95))
 	if elite:
-		var pulse: float = 0.35 + 0.2 * sin(t * 4.0)
-		draw_arc(Vector2.ZERO, radius + 5.0, 0.0, TAU, 24,
-			Color(1.0, 0.82, 0.35, pulse), 1.5, true)
-	# 深度检索标记：头顶蓝色三角，快消失时闪烁
+		var blink: bool = fmod(t, 0.5) < 0.25
+		_px_brackets(Color(1.0, 0.82, 0.35, 0.95 if blink else 0.55), radius + 5.0)
+	# 深度检索标记：头顶蓝色像素箭头，快消失时闪烁
 	if mark_t > 0.0:
 		var a: float = 1.0
 		if mark_t < 0.8:
 			a = 0.45 + 0.55 * absf(sin(t * 14.0))
-		var ty := -radius - 8.0
-		var tri := PackedVector2Array([
-			Vector2(0, ty - 4.0), Vector2(3.4, ty + 1.6), Vector2(-3.4, ty + 1.6)])
-		draw_colored_polygon(tri, Color(0.42, 0.68, 1.0, a))
-		draw_polyline(PackedVector2Array([tri[0], tri[1], tri[2], tri[0]]),
-			Color(0.16, 0.32, 0.62, a * 0.9), 1.0)
+		var ty := roundf(-radius - 10.0)
+		var rows := [5.0, 3.0, 1.0]
+		var yy := ty
+		for w in rows:
+			draw_rect(Rect2((-float(w)) * 0.5 - 1.0, yy - 1.0, float(w) + 2.0, 2.0),
+				Color(0.14, 0.28, 0.56, a))
+			yy += 2.0
+		yy = ty
+		for w2 in rows:
+			draw_rect(Rect2((-float(w2)) * 0.5, yy, float(w2), 1.0),
+				Color(0.42, 0.68, 1.0, a))
+			yy += 2.0
 
 
 ## 数据故障碎片：沿轮廓撒几个 2px 亮点，随时间闪烁
@@ -305,13 +344,19 @@ func glitch_fragments(count: int, r: float, off: float = 0.0) -> void:
 
 
 func _draw_body() -> void:
-	var pts := PackedVector2Array()
-	for i in 6:
-		var a := TAU * i / 6.0 + t * 0.6
-		pts.append(Vector2(cos(a), sin(a)) * radius)
-	draw_colored_polygon(pts, accent)
-	var outline := pts.duplicate()
-	outline.append(pts[0])
-	draw_polyline(outline, Color(0, 0, 0, 0.85), 1.6)
-	draw_circle(Vector2(0, -1), radius * 0.38, Color(1, 1, 1, 0.95))
-	draw_circle(Vector2(0, -1), radius * 0.2, Color(0.05, 0.03, 0.08, 1.0))
+	# 兜底像素团块：子类未覆写时也不会出现平滑多边形
+	var r := roundf(radius)
+	var w1 := roundf(r * 0.9)
+	var w2 := roundf(r * 1.5)
+	var w3 := roundf(r * 1.9)
+	var mid := roundf(r * 0.8)
+	var rects := [
+		Rect2(-w1 * 0.5, -r, w1, 3.0),
+		Rect2(-roundf(w2) * 0.5, -r + 3.0, w2, 3.0),
+		Rect2(-w3 * 0.5, -r + 6.0, w3, mid),
+		Rect2(-w2 * 0.5, -r + 6.0 + mid, w2, 3.0),
+		Rect2(-w1 * 0.5, -r + 9.0 + mid, w1, 3.0),
+	]
+	_px_rects(rects, accent, accent.darkened(0.68))
+	draw_rect(Rect2(-2.0, -2.0, 2.0, 2.0), Color(1, 1, 1, 0.95))
+	draw_rect(Rect2(-1.0, -1.0, 1.0, 1.0), Color(0.06, 0.02, 0.08, 1.0))

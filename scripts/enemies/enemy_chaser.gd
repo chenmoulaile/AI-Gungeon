@@ -12,7 +12,7 @@ func _setup() -> void:
 	radius = 9.0
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
-	accent = Color("#ff7a9c")
+	accent = Color("#B06BFF")
 	_wobble = SeedManager.randf() * TAU
 
 
@@ -28,32 +28,31 @@ func _ai(delta: float) -> void:
 
 
 func _draw_body() -> void:
-	var wob := sin(t * 6.0 + _wobble) * 0.10
-	# 拖尾碎片：移动时身后 3 个像素碎片
-	for i in 3:
-		var a := PI * 0.5 + float(i) * 0.42 - 0.42
-		var p := Vector2(cos(a), sin(a)) * (radius + 4.0 + float(i) * 2.0)
-		var fa := 0.42 - float(i) * 0.11
-		draw_rect(Rect2(p - Vector2(1.5, 1.5), Vector2(3, 3)),
-			Color(accent.r, accent.g, accent.b, fa))
-	# 三段锯齿椭圆
-	for seg in 3:
-		var y := -radius * 0.75 + float(seg) * radius * 0.72
-		var w := radius * (1.0 - 0.16 * float(seg)) * (1.0 + wob)
-		var pts := PackedVector2Array([
-			Vector2(-w, y), Vector2(-w * 0.55, y - radius * 0.42),
-			Vector2(w * 0.55, y - radius * 0.42), Vector2(w, y),
-			Vector2(w * 0.58, y + radius * 0.36), Vector2(-w * 0.58, y + radius * 0.36)])
-		draw_colored_polygon(pts, accent.darkened(0.07 * float(seg)))
-		draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0, 0, 0, 0.85), 1.2)
-	# 左右摆动短足
-	for side in [-1.0, 1.0]:
-		for i in 2:
-			var yy := radius * 0.28 + float(i) * 5.0
-			var xx: float = side * radius * 0.82
-			var kick := sin(t * 12.0 + float(i) + (0.0 if side > 0.0 else 1.5)) * 1.8
-			draw_line(Vector2(xx, yy), Vector2(xx + side * 4.0, yy + 4.0 + kick),
-				accent.darkened(0.35), 1.6)
-	# 眼
-	draw_circle(Vector2(0, -radius * 0.42), radius * 0.30, Color(1, 1, 1, 0.95))
-	draw_circle(Vector2(0, -radius * 0.42), radius * 0.14, Color(0.12, 0.02, 0.06))
+	# 2 帧整数浮动，不做连续位移
+	var bob := 0.0 if fmod(t, 0.7) < 0.35 else 1.0
+	var w1 := roundf(radius * 0.75)
+	var w2 := roundf(radius * 1.35)
+	var w3 := roundf(radius * 1.55)
+	var rects := [
+		Rect2(-w1 * 0.5, -radius - 1.0 + bob, w1, 3.0),
+		Rect2(-w2 * 0.5, -radius + 2.0 + bob, w2, 3.0),
+		Rect2(-w3 * 0.5, -radius + 5.0 + bob, w3, 5.0),
+		Rect2(-w2 * 0.5, -radius + 10.0 + bob, w2, 3.0),
+		Rect2(-w1 * 0.5, -radius + 13.0 + bob, w1, 2.0),
+	]
+	_px_rects(rects, accent, accent.darkened(0.68))
+	# 青色双眼
+	draw_rect(Rect2(-3.0, -radius + 5.0 + bob, 2.0, 2.0), Color("#7FE3FF"))
+	draw_rect(Rect2(1.0, -radius + 5.0 + bob, 2.0, 2.0), Color("#7FE3FF"))
+	# 三颗牙
+	draw_rect(Rect2(-4.0, -radius + 13.0 + bob, 2.0, 2.0), Color("#FFF3D6"))
+	draw_rect(Rect2(-1.0, -radius + 14.0 + bob, 2.0, 2.0), Color("#FFF3D6"))
+	draw_rect(Rect2(2.0, -radius + 13.0 + bob, 2.0, 2.0), Color("#FFF3D6"))
+	# 青色尾迹：2 个 2×2 方块，40% 透明
+	var back := Vector2.LEFT
+	if player != null and is_instance_valid(player):
+		back = -_px_dir(player.global_position - global_position)
+	for i in 2:
+		var p := back * (radius + 3.0 + float(i) * 4.0) + Vector2(0.0, 2.0 + float(i) * 2.0)
+		draw_rect(Rect2(roundf(p.x), roundf(p.y), 2.0, 2.0),
+			Color(0.50, 0.89, 1.0, 0.4))

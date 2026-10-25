@@ -43,10 +43,11 @@ func _break() -> void:
 
 
 func _draw() -> void:
-	var r := Rect2(-size * 0.5, size)
-	draw_rect(r, Color(0.45, 0.32, 0.2))
-	draw_rect(r, Color(0.62, 0.45, 0.28), false, 2.0)
-	draw_line(Vector2(-size.x * 0.5, -size.y * 0.1), Vector2(size.x * 0.5, -size.y * 0.1),
-		Color(0.3, 0.2, 0.12), 1.5)
-	draw_line(Vector2(-size.x * 0.1, -size.y * 0.5), Vector2(-size.x * 0.1, size.y * 0.5),
-		Color(0.3, 0.2, 0.12), 1.5)
+	# 26×26 木箱：1px 深描边 + 2px 亮边 + 整数像素木纹
+	var r := Rect2(-13.0, -26.0, 26.0, 26.0)
+	draw_rect(r, Color("#5C4128"))
+	draw_rect(r, Color("#1A0F06"), false, 1.0)
+	draw_rect(Rect2(-12.0, -25.0, 24.0, 2.0), Color("#7A5836"))
+	draw_rect(Rect2(-12.0, -8.0, 24.0, 2.0), Color("#3A2614"))
+	draw_rect(Rect2(-4.0, -25.0, 2.0, 24.0), Color("#3A2614"))
+	draw_rect(Rect2(2.0, -25.0, 2.0, 24.0), Color("#7A5836"))

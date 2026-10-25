@@ -18,7 +18,7 @@ func _setup() -> void:
 	radius = 10.5
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
-	accent = Color("#c76bff")
+	accent = Color("#E07A2E")
 	fire_cd = SeedManager.randf_range(1.2, 2.0)
 	ring_mode = GameState.floor_index >= 3
 
@@ -55,30 +55,49 @@ func _ai(delta: float) -> void:
 
 
 func _draw_body() -> void:
-	var ang := 0.0
+	var dir := Vector2.RIGHT
 	if player != null and is_instance_valid(player):
-		ang = (player.global_position - global_position).angle()
-	draw_set_transform(Vector2.ZERO, ang, Vector2.ONE)
-	var open := 1.0 if telegraph > 0.0 else 0.55
-	# 三条能量触须
-	for i in 3:
-		var a := (-0.55 + float(i) * 0.55) * open + sin(t * 3.0 + float(i)) * 0.08
-		var ln := radius + 5.0 + (6.0 if telegraph > 0.0 else 0.0)
-		var tip := Vector2(cos(a), sin(a)) * ln
-		draw_line(Vector2(2.0, 0.0), tip, accent.lightened(0.25), 1.6)
-		draw_circle(tip, 1.9, accent.lightened(0.45))
-	# 扇形辐射核心
-	var pts := PackedVector2Array([Vector2(-2.0, 0.0)])
-	for i in 9:
-		var a2 := -0.95 * open + float(i) * (0.21 * open)
-		pts.append(Vector2(cos(a2), sin(a2)) * radius)
-	draw_colored_polygon(pts, accent)
-	draw_polyline(pts + PackedVector2Array([pts[0]]), Color(0, 0, 0, 0.85), 1.4)
-	# 中心放射
-	for i in 3:
-		var a3 := -0.5 + float(i) * 0.5
-		draw_line(Vector2.ZERO, Vector2(cos(a3), sin(a3)) * radius * 0.7,
-			Color(1, 1, 1, 0.35), 1.0)
-	draw_circle(Vector2.ZERO, radius * 0.22, Color(1, 1, 1, 0.95))
-	glitch_fragments(3, radius + 3.0)
-	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+		dir = _px_dir(player.global_position - global_position)
+	var perp := dir.orthogonal()
+	var s := roundf(radius)
+	var body := Color("#E07A2E")
+	var dark := Color("#7A3A12")
+	var edge := Color("#1A0C05")
+	var hot := Color("#FFC46B")
+	var open := telegraph > 0.0
+	# 三根炮管：中管 + 两根侧管，八方向方块
+	var tip_len := s + (4.0 if open else 2.0)
+	for i in [-1.0, 0.0, 1.0]:
+		var bp: Vector2 = dir * tip_len + perp * i * 5.0
+		_px_rects([Rect2(roundf(bp.x) - 2.0, roundf(bp.y) - 2.0, 4.0, 4.0)],
+			dark.lightened(0.08), edge)
+		draw_rect(Rect2(roundf(bp.x) - 1.0, roundf(bp.y) - 1.0, 2.0, 2.0),
+			hot if open else Color(0.35, 0.16, 0.06))
+	# 十字主体
+	_px_rects([
+		Rect2(-6.0, -s - 1.0, 12.0, 4.0),
+		Rect2(-s, -4.0, s * 2.0, 8.0),
+		Rect2(-6.0, s - 3.0, 12.0, 4.0),
+	], body, edge)
+	# 四角黑刺
+	for i in 4:
+		var a := TAU * float(i) / 4.0 + PI * 0.25
+		var pp := Vector2(cos(a), sin(a)) * (s + 2.0)
+		draw_rect(Rect2(roundf(pp.x) - 1.0, roundf(pp.y) - 1.0, 2.0, 2.0), edge)
+	# 中心核心
+	draw_rect(Rect2(-2.0, -2.0, 4.0, 4.0), Color("#2A1408"))
+	draw_rect(Rect2(-1.0, -1.0, 2.0, 2.0), hot)
+	# 蓄力：炮口 2 帧高亮
+	if open and fmod(t, 0.12) < 0.06:
+		for i in [-1.0, 0.0, 1.0]:
+			var bp2: Vector2 = dir * (s + 4.0) + perp * i * 5.0
+			draw_rect(Rect2(roundf(bp2.x) - 2.0, roundf(bp2.y) - 2.0, 4.0, 4.0),
+				Color(1.0, 0.52, 0.22, 0.95))
+	# 环形弹模式：四个正方向红色预警方块
+	if ring_mode and open:
+		for i in 4:
+			var a2 := TAU * float(i) / 4.0
+			var rp := Vector2(cos(a2), sin(a2)) * (s + 14.0)
+			draw_rect(Rect2(roundf(rp.x) - 1.0, roundf(rp.y) - 1.0, 2.0, 2.0),
+				Color(1.0, 0.34, 0.40, 0.8))
+	glitch_fragments(3, s + 4.0)

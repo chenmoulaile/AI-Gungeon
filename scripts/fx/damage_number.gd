@@ -41,7 +41,7 @@ func _draw() -> void:
 	if GameConfig.ui_font == null:
 		return
 	var txt := text if text != "" else str(int(round(value)))
-	var size := 11 if crit else 9
+	var size := 14 if crit else 12
 	var col := Color(1.0, 0.86, 0.35) if crit else Color(0.94, 0.97, 1.0)
 	var w: float = GameConfig.ui_font.get_string_size(txt, HORIZONTAL_ALIGNMENT_LEFT, -1, size).x
 	var p := Vector2(-w * 0.5, 0)
