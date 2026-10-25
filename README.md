@@ -1,6 +1,6 @@
 # AI Gungeon
 
-**v0.10.0** · 分支地图（每层 7 节点 + 门后二选一）· 事件房三选一 · 藏品稀有度分档 / 商店刷新与治疗 · 经济与难度阀门 · HUD 分支小地图
+**v0.10.1** · 三层专属 Boss（镜盾反射 / 双生核心）· 迷你首领 · 分支地图（每层 7 节点 + 门后二选一）· 事件房三选一 · 藏品稀有度分档 / 商店刷新与治疗 · 经济与难度阀门 · HUD 分支小地图
 
 一款 2D 像素俯视角 Roguelike 射击游戏，用 **Godot 4 + GDScript** 开发。
 玩法参考《Enter the Gungeon》的核心循环（角色选择 → 房间清怪 → 开门 → 商店 → Boss → 下一层），
@@ -61,7 +61,7 @@ Web 版关闭了线程（`thread_support=false`），不需要特殊服务器配
 D:\DevTools\Godot\Godot_v4.7.2-stable_win64_console.exe --headless --path D:\projects\AiGungeon res://tests/smoke_test.tscn
 ```
 
-自测覆盖：三个角色开局 / 开火 / 技能 / 翻滚 / 清场开门 / 门后二选一 / 商店购买与刷新 / Boss 三阶段 / 死亡结算。
+自测覆盖：三个角色开局 / 开火 / 技能 / 翻滚 / 清场开门 / 门后二选一 / 商店购买与刷新 / 三层 Boss 选择与镜盾免伤 / 迷你首领数值 / 死亡结算。
 
 ---
 
@@ -325,13 +325,21 @@ D:\DevTools\Godot\Godot_v4.7.2-stable_win64_console.exe --headless --path D:\pro
 
 ---
 
-## Boss：回响聚合体
+## Boss：三层轮换 × 3
 
-| 阶段 | 血量区间 | 行为 |
-| --- | --- | --- |
-| 一 | 100% ~ 60% | 环形弹（14 发，逐圈旋转） |
-| 二 | 60% ~ 25% | 3 发追踪弹（短时间制导） |
-| 三 | 25% ~ 0% | 7 发扇形弹 + 每 6s 召唤 2 只追踪敌人 |
+每层固定一只专属 Boss，招式池复用、登场台词与配色各自独立；循环顺序为
+第 1 层「回响聚合体」→ 第 2 层「镜像回声」→ 第 3 层「双生回响」。
+
+| 层 | Boss | 核心机制 | 招式池 |
+| --- | --- | --- | --- |
+| 一 | 回响聚合体 ECHO AGGREGATE | 三阶段抽招，残血召唤 | 环 / 扇 / 冲锋 / 追踪 / 激光 / 螺旋 / 地雷 / 召唤 |
+| 二 | 镜像回声 MIRROR ECHO | 每 5s 展开 1.6s 镜盾：免伤并把子弹反射回玩家 | 扇 / 环 / 激光 / 地雷 / 螺旋 |
+| 三 | 双生回响 TWIN ECHO | 左右核心共享血条，出招在两侧交替；三阶段双环交叉 | 扇 / 环 / 追踪 / 螺旋 / 交叉环 |
+
+所有 Boss 在 60% / 25% 血量进入下一阶段，阶段转换有 1.25s 的硬直窗口。
+
+**迷你首领**：混合房 / 高潮房的首波有 15% 概率把一只敌人升为迷你首领——
+在精英（×1.55 血、+2 金币）之上再 ×1.6 血、×1.06 体积、+6 金币，头顶红金王冠。
 
 ---
 
@@ -422,14 +430,14 @@ assets/
 scenes/
   main/    main.tscn game.tscn
   player/  player.tscn
-  enemies/ enemy_chaser / enemy_shooter / enemy_spreader / boss
+  enemies/ enemy_chaser / enemy_shooter / enemy_spreader / boss / boss_mirror / boss_twins
   rooms/   room_basic.tscn
   ui/      hud / character_select / shop / result / boss_intro / portrait_dialog
 scripts/
   player/  player.gd
   weapons/ weapon_base / weapon_reasoning_chain / weapon_multimodal / weapon_long_context
            bullet.gd / beam.gd
-  enemies/ enemy_base / enemy_chaser / enemy_shooter / enemy_spreader / boss
+  enemies/ enemy_base / enemy_chaser / enemy_shooter / enemy_spreader / boss / boss_mirror / boss_twins
   systems/ game_config / game_state / upgrade_db / upgrade / character_data
            floor_map / room_basic / coin / sfx
   ui/      hud / character_select / shop / result / boss_intro / portrait_dialog
@@ -468,7 +476,7 @@ build/          Windows 导出产物
    补一张完整的 Claude 正面三视图后，把 `make_pixel_sprites.py` 里 claude 的 `view` 改成 0 重跑即可。
 2. **Claude 没有全身立绘**：只有 Q 版三视图，立绘由 Q 版放大 + 锐化补到 1024×1024，
    风格上比另外两张更「Q」，但发色/瞳色/服装主色/雏菊发饰一致。
-3. **Boss 没有参考立绘**：Boss「回响聚合体」没有对应的参考图，
+3. **Boss 没有参考立绘**：三只 Boss（回响聚合体 / 镜像回声 / 双生回响）都没有对应的参考图，
    登场界面用与战斗内一致的几何风格放大渲染（程序化绘制），未引入任何外部素材。
 4. **中文字体依赖系统字体**：优先加载 `C:\Windows\Fonts\msyh.ttc` 等系统字体（只读，不复制、不打包），
    在缺少中文字体的机器上界面中文会显示为方块。把任意 ttf 放到 `assets/fonts/ui.ttf` 可解决。
