@@ -5,9 +5,9 @@
 [resource]
 script = ExtResource("1_s")
 enemy_id = "shield_bearer"
-max_hp = 26.0
-speed = 26.0
-contact_damage = 1
-coin_value = 5
-attack_interval = 1.60
-warn_time = 0.40
+max_hp = 48.0
+speed = 32.0
+contact_damage = 2
+coin_value = 7
+attack_interval = 1.20
+warn_time = 0.35

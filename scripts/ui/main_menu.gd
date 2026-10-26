@@ -7,13 +7,14 @@ signal open_settings
 signal open_collection
 signal open_training
 signal open_about
+signal quit_game
 
 const IDS := ["deepseek", "gpt", "claude"]
 const MENU_X := 32.0
 const MENU_Y := 104.0
 const BTN_W := 176.0
-const BTN_H := 24.0
-const BTN_GAP := 6.0
+const BTN_H := 22.0
+const BTN_GAP := 4.0
 
 var _t: float = 0.0
 var _enter: float = 8.0
@@ -48,6 +49,7 @@ func _build() -> void:
 		["图鉴", "ghost", "collection"],
 		["设置", "ghost", "settings"],
 		["关于", "ghost", "about"],
+		["退出游戏", "ghost", "quit"],
 	]
 	for i in rows.size():
 		var row: Array = rows[i]
@@ -76,6 +78,8 @@ func _on_action(action: String) -> void:
 			open_settings.emit()
 		"about":
 			open_about.emit()
+		"quit":
+			quit_game.emit()
 
 
 func _process(delta: float) -> void:
@@ -115,6 +119,9 @@ func _unhandled_input(event: InputEvent) -> void:
 				get_viewport().set_input_as_handled()
 			KEY_F1:
 				open_about.emit()
+				get_viewport().set_input_as_handled()
+			KEY_Q:
+				quit_game.emit()
 				get_viewport().set_input_as_handled()
 
 
@@ -158,7 +165,7 @@ func _draw() -> void:
 		var rr := Rect2(b.position, b.size)
 		if i == _focus and not b.disabled:
 			UiKit.corner_brackets(self, rr.grow(1), UiKit.GOLD, 5)
-		var key: String = ["F", "V", "T", "C", "O", "F1"][i]
+		var key: String = ["F", "V", "T", "C", "O", "F1", "Q"][i]
 		var kw := UiKit.measure(key, 12) + 8
 		var kr := Rect2(rr.end.x + 10, rr.position.y + 4, maxf(18.0, kw), 16)
 		draw_rect(Rect2(kr.position + Vector2(0, 1), kr.size), UiKit.SHADOW)

@@ -23,6 +23,8 @@ var _show_tip: bool = false
 var _skip_btn: BaButton = null
 var _reroll_btn: BaButton = null
 var _heal_btn: BaButton = null
+var _plan_btn: BaButton = null
+var _card_btn: BaButton = null
 var _reroll_cost: int = 5
 var _heal_used: bool = false
 var _last_coins: int = -1
@@ -48,17 +50,27 @@ func _ready() -> void:
 func _build_service_buttons() -> void:
 	_heal_btn = BaButton.new()
 	add_child(_heal_btn)
-	_heal_btn.setup("治疗 [H]", Rect2(40, 286, 140, 24), "ghost", "res://assets/icons/extra_heart.png", UiKit.F_BODY)
+	_heal_btn.setup("治疗 [H]", Rect2(24, 286, 108, 24), "ghost", "res://assets/icons/extra_heart.png", UiKit.F_BODY)
 	_heal_btn.pressed.connect(_heal)
 
 	_reroll_btn = BaButton.new()
 	add_child(_reroll_btn)
-	_reroll_btn.setup("刷新 [R]", Rect2(194, 286, 140, 24), "ghost", "", UiKit.F_BODY)
+	_reroll_btn.setup("刷新 [R]", Rect2(140, 286, 108, 24), "ghost", "", UiKit.F_BODY)
 	_reroll_btn.pressed.connect(_reroll)
+
+	_plan_btn = BaButton.new()
+	add_child(_plan_btn)
+	_plan_btn.setup("套餐 [P]", Rect2(256, 286, 146, 24), "ghost", "", UiKit.F_BODY)
+	_plan_btn.pressed.connect(_upgrade_plan)
+
+	_card_btn = BaButton.new()
+	add_child(_card_btn)
+	_card_btn.setup("额度卡 [K]", Rect2(410, 286, 120, 24), "ghost", "", UiKit.F_BODY)
+	_card_btn.pressed.connect(_buy_card)
 
 	_skip_btn = BaButton.new()
 	add_child(_skip_btn)
-	_skip_btn.setup("跳过  [ESC]", Rect2(440, 286, 100, 24), "ghost", "", UiKit.F_BODY)
+	_skip_btn.setup("跳过  [ESC]", Rect2(538, 286, 86, 24), "ghost", "", UiKit.F_BODY)
 	_skip_btn.pressed.connect(_close)
 	_update_buttons()
 
@@ -79,7 +91,85 @@ func _update_buttons() -> void:
 	_reroll_btn.sub_label = "%d 金" % _reroll_cost
 	_reroll_btn.disabled = GameState.coins < _reroll_cost
 	_reroll_btn.queue_redraw()
+	_update_plan_buttons()
 	_last_coins = GameState.coins
+
+
+func _update_plan_buttons() -> void:
+	if _plan_btn == null or _card_btn == null:
+		return
+	if not GameState.has_quota_system():
+		_plan_btn.label = "套餐 [P]"
+		_plan_btn.sub_label = "本角色无额度"
+		_plan_btn.disabled = true
+		_card_btn.label = "额度卡 [K]"
+		_card_btn.sub_label = "无额度系统"
+		_card_btn.disabled = true
+		_plan_btn.queue_redraw()
+		_card_btn.queue_redraw()
+		return
+	var np := GameState.next_plan_name()
+	var pp := GameState.next_plan_price()
+	if np == "" or pp < 0:
+		_plan_btn.label = "套餐 [P]"
+		_plan_btn.sub_label = "%s 已满级" % GameState.plan_name()
+		_plan_btn.disabled = true
+	else:
+		_plan_btn.label = "升级 %s [P]" % np
+		_plan_btn.sub_label = "%d 金" % pp
+		_plan_btn.disabled = GameState.coins < pp
+	_plan_btn.queue_redraw()
+
+	var full: bool = GameState.ai_reset_cards >= GameState.RESET_CARD_MAX
+	_card_btn.label = "额度卡 [K]"
+	if full:
+		_card_btn.sub_label = "已满 %d 张" % GameState.RESET_CARD_MAX
+		_card_btn.disabled = true
+	else:
+		_card_btn.sub_label = "%d 金 · x%d" % [GameState.RESET_CARD_PRICE,
+			GameState.ai_reset_cards]
+		_card_btn.disabled = GameState.coins < GameState.RESET_CARD_PRICE
+	_card_btn.queue_redraw()
+
+
+func _upgrade_plan() -> void:
+	if _msg_t > 0.0 or not GameState.has_quota_system():
+		return
+	var np := GameState.next_plan_name()
+	var pp := GameState.next_plan_price()
+	if np == "" or pp < 0:
+		_msg = "已是最顶级套餐"
+		_msg_t = 1.4
+		return
+	if GameState.coins < pp:
+		_msg = "金币不足 · 升级需要 %d" % pp
+		_msg_t = 1.4
+		Sfx.play("hurt", -12.0, 1.5)
+		return
+	if GameState.upgrade_plan():
+		_msg = "套餐升级 · %s · 额度已补满" % GameState.plan_name()
+		_msg_t = 2.0
+		Sfx.play("relic", -2.0, 1.1)
+		_update_buttons()
+
+
+func _buy_card() -> void:
+	if _msg_t > 0.0 or not GameState.has_quota_system():
+		return
+	if GameState.ai_reset_cards >= GameState.RESET_CARD_MAX:
+		_msg = "额度重置卡已满 %d 张" % GameState.RESET_CARD_MAX
+		_msg_t = 1.4
+		return
+	if GameState.coins < GameState.RESET_CARD_PRICE:
+		_msg = "金币不足 · 额度卡需要 %d" % GameState.RESET_CARD_PRICE
+		_msg_t = 1.4
+		Sfx.play("hurt", -12.0, 1.5)
+		return
+	if GameState.buy_reset_card():
+		_msg = "已购买额度重置卡 · 按 T 使用"
+		_msg_t = 1.8
+		Sfx.play("coin")
+		_update_buttons()
 
 
 func _heal() -> void:
@@ -226,6 +316,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		elif event.physical_keycode == KEY_H:
 			_heal()
 			get_viewport().set_input_as_handled()
+		elif event.physical_keycode == KEY_P:
+			_upgrade_plan()
+			get_viewport().set_input_as_handled()
+		elif event.physical_keycode == KEY_K:
+			_buy_card()
+			get_viewport().set_input_as_handled()
 
 
 func _buy(index: int) -> void:
@@ -315,7 +411,8 @@ func _draw() -> void:
 			Color(UiKit.DANGER.r, UiKit.DANGER.g, UiKit.DANGER.b, clampf(_msg_t, 0.0, 1.0)))
 
 	UiKit.text_center(self, GameConfig.BASE_W * 0.5, 332,
-		"点击石台购买 · 1-4 购买 · R 刷新 · H 治疗 · ESC 跳过", UiKit.F_SMALL, UiKit.TEXT_DIM)
+		"点击/1-4 购买 · R 刷新 · H 治疗 · P 套餐 · K 额度卡 · ESC 跳过",
+		UiKit.F_SMALL, UiKit.TEXT_DIM)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 

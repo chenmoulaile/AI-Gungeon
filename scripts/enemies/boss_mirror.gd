@@ -9,6 +9,10 @@ const POOLS_MIRROR := {
 	3: ["ring", "fan", "laser", "mine", "spiral"],
 }
 
+const SHIELD_TIME := 1.45
+const SHIELD_CD := 3.6
+const REFLECT_SPEED := 240.0
+
 var shield_cd: float = 3.0
 var shield_t: float = 0.0
 var reflect_flash: float = 0.0
@@ -26,12 +30,12 @@ func _setup() -> void:
 	]
 	accent_color = Color("#59d6ff")
 	light_color = Color(0.30, 0.80, 1.0)
-	max_hp = 160.0 * GameState.enemy_scale()
+	max_hp = 400.0 * GameState.enemy_scale()
 	hp = max_hp
-	speed = 30.0
+	speed = 34.0
 	radius = 27.0
-	contact_damage = 2
-	coin_value = 28
+	contact_damage = 3
+	coin_value = 46
 	_setup_common()
 
 
@@ -52,7 +56,7 @@ func _physics_process(delta: float) -> void:
 	if shield_t > 0.0:
 		shield_t -= delta
 		if shield_t <= 0.0:
-			shield_cd = 4.6
+			shield_cd = SHIELD_CD
 	else:
 		shield_cd -= delta
 		if shield_cd <= 0.0:
@@ -60,7 +64,7 @@ func _physics_process(delta: float) -> void:
 
 
 func _open_shield() -> void:
-	shield_t = 1.6
+	shield_t = SHIELD_TIME
 	GameFeel.screen_flash(Color(0.55, 0.9, 1.0), 0.10, 0.25)
 	Sfx.play("skill", -3.0, 1.3)
 	GameFeel.burst(global_position, Color(0.55, 0.92, 1.0), 12, 150.0, 0.32)
@@ -86,11 +90,15 @@ func _reflect(dir: Vector2) -> void:
 	if target.length() < 0.01:
 		target = Vector2.RIGHT
 	var d := target.normalized()
-	var b = GameFeel.get_bullet()
-	if b != null:
+	# 一次反射两发：直射 + 小角度夹击，逼玩家横向走位
+	for i in 2:
+		var rd := d.rotated(deg_to_rad(-7.0 + 14.0 * i))
+		var b = GameFeel.get_bullet()
+		if b == null:
+			continue
 		b.friendly = false
-		b.dir = d
-		b.speed = 205.0
+		b.dir = rd
+		b.speed = REFLECT_SPEED
 		b.damage = 1.0
 		b.radius = 4.4
 		b.color = Color("#8BE9FF") if not Settings.high_contrast else Color("#00E5FF")
@@ -102,7 +110,7 @@ func _reflect(dir: Vector2) -> void:
 		b.trail = true
 		b.crit = false
 		b.tier = "medium"
-		b.global_position = global_position + d * (radius + 8.0)
+		b.global_position = global_position + rd * (radius + 8.0)
 		b.prepare()
 	Sfx.play_at("clang", global_position, -2.0, 1.35)
 	GameFeel.burst(global_position, Color(0.6, 0.95, 1.0), 10, 170.0, 0.28)
@@ -168,7 +176,7 @@ func _draw_body() -> void:
 
 	# 镜盾：亮青八边形像素点阵
 	if shield_t > 0.0:
-		var sa := clampf(shield_t / 1.6, 0.0, 1.0)
+		var sa := clampf(shield_t / SHIELD_TIME, 0.0, 1.0)
 		var rr := radius + 16.0
 		for i in 28:
 			var ang := TAU * float(i) / 28.0 + spin * 2.2

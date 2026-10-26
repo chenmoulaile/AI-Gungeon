@@ -1,13 +1,14 @@
 extends EnemyBase
-## 环形射手：原地不动，每 3.0s 放一圈 12 发（120px/s），发射前 0.5s 收拢白色预警环
+## 环形射手：原地不动，每 2.2s 放一圈 14 发（150px/s，第 3 层 16 发），发射前 0.45s 收拢预警环
 
-const CYCLE := 3.0
-const WARN := 0.5
-const BULLETS := 12
+const CYCLE := 2.2
+const WARN := 0.45
 
 var timer: float = 0.0
 var warning: float = 0.0
 var spin: float = 0.0
+## 第 3 层起弹幕更密：14 -> 16
+var bullets: int = 14
 
 
 func _setup() -> void:
@@ -19,8 +20,9 @@ func _setup() -> void:
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
 	accent = Color("#E4485F")
-	timer = SeedManager.randf_range(1.2, 2.4)
+	timer = SeedManager.randf_range(0.7, 1.4)
 	spin = SeedManager.randf() * TAU
+	bullets = 16 if GameState.floor_index >= 3 else 14
 
 
 func _ai(delta: float) -> void:
@@ -37,10 +39,10 @@ func _ai(delta: float) -> void:
 
 
 func _fire_ring() -> void:
-	spin += 0.26
-	for i in BULLETS:
-		var a := TAU * float(i) / float(BULLETS) + spin
-		shoot_at(Vector2(cos(a), sin(a)), 120.0, 3.8)
+	spin += 0.3
+	for i in bullets:
+		var a := TAU * float(i) / float(bullets) + spin
+		shoot_at(Vector2(cos(a), sin(a)), 150.0, 3.8)
 	Sfx.play_at("hit", global_position, -6.0, 0.8)
 	GameFeel.screen_shake(0.08)
 

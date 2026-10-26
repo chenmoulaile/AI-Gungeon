@@ -1,10 +1,10 @@
 extends EnemyBase
-## 冲锋兵：蓄力 0.6s（闪白 + 地面红色箭头）→ 300px/s 直线冲锋 0.8s → 撞墙眩晕 1.0s
+## 冲锋兵：蓄力 0.42s（闪白 + 地面红色箭头）→ 340px/s 直线冲锋 0.75s → 撞墙眩晕 0.85s
 
-const WINDUP := 0.5
-const DASH_TIME := 0.8
-const DASH_SPEED := 300.0
-const STUN_TIME := 1.0
+const WINDUP := 0.42
+const DASH_TIME := 0.75
+const DASH_SPEED := 340.0
+const STUN_TIME := 0.85
 
 var state: String = "idle"   # idle / windup / dash / stun
 var timer: float = 0.0
@@ -21,7 +21,7 @@ func _setup() -> void:
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
 	accent = Color("#E04A38")
-	timer = SeedManager.randf_range(0.4, 1.2)
+	timer = SeedManager.randf_range(0.3, 0.9)
 
 
 func _ai(delta: float) -> void:
@@ -58,7 +58,7 @@ func _ai(delta: float) -> void:
 		"stun":
 			if timer <= 0.0:
 				state = "idle"
-				timer = SeedManager.randf_range(1.0, 1.8)
+				timer = SeedManager.randf_range(0.8, 1.4)
 
 
 func _hit_obstacle() -> bool:

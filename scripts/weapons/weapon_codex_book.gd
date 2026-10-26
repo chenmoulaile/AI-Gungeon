@@ -33,7 +33,9 @@ func _process(delta: float) -> void:
 		_stop()
 		return
 	_release_cd = maxf(0.0, _release_cd - delta)
-	var holding: bool = Input.is_action_pressed("shoot") and not get_tree().paused
+	# 必须尊重开局输入锁与武器槽：否则选完角色那一下点击会直接喷光束
+	var holding: bool = Input.is_action_pressed("shoot") and not get_tree().paused \
+		and player.input_lock <= 0.0 and player.active_slot == 0
 	if holding and _release_cd <= 0.0:
 		if beam == null or not is_instance_valid(beam):
 			beam = BeamScript.new()
@@ -50,6 +52,7 @@ func _process(delta: float) -> void:
 		if player.gun != null and is_instance_valid(player.gun):
 			origin = player.gun.to_global(player.gun.muzzle_local())
 		beam.set_beam(origin, player.aim)
+		GameState.drain_quota(GameState.model_quota_cost() * delta)
 		player.fire_anim = 0.1
 		# 角色周围漂浮的发光书页
 		_page_t -= delta

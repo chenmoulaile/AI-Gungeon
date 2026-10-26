@@ -30,7 +30,7 @@ var accent_color: Color = Color("#b45cff")
 var light_color: Color = Color(0.72, 0.45, 1.0)
 
 var phase: int = 1
-var atk_cd: float = 1.6
+var atk_cd: float = 1.25
 var summon_cd: float = 5.0
 var summon_lock: float = 0.0
 var ring_angle: float = 0.0
@@ -47,12 +47,12 @@ var charge_dir: Vector2 = Vector2.RIGHT
 
 
 func _setup() -> void:
-	max_hp = 150.0 * GameState.enemy_scale()
+	max_hp = 420.0 * GameState.enemy_scale()
 	hp = max_hp
-	speed = 26.0
+	speed = 34.0
 	radius = 27.0
-	contact_damage = 2
-	coin_value = 26
+	contact_damage = 3
+	coin_value = 42
 	_setup_common()
 
 
@@ -72,7 +72,7 @@ func _setup_common() -> void:
 	add_child(light)
 	# 本体不参与 2D 光照：否则自己的点光会把像素体染色，看着像没做像素化
 	light_mask = 0
-	atk_cd = 1.8
+	atk_cd = 1.25
 	_roll_moves()
 
 
@@ -109,7 +109,7 @@ func _ai(delta: float) -> void:
 	# 冲锋中
 	if charge_t > 0.0:
 		charge_t -= delta
-		position += charge_dir * 300.0 * delta
+		position += charge_dir * 360.0 * delta
 		if charge_t <= 0.0:
 			GameFeel.screen_shake(0.2)
 		return
@@ -118,12 +118,12 @@ func _ai(delta: float) -> void:
 	if spiral_left > 0:
 		spiral_t -= delta
 		if spiral_t <= 0.0:
-			spiral_t = 0.1
+			spiral_t = 0.085
 			spiral_left -= 1
-			spiral_angle += deg_to_rad(20.0)
-			shoot_at(Vector2(cos(spiral_angle), sin(spiral_angle)), 150.0, 4.0)
+			spiral_angle += deg_to_rad(17.0)
+			shoot_at(Vector2(cos(spiral_angle), sin(spiral_angle)), 170.0, 4.0)
 		if spiral_left <= 0:
-			atk_cd = 0.8
+			atk_cd = 0.7
 		return
 
 	if dist > 130.0:
@@ -139,8 +139,8 @@ func _ai(delta: float) -> void:
 		if telegraph <= 0.0 and pending_phase > 0:
 			phase = pending_phase
 			pending_phase = 0
-			atk_cd = 0.55
-			summon_lock = 0.5
+			atk_cd = 0.4
+			summon_lock = 0.35
 			move_idx = 0
 			GameFeel.screen_shake(0.3)
 		return
@@ -148,12 +148,12 @@ func _ai(delta: float) -> void:
 	atk_cd -= delta
 	if atk_cd <= 0.0:
 		_do_move(dir)
-		atk_cd = 1.5
+		atk_cd = 1.05
 
 	if phase >= 3 and summon_lock <= 0.0:
 		summon_cd -= delta
 		if summon_cd <= 0.0:
-			summon_cd = 8.0
+			summon_cd = 6.5
 			_do_summon()
 
 
@@ -166,9 +166,9 @@ func _physics_process(delta: float) -> void:
 func _update_phase() -> void:
 	var ratio := hp_ratio()
 	var new_phase := 1
-	if ratio <= 0.25:
+	if ratio <= 0.30:
 		new_phase = 3
-	elif ratio <= 0.6:
+	elif ratio <= 0.65:
 		new_phase = 2
 	if new_phase != phase and pending_phase == 0 and telegraph <= 0.0:
 		pending_phase = new_phase
@@ -202,7 +202,7 @@ func _do_move(dir: Vector2) -> void:
 			_attack_fan(dir)
 		"charge":
 			charge_dir = dir
-			charge_t = 0.6
+			charge_t = 0.65
 			Sfx.play("charge_windup", -2.0, 0.8)
 		"homing":
 			_attack_homing(dir)
@@ -215,7 +215,7 @@ func _do_move(dir: Vector2) -> void:
 			GameState.bullets_root.add_child(l)
 			Sfx.play("laser_charge", -2.0, 1.0)
 		"spiral":
-			spiral_left = 15
+			spiral_left = 22
 			spiral_t = 0.0
 			spiral_angle = dir.angle()
 			Sfx.play("warn_high", -2.0, 0.9)
@@ -227,26 +227,26 @@ func _do_move(dir: Vector2) -> void:
 
 
 func _attack_ring() -> void:
-	var count := 14
+	var count := 18
 	ring_angle += 0.22
 	for i in count:
 		var a := TAU * i / count + ring_angle
-		shoot_at(Vector2(cos(a), sin(a)), 132.0, 4.2)
+		shoot_at(Vector2(cos(a), sin(a)), 165.0, 4.2)
 	Sfx.play("hit", -8.0, 0.7)
 
 
 func _attack_homing(dir: Vector2) -> void:
 	Sfx.play("lock_beep", -4.0, 1.0)
-	for i in 3:
-		var a := dir.rotated(deg_to_rad(-18.0 + 18.0 * i))
+	for i in 5:
+		var a := dir.rotated(deg_to_rad(-28.0 + 14.0 * i))
 		_spawn_homing(a)
 	Sfx.play("whoosh", -4.0, 0.9)
 
 
 func _attack_fan(dir: Vector2) -> void:
-	for i in 7:
-		var t2 := float(i) / 6.0 - 0.5
-		shoot_at(dir.rotated(deg_to_rad(52.0 * t2)), 172.0, 4.0)
+	for i in 9:
+		var t2 := float(i) / 8.0 - 0.5
+		shoot_at(dir.rotated(deg_to_rad(62.0 * t2)), 195.0, 4.0)
 	Sfx.play("hit", -8.0, 0.85)
 
 
@@ -257,13 +257,13 @@ func _spawn_homing(a: Vector2) -> void:
 		return
 	b.friendly = false
 	b.dir = a
-	b.speed = 100.0
+	b.speed = 120.0
 	b.damage = 1.0
 	b.radius = 4.6
 	b.color = Color("#ff8a4d")
 	b.life = 6.0
-	b.homing = 2.2
-	b.homing_time = 2.5
+	b.homing = 2.6
+	b.homing_time = 3.0
 	b.destructible = true
 	b.pierce = 0
 	b.gen = 0
@@ -275,7 +275,7 @@ func _spawn_homing(a: Vector2) -> void:
 
 
 func _drop_mines() -> void:
-	for i in 3:
+	for i in 5:
 		var b = GameFeel.get_bullet()
 		if b == null:
 			return
@@ -289,7 +289,7 @@ func _drop_mines() -> void:
 		b.color = Color("#ff6b3d")
 		b.life = 4.0
 		b.mine = true
-		b.mine_fuse = 1.5
+		b.mine_fuse = 1.3
 		b.pierce = 0
 		b.gen = 0
 		b.trail = false
@@ -303,7 +303,7 @@ func _drop_mines() -> void:
 func _do_summon() -> void:
 	if GameState.bullets_root == null:
 		return
-	for i in 2:
+	for i in 3:
 		var e = ChaserScene.instantiate()
 		var ang := SeedManager.randf() * TAU
 		e.position = global_position + Vector2(cos(ang), sin(ang)) * 60.0

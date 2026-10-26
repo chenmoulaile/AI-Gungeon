@@ -83,13 +83,17 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 
-func _gui_input(event: InputEvent) -> void:
+## 暂停状态下的全局鼠标兜底：直接按坐标命中，不依赖 GUI 命中测试
+func _input(event: InputEvent) -> void:
 	if not (event is InputEventMouseButton and event.pressed
 			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT):
 		return
-	if _hover >= 0:
-		_pick(_hover)
-		accept_event()
+	var m: Vector2 = event.position
+	for i in _rects.size():
+		if (_rects[i] as Rect2).has_point(m):
+			_pick(i)
+			get_viewport().set_input_as_handled()
+			return
 
 
 func _unhandled_input(event: InputEvent) -> void:

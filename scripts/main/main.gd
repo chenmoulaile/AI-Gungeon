@@ -132,6 +132,7 @@ func show_menu() -> void:
 	m.open_collection.connect(func() -> void: Transition.play("fade", show_collection))
 	m.open_training.connect(func() -> void: Transition.play("fade", show_training))
 	m.open_about.connect(func() -> void: Transition.play("fade", show_about))
+	m.quit_game.connect(func() -> void: get_tree().quit())
 	_swap(m)
 
 

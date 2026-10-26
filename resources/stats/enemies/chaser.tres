@@ -5,9 +5,9 @@
 [resource]
 script = ExtResource("1_s")
 enemy_id = "chaser"
-max_hp = 11.0
-speed = 52.0
+max_hp = 20.0
+speed = 58.0
 contact_damage = 1
-coin_value = 2
+coin_value = 3
 attack_interval = 0.00
 warn_time = 0.00

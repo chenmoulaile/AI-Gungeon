@@ -26,6 +26,7 @@ func stat(key: String, default_value: float = 0.0) -> float:
 
 func damage_mult() -> float:
 	var m := stat("damage", 1.0)
+	m *= GameState.model_damage_mult()
 	if player != null and is_instance_valid(player):
 		m *= 1.0 + float(player.get_buff("damage", 0.0))
 		m *= 1.0 + float(player.roll_buff)
@@ -38,6 +39,7 @@ func damage_mult() -> float:
 
 func fire_rate_mult() -> float:
 	var m := stat("fire_rate", 1.0)
+	m *= GameState.model_rate_mult()
 	if player != null and is_instance_valid(player):
 		m *= 1.0 + float(player.get_buff("fire_rate", 0.0))
 		# 藏品：连续命中 6 次后射速大涨
@@ -49,6 +51,7 @@ func fire_rate_mult() -> float:
 
 func bullet_speed_mult() -> float:
 	var m := stat("bullet_speed", 1.0)
+	m *= GameState.model_bullet_mult()
 	if player != null and is_instance_valid(player):
 		m *= 1.0 + float(player.get_buff("bullet_speed", 0.0))
 	return m

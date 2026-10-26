@@ -42,6 +42,11 @@ func save_run() -> void:
 	cfg.set_value("run", "time", GameState.run_time)
 	cfg.set_value("run", "upgrades", GameState.upgrades)
 	cfg.set_value("run", "combos", GameState.combos)
+	cfg.set_value("run", "ai_plan", GameState.ai_plan)
+	cfg.set_value("run", "ai_mode", GameState.ai_mode)
+	cfg.set_value("run", "ai_quota", GameState.ai_quota)
+	cfg.set_value("run", "ai_reset_t", GameState.ai_reset_t)
+	cfg.set_value("run", "ai_reset_cards", GameState.ai_reset_cards)
 	var mode := 0
 	if GameState.player != null and is_instance_valid(GameState.player):
 		var w = GameState.player.weapon
@@ -81,6 +86,11 @@ func load_run() -> Dictionary:
 		"time": float(cfg.get_value("run", "time", 0.0)),
 		"upgrades": cfg.get_value("run", "upgrades", []),
 		"combos": cfg.get_value("run", "combos", []),
+		"ai_plan": int(cfg.get_value("run", "ai_plan", 0)),
+		"ai_mode": int(cfg.get_value("run", "ai_mode", 0)),
+		"ai_quota": float(cfg.get_value("run", "ai_quota", -1.0)),
+		"ai_reset_t": float(cfg.get_value("run", "ai_reset_t", -1.0)),
+		"ai_reset_cards": int(cfg.get_value("run", "ai_reset_cards", 1)),
 		"weapon_mode": int(cfg.get_value("run", "weapon_mode", 0)),
 		"challenge": String(cfg.get_value("run", "challenge", "")),
 	}

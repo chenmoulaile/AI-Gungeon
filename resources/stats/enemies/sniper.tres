@@ -5,9 +5,9 @@
 [resource]
 script = ExtResource("1_s")
 enemy_id = "sniper"
-max_hp = 11.0
-speed = 44.0
+max_hp = 26.0
+speed = 50.0
 contact_damage = 1
-coin_value = 4
-attack_interval = 2.50
-warn_time = 0.50
+coin_value = 5
+attack_interval = 1.90
+warn_time = 0.45

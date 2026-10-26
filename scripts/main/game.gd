@@ -32,7 +32,7 @@ const PRIORITY_TYPES := ["summoner", "shield", "splitter"]
 const HudScene = preload("res://scenes/ui/hud.tscn")
 const ShopScene = preload("res://scenes/ui/shop.tscn")
 const BossIntroScene = preload("res://scenes/ui/boss_intro.tscn")
-const PortraitDialogScene = preload("res://scenes/ui/portrait_dialog.tscn")
+const RunIntroScript = preload("res://scripts/ui/run_intro.gd")
 const SettingsScene = preload("res://scenes/ui/settings_menu.tscn")
 const TutorialScript = preload("res://scripts/ui/tutorial_hint.gd")
 const FloorCardScript = preload("res://scripts/ui/floor_card.gd")
@@ -79,13 +79,13 @@ func _ready() -> void:
 		GameState.room_index = GameState.node_id + 1
 	var wants_intro := not intro_shown and dbg == "" \
 		and GameState.floor_index == 1 and GameState.node_id == FloorMap.START_ID
-	# 开场介绍期间不生成第一波敌人：介绍播完再刷，避免“看着介绍挨打”
+	# 开局介绍期间不生成第一波敌人：介绍播完再刷，避免“看着介绍挨打”
 	_start_node(GameState.node_id, wants_intro)
 	ScreenFx.set_battle(true)
 	BaCursor.set_battle(true)
 	if wants_intro:
 		intro_shown = true
-		_show_intro_dialog(wants_intro)
+		_show_run_intro()
 	_check_debug_query(dbg)
 
 
@@ -296,15 +296,15 @@ func _count_for(kind: int) -> int:
 	var f: int = GameState.floor_index
 	match kind:
 		Kind.SMALL:
-			return 2 + f
-		Kind.MIXED:
 			return 3 + f
+		Kind.MIXED:
+			return 4 + f
 		Kind.ELITE:
-			return 2 + f
+			return 3 + f
 		Kind.BREATHER:
 			return 1 + int(f / 2.0)
 		Kind.CLIMAX:
-			return 4 + f
+			return 5 + f
 		_:
 			return 3
 
@@ -513,34 +513,20 @@ func _boss_scene_for_floor() -> PackedScene:
 	return BossScene
 
 
-## 开局对话：立绘 + 打字机
-func _show_intro_dialog(deferred_wave: bool = false) -> void:
-	var d = GameState.char_data
-	if d == null:
-		if deferred_wave:
-			_spawn_wave()
-		return
-	var dlg = PortraitDialogScene.instantiate()
-	dlg.process_mode = Node.PROCESS_MODE_ALWAYS
-	ui_layer.add_child(dlg)
-	var portrait := "res://assets/portraits/%s_pixel.png" % GameState.char_id
-	if not ResourceLoader.exists(portrait):
-		portrait = "res://assets/portraits/%s_full.png" % GameState.char_id
-	dlg.setup(portrait, d.display_name,
-		[d.blurb, "武器「%s」：%s" % [d.weapon_name, d.weapon_desc],
-		 "技能「%s」：%s" % [d.skill_name, d.skill_desc],
-		 "天赋「%s」：%s" % [d.passive_name, d.passive_desc],
-		 "清空 5 个房间，第 5 间是 Boss。走吧。"])
+## 开局全屏登场：与 Boss 登场一致，先暂停并拦截点击/空格，关闭后才刷第一波
+func _show_run_intro() -> void:
+	var intro = RunIntroScript.new()
+	intro.setup(GameState.char_data, GameState.floor_index)
+	intro.process_mode = Node.PROCESS_MODE_ALWAYS
+	ui_layer.add_child(intro)
 	get_tree().paused = true
-	dlg.finished.connect(func() -> void:
+	intro.finished.connect(func() -> void:
 		get_tree().paused = false
-		if is_instance_valid(dlg):
-			dlg.queue_free()
-		# 关对白那一下点击不能变成攻击：清缓冲 + 锁 0.4s
+		if is_instance_valid(intro):
+			intro.queue_free()
 		if player != null and is_instance_valid(player):
 			player.lock_input(0.4)
-		if deferred_wave:
-			_spawn_wave())
+		_spawn_wave())
 
 
 func _show_boss_intro(cfg: Dictionary = {}) -> void:
@@ -803,4 +789,3 @@ func _on_run_ended() -> void:
 	if not is_inside_tree():
 		return
 	run_over.emit()
-

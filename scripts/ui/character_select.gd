@@ -16,6 +16,7 @@ const CARD_GAP := 12.0
 
 var _data: Array = []
 var _tex: Array = []
+var _portraits: Array = []
 var _intro: Array = []
 var _rects: Array = []
 var _stats: Array = []
@@ -43,8 +44,14 @@ func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_STOP
 	for id in IDS:
 		_data.append(GameState.load_character(id))
-		var p := "res://assets/portraits/%s_pixel.png" % id
-		_tex.append(load(p) if ResourceLoader.exists(p) else null)
+		# 候选页使用成人版非像素立绘（bust 优先，其次 face）
+		var p := ""
+		for suffix in ["bust", "face"]:
+			var cand := "res://assets/portraits/%s_%s.png" % [id, suffix]
+			if ResourceLoader.exists(cand):
+				p = cand
+				break
+		_tex.append(load(p) if p != "" else null)
 		_intro.append(DialogueManager.pick(id, "intro"))
 		_stats.append(Stats.char(id))
 	_has_save = RunSave.has_save()
@@ -52,6 +59,7 @@ func _ready() -> void:
 	SeedManager.difficulty = _difficulty
 	_tip_visible = not MetaProgress.tutorial_flag("seen_select_tip")
 	_layout()
+	_build_portraits()
 	_build_buttons()
 	BaCursor.set_battle(false)
 	var tw := create_tween()
@@ -66,6 +74,24 @@ func _layout() -> void:
 	var x0: float = (GameConfig.BASE_W - total) * 0.5
 	for i in count:
 		_rects.append(Rect2(x0 + i * (CARD_W + CARD_GAP), CARD_Y, CARD_W, CARD_H))
+
+
+func _build_portraits() -> void:
+	_portraits.clear()
+	for i in _rects.size():
+		var tr := TextureRect.new()
+		tr.texture = _tex[i]
+		# 必须忽略贴图原始尺寸，否则 TextureRect 会被 1024×1024 原图撑爆
+		tr.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		tr.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		tr.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		tr.clip_contents = true
+		tr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var r: Rect2 = _rects[i]
+		tr.position = r.position + Vector2(5, 5)
+		tr.size = Vector2(r.size.x - 10, 130)
+		add_child(tr)
+		_portraits.append(tr)
 
 
 func _build_buttons() -> void:
@@ -113,6 +139,9 @@ func _process(delta: float) -> void:
 	for i in _rects.size():
 		if (_rects[i] as Rect2).has_point(mouse):
 			_hover = i
+	for i in _portraits.size():
+		var lift: float = -1.0 if (_hover == i or _sel == i) else 0.0
+		(_portraits[i] as TextureRect).position = _rects[i].position + Vector2(5, 5 + lift)
 	if _hover >= 0:
 		BaCursor.force_hot()
 	for i in 3:
@@ -124,38 +153,47 @@ func _process(delta: float) -> void:
 	queue_redraw()
 
 
-func _gui_input(event: InputEvent) -> void:
+## 全局鼠标命中：不依赖 Control 的 GUI 命中测试，暂停/缩放时也能稳定点击
+func _input(event: InputEvent) -> void:
 	if not (event is InputEventMouseButton and event.pressed
 			and (event as InputEventMouseButton).button_index == MOUSE_BUTTON_LEFT):
 		return
-	var m := get_local_mouse_position()
+	var m: Vector2 = event.position
 	if _seed_rect().has_point(m):
 		_editing = true
 		Sfx.play("ui")
-		accept_event()
+		get_viewport().set_input_as_handled()
 		return
 	if _tip_close_rect().has_point(m) and _tip_visible:
 		_tip_visible = false
 		MetaProgress.set_tutorial_flag("seen_select_tip")
 		Sfx.play("ui")
-		accept_event()
+		get_viewport().set_input_as_handled()
 		return
 	for i in 3:
 		if _diff_rect(i).has_point(m):
-			_difficulty = i
-			Settings.difficulty = i
-			Settings.save_settings()
-			SeedManager.difficulty = i
-			Sfx.play("ui")
-			accept_event()
+			_set_difficulty(i)
+			get_viewport().set_input_as_handled()
 			return
-	if _hover >= 0:
-		if _sel == _hover:
-			_choose(_hover)
-		else:
-			_sel = _hover
-			Sfx.play("ui")
-		accept_event()
+	for i in _rects.size():
+		if (_rects[i] as Rect2).has_point(m):
+			if _sel == i:
+				_choose(i)
+			else:
+				_sel = i
+				Sfx.play("ui")
+			get_viewport().set_input_as_handled()
+			return
+
+
+func _set_difficulty(i: int) -> void:
+	if i == _difficulty:
+		return
+	_difficulty = i
+	Settings.difficulty = i
+	Settings.save_settings()
+	SeedManager.difficulty = i
+	Sfx.play("ui")
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -194,10 +232,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_RIGHT:
 				_sel = mini(IDS.size() - 1, _sel + 1)
 				get_viewport().set_input_as_handled()
+			KEY_F1:
+				_set_difficulty(0)
+				get_viewport().set_input_as_handled()
+			KEY_F2:
+				_set_difficulty(1)
+				get_viewport().set_input_as_handled()
+			KEY_F3:
+				_set_difficulty(2)
+				get_viewport().set_input_as_handled()
 
 
 func _diff_rect(i: int) -> Rect2:
-	return Rect2(56 + i * 48, 294, 44, 18)
+	return Rect2(56 + i * 58, 292, 52, 20)
 
 
 func _seed_rect() -> Rect2:
@@ -247,8 +294,9 @@ func _draw() -> void:
 		var on := i == _difficulty
 		UiKit.frame(self, dr, UiKit.RAISED if on else UiKit.PANEL,
 			UiKit.GOLD if on else UiKit.BORDER, Color(0, 0, 0, 0), false)
-		UiKit.text_center(self, dr.get_center().x, dr.position.y + 13,
+		UiKit.text_center(self, dr.get_center().x, dr.position.y + 14,
 			["简单", "普通", "困难"][i], 12, UiKit.GOLD if on else UiKit.TEXT_DIM)
+	UiKit.text(self, Vector2(232, 307), "点击或 F1-F3", 12, UiKit.TEXT_DIM)
 
 	if _tip_visible:
 		_draw_tip()
@@ -282,11 +330,9 @@ func _draw_card(i: int, r: Rect2) -> void:
 	# 顶部角色色条
 	draw_rect(Rect2(rr.position + Vector2(1, 1), Vector2(rr.size.x - 2, 2)), accent)
 
-	# 立绘 96×128（1x 精确放入 96×132 区域）
+	# 立绘由 TextureRect 子节点绘制（线性过滤、非像素），这里只保留凹槽边框
 	var pr := Rect2(rr.position + Vector2(4, 4), Vector2(96, 132))
 	UiKit.inset(self, pr, Color(accent.r, accent.g, accent.b, 0.10), UiKit.BORDER)
-	if _tex[i] != null:
-		UiKit.draw_tex_contain(self, _tex[i], Rect2(pr.position + Vector2(0, 2), Vector2(96, 128)))
 
 	# 名字
 	UiKit.text_center(self, rr.get_center().x, rr.position.y + 148, d.display_name, 12,
@@ -302,7 +348,8 @@ func _draw_card(i: int, r: Rect2) -> void:
 	if selected:
 		UiKit.corner_brackets(self, rr.grow(1), UiKit.GOLD, 6)
 		if fmod(_t, 1.0) < 0.6:
-			var tag := Rect2(rr.position + Vector2(62, 6), Vector2(38, 16))
+			# 贴在卡片内部右上角，避免和顶部提示条/种子框重叠
+			var tag := Rect2(rr.position + Vector2(60, 4), Vector2(38, 16))
 			draw_rect(tag, UiKit.GOLD)
 			UiKit.text_center(self, tag.get_center().x, tag.get_center().y + 4, "READY", 12,
 				UiKit.VOID)

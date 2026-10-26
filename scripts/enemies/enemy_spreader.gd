@@ -19,7 +19,7 @@ func _setup() -> void:
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
 	accent = Color("#E07A2E")
-	fire_cd = SeedManager.randf_range(1.2, 2.0)
+	fire_cd = SeedManager.randf_range(0.8, 1.4)
 	ring_mode = GameState.floor_index >= 3
 
 
@@ -41,17 +41,17 @@ func _ai(delta: float) -> void:
 		if telegraph <= 0.0:
 			volley += 1
 			if ring_mode and volley % 3 == 0:
-				for i in 10:
-					var a := TAU * i / 10.0 + t
-					shoot_at(Vector2(cos(a), sin(a)), 150.0, 3.6)
+				for i in 12:
+					var a := TAU * i / 12.0 + t
+					shoot_at(Vector2(cos(a), sin(a)), 170.0, 3.6)
 			else:
-				for i in 5:
-					var t2 := float(i) / 4.0 - 0.5
-					shoot_at(dir.rotated(deg_to_rad(30.0 * t2)), 165.0, 4.0)
+				for i in 7:
+					var t2 := float(i) / 6.0 - 0.5
+					shoot_at(dir.rotated(deg_to_rad(46.0 * t2)), 185.0, 4.0)
 			Sfx.play_at("hit", global_position, -8.0, 0.9)
 	if fire_cd <= 0.0:
-		fire_cd = SeedManager.randf_range(2.3, 3.0)
-		telegraph = 0.45
+		fire_cd = SeedManager.randf_range(1.55, 2.1)
+		telegraph = 0.4
 
 
 func _draw_body() -> void:

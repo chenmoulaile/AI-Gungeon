@@ -39,6 +39,7 @@ func _run() -> void:
 
 	for cid in ["deepseek", "gpt", "claude"]:
 		await _test_character(cid)
+	_test_ai_quota()
 	await _test_boss()
 	await _test_boss_pool()
 	await _test_miniboss()
@@ -66,9 +67,14 @@ func _new_game(cid: String):
 func _dismiss_overlay(g) -> void:
 	for k in 24:
 		var top = g.ui_layer.get_child(g.ui_layer.get_child_count() - 1)
+		var advanced := false
 		if top != null and is_instance_valid(top) and top.has_method("_advance"):
 			top._advance()
+			advanced = true
 		await _frames(2)
+		# 界面已关闭且恢复运行：提前结束，避免把开局的 0.4s 输入锁等过去
+		if not advanced and not get_tree().paused:
+			break
 	get_tree().paused = false
 	await _frames(2)
 
@@ -96,6 +102,15 @@ func _test_character(cid: String) -> void:
 	_check(p != null, "%s: 玩家生成" % cid)
 	_check(GameState.enemies.size() > 0, "%s: 首波敌人 %d 个" % [cid, GameState.enemies.size()])
 	GameState.player.invuln = 999.0
+
+	# 开局全屏登场关闭后的第一下点击/空格不应变成攻击/翻滚
+	Input.action_press("shoot")
+	Input.action_press("roll")
+	await _frames(6)
+	Input.action_release("shoot")
+	Input.action_release("roll")
+	_check(float(p.fire_anim) <= 0.0 and float(p.roll_t) <= 0.0,
+		"%s: 开局首次输入不触发攻击/翻滚" % cid)
 
 	# 用真实输入通道开火（开局有 0.4s 输入锁，先等锁结束）
 	await _wait(0.5)
@@ -201,6 +216,50 @@ func _test_character(cid: String) -> void:
 
 	g.queue_free()
 	await _frames(3)
+
+
+## v0.11：GPT / Claude 套餐、模式、额度耗尽降级与重置卡
+func _test_ai_quota() -> void:
+	print("\n[AI 额度]")
+	GameState.start_run("gpt")
+	_check(GameState.plan_name() == "FREE" and GameState.mode_name() == "LUNA",
+		"GPT 初始 FREE · LUNA")
+	_check(is_equal_approx(GameState.quota_cap(), 120.0), "GPT 免费档额度 120")
+	GameState.coins = 0
+	_check(not GameState.upgrade_plan(), "金币不足无法升级套餐")
+	GameState.coins = 999
+	_check(GameState.upgrade_plan(), "金币足够升级 Plus")
+	_check(GameState.plan_name() == "PLUS" and GameState.max_mode_index() == 1,
+		"Plus 解锁 Sol 模式")
+	GameState.cycle_model_mode()
+	_check(GameState.mode_name() == "SOL" and GameState.model_damage_mult() > 1.3,
+		"切到 Sol 伤害倍率提升（%.2f）" % GameState.model_damage_mult())
+	GameState.drain_quota(9999.0)
+	_check(GameState.ai_depleted, "额度耗尽进入降级")
+	_check(GameState.model_damage_mult() < 1.0 and GameState.model_move_mult() < 0.6,
+		"耗尽后伤害/移速全面弱化（伤害 %.2f / 移速 %.2f）"
+		% [GameState.model_damage_mult(), GameState.model_move_mult()])
+	GameState.coins = 999
+	_check(GameState.buy_reset_card() and GameState.ai_reset_cards == 2,
+		"购买额度重置卡（x%d）" % GameState.ai_reset_cards)
+	_check(GameState.use_quota_reset_card() and not GameState.ai_depleted
+		and is_equal_approx(GameState.ai_quota, GameState.quota_cap()),
+		"重置卡立即回满额度并解除降级")
+	_check(GameState.upgrade_plan() and GameState.plan_name() == "PRO"
+		and GameState.max_mode_index() == 2, "继续升级 Pro 解锁 Astra")
+	GameState.cycle_model_mode()
+	_check(GameState.mode_name() == "ASTRA", "切到 Astra 模式")
+
+	GameState.start_run("claude")
+	_check(GameState.plan_name() == "FREE" and GameState.mode_name() == "SONNET",
+		"Claude 初始 FREE · SONNET")
+	_check(GameState.max_mode_index() == 0, "免费档只有 Sonnet")
+	GameState.coins = 999
+	_check(GameState.upgrade_plan() and GameState.plan_name() == "PRO",
+		"Claude 升级 Pro")
+	GameState.cycle_model_mode()
+	_check(GameState.mode_name() == "OPUS" and GameState.max_mode_index() == 1,
+		"Pro 解锁 Opus")
 
 
 func _test_boss() -> void:

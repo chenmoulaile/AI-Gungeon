@@ -1,8 +1,9 @@
 extends EnemyBase
-## 召唤者：躲在房间边缘，每 4.0s 召唤 2 只小型追踪怪，召唤前 0.5s 头顶亮召唤阵
+## 召唤者：躲在房间边缘，每 2.8s 召唤 3 只小型追踪怪，召唤前 0.45s 头顶亮召唤阵
 
-const CYCLE := 4.0
-const WARN := 0.5
+const CYCLE := 2.8
+const WARN := 0.45
+const SUMMON_N := 3
 const ChaserScene = preload("res://scenes/enemies/enemy_chaser.tscn")
 
 var timer: float = 0.0
@@ -18,7 +19,7 @@ func _setup() -> void:
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
 	accent = Color("#7B57B0")
-	timer = SeedManager.randf_range(1.4, 2.6)
+	timer = SeedManager.randf_range(0.9, 1.7)
 
 
 func _ai(delta: float) -> void:
@@ -46,7 +47,7 @@ func _ai(delta: float) -> void:
 func _summon() -> void:
 	if GameState.bullets_root == null:
 		return
-	for i in 2:
+	for i in SUMMON_N:
 		var e = ChaserScene.instantiate()
 		e.mini = true
 		var ang := SeedManager.randf() * TAU

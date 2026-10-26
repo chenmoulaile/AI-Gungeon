@@ -8,8 +8,46 @@ signal combo_activated(combo_name: String)
 signal synergy_activated(synergy_name: String)
 signal low_health_triggered
 signal run_ended()
+signal ai_state_changed()
+signal ai_depleted_changed(depleted: bool)
 
 const PLAYER_MAX_HP := 100
+
+## ---------------- 额度系统（GPT / Claude） ----------------
+## 参考真实订阅：免费档滚动 5h 窗口额度、Plus/Pro 依次扩容并缩短重置，
+## 额度耗尽后全面降级；额度重置卡可立即跳过等待。
+const GPT_PLANS := [
+	{"name": "FREE", "cap": 120.0, "reset": 180.0, "price": 0},
+	{"name": "PLUS", "cap": 300.0, "reset": 150.0, "price": 70},
+	{"name": "PRO", "cap": 600.0, "reset": 110.0, "price": 180},
+]
+const GPT_MODES := [
+	{"name": "LUNA", "cn": "轻量", "plan": 0, "dmg": 1.0, "rate": 1.06,
+		"bullet": 1.0, "move": 1.0, "cost": 0.12},
+	{"name": "SOL", "cn": "标准", "plan": 1, "dmg": 1.35, "rate": 1.0,
+		"bullet": 1.05, "move": 1.0, "cost": 0.24},
+	{"name": "ASTRA", "cn": "深度", "plan": 2, "dmg": 1.85, "rate": 0.90,
+		"bullet": 1.10, "move": 1.0, "cost": 0.45},
+]
+const CLAUDE_PLANS := [
+	{"name": "FREE", "cap": 120.0, "reset": 180.0, "price": 0},
+	{"name": "PRO", "cap": 300.0, "reset": 150.0, "price": 80},
+	{"name": "MAX 5X", "cap": 450.0, "reset": 120.0, "price": 200},
+	{"name": "MAX 20X", "cap": 700.0, "reset": 90.0, "price": 420},
+]
+const CLAUDE_MODES := [
+	{"name": "SONNET", "cn": "均衡", "plan": 0, "dmg": 1.0, "rate": 1.0,
+		"bullet": 1.0, "move": 1.0, "cost": 0.55},
+	{"name": "OPUS", "cn": "深度", "plan": 1, "dmg": 1.55, "rate": 0.95,
+		"bullet": 1.0, "move": 1.0, "cost": 1.15},
+]
+## 额度耗尽惩罚：伤害/射速/弹速/移速全面下滑
+const DEPLETED_DMG := 0.45
+const DEPLETED_RATE := 0.60
+const DEPLETED_BULLET := 0.75
+const DEPLETED_MOVE := 0.55
+const RESET_CARD_PRICE := 45
+const RESET_CARD_MAX := 3
 
 var char_id: String = "deepseek"
 var char_data: CharacterData = null
@@ -36,6 +74,14 @@ var excl_clean_floor: bool = false
 var exclusive_equipped: bool = false
 var training: bool = false
 
+## 额度系统运行状态（仅 GPT / Claude 使用）
+var ai_plan: int = 0
+var ai_mode: int = 0
+var ai_quota: float = 120.0
+var ai_reset_t: float = 180.0
+var ai_reset_cards: int = 1
+var ai_depleted: bool = false
+
 var upgrades: Array = []      # 已持有藏品 id
 var combos: Array = []        # 已激活组合名
 var synergies: Array = []     # 已激活的跨角色协同
@@ -57,6 +103,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if player != null and is_instance_valid(player) and player.alive:
 		run_time += delta
+		_tick_ai_quota(delta)
 
 
 func start_run(id: String, seed_text: String = "") -> void:
@@ -91,6 +138,7 @@ func start_run(id: String, seed_text: String = "") -> void:
 	floor_clean = true
 	excl_clean_floor = false
 	exclusive_equipped = false
+	_reset_ai_quota()
 	MetaProgress.start_run(id)
 	coins_changed.emit(coins)
 	hp_changed.emit(hp, max_hp)
@@ -116,6 +164,16 @@ func restore_run(d: Dictionary) -> void:
 	run_time = float(d.get("time", 0.0))
 	upgrades = d.get("upgrades", []).duplicate()
 	combos = d.get("combos", []).duplicate()
+	ai_plan = int(d.get("ai_plan", 0))
+	ai_mode = clampi(int(d.get("ai_mode", 0)), 0, max_mode_index())
+	ai_quota = float(d.get("ai_quota", -1.0))
+	ai_reset_t = float(d.get("ai_reset_t", -1.0))
+	if ai_quota < 0.0:
+		ai_quota = quota_cap() if has_quota_system() else 0.0
+	if ai_reset_t < 0.0:
+		ai_reset_t = plan_reset()
+	ai_reset_cards = int(d.get("ai_reset_cards", 1))
+	ai_depleted = false
 	recalc_stats()
 	hp = clampi(int(d.get("hp", max_hp)), 1, max_hp)
 	run_cleared = false
@@ -399,3 +457,221 @@ func exclusive_ratio() -> float:
 		"claude":
 			return 1.0 if excl_clean_floor else 0.0
 	return 0.0
+
+
+# ---------------- 额度系统（GPT / Claude） ----------------
+func has_quota_system() -> bool:
+	return char_id == "gpt" or char_id == "claude"
+
+
+func _plan_table() -> Array:
+	return GPT_PLANS if char_id == "gpt" else CLAUDE_PLANS
+
+
+func _mode_table() -> Array:
+	return GPT_MODES if char_id == "gpt" else CLAUDE_MODES
+
+
+func plan_name() -> String:
+	var t := _plan_table()
+	return String(t[clampi(ai_plan, 0, t.size() - 1)]["name"])
+
+
+func mode_name() -> String:
+	var t := _mode_table()
+	return String(t[clampi(ai_mode, 0, t.size() - 1)]["name"])
+
+
+func mode_cn() -> String:
+	var t := _mode_table()
+	return String(t[clampi(ai_mode, 0, t.size() - 1)]["cn"])
+
+
+## HUD 用：FREE · LUNA / MAX 5X · OPUS
+func model_label() -> String:
+	return "%s · %s" % [plan_name(), mode_name()]
+
+
+func quota_cap() -> float:
+	var t := _plan_table()
+	return float(t[clampi(ai_plan, 0, t.size() - 1)]["cap"])
+
+
+func plan_reset() -> float:
+	var t := _plan_table()
+	return float(t[clampi(ai_plan, 0, t.size() - 1)]["reset"])
+
+
+func reset_left() -> float:
+	return maxf(0.0, ai_reset_t)
+
+
+func next_plan_name() -> String:
+	var t := _plan_table()
+	if ai_plan >= t.size() - 1:
+		return ""
+	return String(t[ai_plan + 1]["name"])
+
+
+func next_plan_price() -> int:
+	var t := _plan_table()
+	if ai_plan >= t.size() - 1:
+		return -1
+	return int(t[ai_plan + 1]["price"])
+
+
+func max_mode_index() -> int:
+	var t := _mode_table()
+	var m := 0
+	for i in t.size():
+		if ai_plan >= int(t[i]["plan"]):
+			m = i
+	return m
+
+
+func _mode_data() -> Dictionary:
+	var t := _mode_table()
+	return t[clampi(ai_mode, 0, t.size() - 1)]
+
+
+func model_damage_mult() -> float:
+	if not has_quota_system():
+		return 1.0
+	var v := float(_mode_data().get("dmg", 1.0))
+	return v * (DEPLETED_DMG if ai_depleted else 1.0)
+
+
+func model_rate_mult() -> float:
+	if not has_quota_system():
+		return 1.0
+	var v := float(_mode_data().get("rate", 1.0))
+	return v * (DEPLETED_RATE if ai_depleted else 1.0)
+
+
+func model_bullet_mult() -> float:
+	if not has_quota_system():
+		return 1.0
+	var v := float(_mode_data().get("bullet", 1.0))
+	return v * (DEPLETED_BULLET if ai_depleted else 1.0)
+
+
+func model_move_mult() -> float:
+	if not has_quota_system():
+		return 1.0
+	var v := float(_mode_data().get("move", 1.0))
+	return v * (DEPLETED_MOVE if ai_depleted else 1.0)
+
+
+func model_quota_cost() -> float:
+	if not has_quota_system():
+		return 0.0
+	return float(_mode_data().get("cost", 0.0))
+
+
+func _reset_ai_quota() -> void:
+	ai_plan = 0
+	ai_mode = 0
+	ai_reset_cards = 1
+	ai_depleted = false
+	ai_quota = quota_cap() if has_quota_system() else 0.0
+	ai_reset_t = plan_reset()
+	ai_state_changed.emit()
+
+
+func _refill_quota() -> void:
+	ai_quota = quota_cap()
+	ai_reset_t = plan_reset()
+	if ai_depleted:
+		ai_depleted = false
+		ai_depleted_changed.emit(false)
+	ai_state_changed.emit()
+
+
+func _tick_ai_quota(delta: float) -> void:
+	if not has_quota_system() or training:
+		return
+	ai_reset_t = maxf(0.0, ai_reset_t - delta)
+	if ai_reset_t <= 0.0:
+		_refill_quota()
+
+
+## 每发子弹扣额度；耗尽只降级，不阻止开火
+func spend_quota(amount: float) -> void:
+	drain_quota(amount)
+
+
+func drain_quota(amount: float) -> void:
+	if not has_quota_system() or amount <= 0.0:
+		return
+	ai_quota = maxf(0.0, ai_quota - amount)
+	if ai_quota <= 0.0 and not ai_depleted:
+		ai_depleted = true
+		ai_depleted_changed.emit(true)
+	ai_state_changed.emit()
+
+
+## R：在已解锁模型间循环；免费档只有 Luna / Sonnet
+func cycle_model_mode() -> String:
+	if not has_quota_system():
+		return "本角色没有模型额度"
+	var max_i := max_mode_index()
+	if max_i <= 0:
+		var need := next_plan_name()
+		return "升级到 %s 解锁更多模型" % need if need != "" else "已到最高档"
+	ai_mode += 1
+	if ai_mode > max_i:
+		ai_mode = 0
+	ai_state_changed.emit()
+	return "模型切换：%s（%s）" % [mode_name(), mode_cn()]
+
+
+## 商店 P：按顺序升级套餐，补满额度并缩短重置时间
+func upgrade_plan() -> bool:
+	if not has_quota_system():
+		return false
+	var price := next_plan_price()
+	if price < 0 or coins < price:
+		return false
+	coins -= price
+	coins_changed.emit(coins)
+	ai_plan += 1
+	ai_mode = mini(ai_mode, max_mode_index())
+	ai_quota = quota_cap()
+	ai_reset_t = plan_reset()
+	if ai_depleted:
+		ai_depleted = false
+		ai_depleted_changed.emit(false)
+	ai_state_changed.emit()
+	RunSave.save_run()
+	return true
+
+
+func can_buy_reset_card() -> bool:
+	return has_quota_system() and ai_reset_cards < RESET_CARD_MAX \
+		and coins >= RESET_CARD_PRICE
+
+
+## 商店 K：购买额度重置卡（上限 3 张）
+func buy_reset_card() -> bool:
+	if not can_buy_reset_card():
+		return false
+	coins -= RESET_CARD_PRICE
+	coins_changed.emit(coins)
+	ai_reset_cards += 1
+	ai_state_changed.emit()
+	RunSave.save_run()
+	return true
+
+
+## T：跳过重置等待，立即回满额度
+func use_quota_reset_card() -> bool:
+	if not has_quota_system():
+		return false
+	if ai_reset_cards <= 0:
+		return false
+	if ai_quota >= quota_cap() and not ai_depleted:
+		return false
+	ai_reset_cards -= 1
+	_refill_quota()
+	RunSave.save_run()
+	return true

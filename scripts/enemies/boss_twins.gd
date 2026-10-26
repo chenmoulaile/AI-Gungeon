@@ -25,13 +25,13 @@ func _setup() -> void:
 	]
 	accent_color = Color("#ff7a4d")
 	light_color = Color(1.0, 0.42, 0.22)
-	max_hp = 170.0 * GameState.enemy_scale()
+	max_hp = 460.0 * GameState.enemy_scale()
 	hp = max_hp
-	speed = 30.0
+	speed = 34.0
 	# 双核心整体较宽，碰撞半径要覆盖到两侧核心边缘
 	radius = 48.0
 	contact_damage = 2
-	coin_value = 30
+	coin_value = 50
 	_setup_common()
 
 
@@ -76,7 +76,7 @@ func _do_move(dir: Vector2) -> void:
 		"homing":
 			_attack_homing(dir)
 		"spiral":
-			spiral_left = 14
+			spiral_left = 20
 			spiral_t = 0.0
 			spiral_angle = dir.angle()
 			Sfx.play("warn_high", -2.0, 0.9)
@@ -89,13 +89,14 @@ func _do_move(dir: Vector2) -> void:
 
 ## 第 3 阶段：左右核心同时甩出反向错位的双环
 func _attack_cross() -> void:
+	var n := 14
 	for side in [-1.0, 1.0]:
 		var o := _core_pos(side)
-		var off := 0.0 if side < 0.0 else TAU / 24.0
-		for i in 12:
-			var a := TAU * float(i) / 12.0 + off + ring_angle
+		var off := 0.0 if side < 0.0 else TAU / float(n * 2)
+		for i in n:
+			var a := TAU * float(i) / float(n) + off + ring_angle
 			var d := Vector2(cos(a), sin(a))
-			shoot_from(o + d * 8.0, d, 150.0, 4.0)
+			shoot_from(o + d * 8.0, d, 175.0, 4.0)
 	ring_angle += 0.16
 	Sfx.play("hit", -7.0, 0.6)
 	GameFeel.screen_shake(0.1)
@@ -108,13 +109,13 @@ func _spawn_homing(a: Vector2) -> void:
 		return
 	b.friendly = false
 	b.dir = a
-	b.speed = 100.0
+	b.speed = 120.0
 	b.damage = 1.0
 	b.radius = 4.6
 	b.color = Color("#ffa24d")
 	b.life = 6.0
-	b.homing = 2.2
-	b.homing_time = 2.5
+	b.homing = 2.6
+	b.homing_time = 3.0
 	b.destructible = true
 	b.pierce = 0
 	b.gen = 0
