@@ -441,18 +441,24 @@ func _draw_boss() -> void:
 	var w := 240.0
 	var x := (GameConfig.BASE_W - w) * 0.5
 	var y := 16.0
-	UiKit.text(self, Vector2(x, y + 10), "回响聚合体 · 第 %d 阶段" % boss.phase, 12, UiKit.TEXT)
+	UiKit.text(self, Vector2(x, y + 10), "%s · 第 %d 阶段" % [String(boss.display_name), boss.phase],
+		12, UiKit.TEXT)
 	# 2 段血条，段间 2px
 	var seg_w := (w - 2) * 0.5
+	var bar_col: Color = Color("#E45C7A")
+	if "accent" in boss:
+		bar_col = boss.accent
+	if boss.phase >= 2:
+		bar_col = UiKit.DANGER
 	for i in 2:
 		UiKit.bar(self, Rect2(x + i * (seg_w + 2), y + 16, seg_w, 8), boss.hp_ratio(),
-			UiKit.DANGER if boss.phase >= 2 else Color("#E45C7A"), UiKit.VOID)
+			bar_col, UiKit.VOID)
 	for mark in [0.6, 0.25]:
 		var mx: float = x + w * float(mark)
 		draw_line(Vector2(mx, y + 16), Vector2(mx, y + 24), UiKit.DEEP, 1.0)
 	var mv: Array = boss.current_moves() if boss.has_method("current_moves") else []
 	var labels := {"ring": "环", "fan": "扇", "charge": "冲", "homing": "追",
-		"summon": "召", "laser": "激", "spiral": "旋", "mine": "雷"}
+		"summon": "召", "laser": "激", "spiral": "旋", "mine": "雷", "cross": "叉"}
 	for i in mv.size():
 		UiKit.text(self, Vector2(x + w - 14.0 - i * 15.0, y + 34),
 			String(labels.get(String(mv[i]), "?")), 12, Color(1, 0.92, 0.85, 0.75))

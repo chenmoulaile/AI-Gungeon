@@ -4,17 +4,34 @@ extends Control
 
 signal finished
 
-const LINES := [
+const DEFAULT_LINES := [
 	"三个助手的推理回响，在这个房间里聚成了一个实体。",
 	"它没有名字，只有你刚才打出的每一发子弹的记忆。",
 	"清空它，才能进入下一层。",
 ]
+
+var boss_name: String = "回响聚合体"
+var subtitle: String = "ECHO AGGREGATE"
+var lines: Array = DEFAULT_LINES
+var accent: Color = Color("#8E6AC8")
 
 var line_index: int = 0
 var typed: float = 0.0
 var speed: float = 30.0
 var _t: float = 0.0
 var _done: bool = false
+
+
+## 由 game.gd 在加入场景前传入：名称 / 副标题 / 台词 / 主色
+func setup(cfg: Dictionary) -> void:
+	if cfg.is_empty():
+		return
+	boss_name = String(cfg.get("name", boss_name))
+	subtitle = String(cfg.get("subtitle", subtitle))
+	var cfg_lines = cfg.get("lines", null)
+	if cfg_lines is Array and not (cfg_lines as Array).is_empty():
+		lines = cfg_lines
+	accent = cfg.get("color", accent)
 
 
 func _ready() -> void:
@@ -26,8 +43,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_t += delta
-	if not _done and line_index < LINES.size():
-		var full: String = LINES[line_index]
+	if not _done and line_index < lines.size():
+		var full: String = lines[line_index]
 		if typed < float(full.length()):
 			typed = minf(float(full.length()), typed + speed * delta)
 	queue_redraw()
@@ -49,13 +66,13 @@ func _unhandled_input(event: InputEvent) -> void:
 func _advance() -> void:
 	if _done:
 		return
-	var full: String = LINES[line_index] if line_index < LINES.size() else ""
+	var full: String = lines[line_index] if line_index < lines.size() else ""
 	if typed < float(full.length()):
 		typed = float(full.length())
 		return
 	line_index += 1
 	typed = 0.0
-	if line_index >= LINES.size():
+	if line_index >= lines.size():
 		_done = true
 		finished.emit()
 
@@ -77,23 +94,24 @@ func _draw() -> void:
 			var p := center + Vector2(cos(a), sin(a)) * radius
 			var s := 4 if k == 0 else 3
 			draw_rect(Rect2((p - Vector2(s, s) * 0.5).round(), Vector2(s, s)),
-				Color(0.72, 0.36, 1.0, 0.42 - k * 0.14))
-	# 核心剪影：硬边像素菱形
+				Color(accent.r, accent.g, accent.b, 0.42 - k * 0.14))
+	# 核心剪影：硬边像素菱形（颜色跟随当前 Boss）
 	_pixel_diamond(center, 46, 38, UiKit.SHADOW)
-	_pixel_diamond(center, 44, 36, Color("#3A1F5E"))
-	_pixel_diamond(center, 32, 26, Color("#7A46C8"))
-	_pixel_diamond(center, 20, 16, Color("#A874F0"))
+	_pixel_diamond(center, 44, 36, accent.darkened(0.66))
+	_pixel_diamond(center, 32, 26, accent.darkened(0.38))
+	_pixel_diamond(center, 20, 16, accent.lightened(0.26))
 	# 眼
 	draw_rect(Rect2(center.x - 9, center.y - 4, 18, 8), UiKit.WHITE)
 	draw_rect(Rect2(center.x - 3, center.y - 4, 6, 8), Color("#160A22"))
 	draw_rect(Rect2(center.x - 2, center.y - 3, 2, 2), Color(1, 1, 1, 0.9))
 
-	UiKit.text_center(self, center.x, 40, "回响聚合体", UiKit.F_H2, UiKit.GOLD)
-	UiKit.text_center(self, center.x, 56, "ECHO AGGREGATE", UiKit.F_SMALL, Color(0.66, 0.52, 0.88))
+	UiKit.text_center(self, center.x, 40, boss_name, UiKit.F_H2, UiKit.GOLD)
+	UiKit.text_center(self, center.x, 56, subtitle, UiKit.F_SMALL, accent.lightened(0.18))
 
 	var box := Rect2(80, GameConfig.BASE_H - 92, GameConfig.BASE_W - 160, 76)
-	UiKit.frame(self, box, Color(0.05, 0.04, 0.07, 0.96), Color("#6A4A9E"), Color("#8E6AC8"), true)
-	var full: String = LINES[line_index] if line_index < LINES.size() else ""
+	UiKit.frame(self, box, Color(0.05, 0.04, 0.07, 0.96), accent.darkened(0.45),
+		accent, true)
+	var full: String = lines[line_index] if line_index < lines.size() else ""
 	var shown: String = full.substr(0, int(typed))
 	UiKit.text_block(self, box.position + Vector2(14, 24), shown, box.size.x - 28,
 		UiKit.F_BODY, UiKit.TEXT, 4)

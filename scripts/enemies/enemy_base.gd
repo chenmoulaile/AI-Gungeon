@@ -20,6 +20,8 @@ var accent: Color = Color("#ff6b8b")
 var coin_value: int = 2
 var is_boss: bool = false
 var elite: bool = false
+## 迷你首领：精英之上再强化一档，红金王冠标记
+var miniboss: bool = false
 var mini: bool = false
 var mini_speed_scale: float = 1.0
 var hp_scale: float = 1.0
@@ -46,10 +48,16 @@ func _ready() -> void:
 	add_to_group("enemies")
 	player = GameState.player
 	_setup()
+	if miniboss:
+		elite = true
 	if elite:
 		max_hp *= 1.55
 		radius *= 1.08
 		coin_value += 2
+	if miniboss:
+		max_hp *= 1.6
+		radius *= 1.06
+		coin_value += 6
 	if hp_scale != 1.0:
 		max_hp *= hp_scale
 	max_hp *= SeedManager.diff("hp")
@@ -200,8 +208,8 @@ func _die() -> void:
 	GameState.on_enemy_killed(last_hit_tag)
 	if GameState.player != null and is_instance_valid(GameState.player):
 		GameState.player.on_kill()
-	# 碎成 6~8 个小方块，重力下坠 + 0.4s 淡出
-	var shard_n: int = 10 if elite else 8
+	# 碎成 8~12 个小方块，重力下坠 + 0.4s 淡出
+	var shard_n: int = 12 if miniboss else 10 if elite else 8
 	GameFeel.shards(global_position + Vector2(0, -radius * 0.5), accent, shard_n, 160.0, 0.4)
 	GameFeel.screen_shake(0.18 if elite else 0.12)
 	# 击杀顿帧：0.10s，不受轻击冷却限制
@@ -230,13 +238,23 @@ func _drop_coins() -> void:
 # ---------------- 敌方子弹 ----------------
 func shoot_at(dir: Vector2, speed: float = 155.0, bullet_radius: float = 3.8,
 		homing: float = 0.0, homing_time: float = 0.0) -> void:
+	var d := dir.normalized()
+	shoot_from(global_position + d * (radius + 2.0), d, speed, bullet_radius,
+		homing, homing_time)
+
+
+## 从指定世界坐标发射（双生 Boss 等有多个枪口的敌人使用）
+func shoot_from(origin: Vector2, dir: Vector2, speed: float = 155.0,
+		bullet_radius: float = 3.8, homing: float = 0.0,
+		homing_time: float = 0.0) -> void:
 	if GameState.bullets_root == null:
 		return
 	var b: Node = GameFeel.get_bullet()
 	if b == null:
 		return
+	var d := dir.normalized()
 	b.friendly = false
-	b.dir = dir.normalized()
+	b.dir = d
 	b.speed = speed * SeedManager.diff("bullet")
 	b.damage = 1.0
 	b.radius = bullet_radius
@@ -249,13 +267,13 @@ func shoot_at(dir: Vector2, speed: float = 155.0, bullet_radius: float = 3.8,
 	b.trail = false
 	b.crit = false
 	b.tier = "medium"
-	b.global_position = global_position + dir.normalized() * (radius + 2.0)
+	b.global_position = origin
 	b.prepare()
 	# 枪口弹道线：让玩家一眼看出这一发的来向
 	if GameState.bullets_root != null and is_instance_valid(GameState.bullets_root):
 		var tg = TelegraphScript.new()
 		GameState.bullets_root.add_child(tg)
-		tg.setup(b.global_position, b.global_position + dir.normalized() * 70.0, 0.14,
+		tg.setup(origin, origin + d * 70.0, 0.14,
 			Color(1.0, 0.34, 0.40, 0.5), 1.0)
 
 
@@ -295,6 +313,21 @@ func _px_brackets(color: Color, half: float, y_off: float = 0.0) -> void:
 			draw_rect(Rect2(sx * half - 1.0, y_off + sy * half - 1.0, 2.0, 2.0), color)
 
 
+## 迷你首领：红金双括号 + 3 齿王冠
+func _px_crown() -> void:
+	var gold := Color(1.0, 0.84, 0.32, 0.96)
+	var red := Color(1.0, 0.32, 0.38, 0.95)
+	var y := roundf(-radius - 16.0)
+	_px_brackets(red, radius + 7.0)
+	_px_brackets(gold, radius + 3.0)
+	draw_rect(Rect2(-8.0, y, 16.0, 3.0), gold.darkened(0.28))
+	draw_rect(Rect2(-8.0, y - 1.0, 16.0, 1.0), gold)
+	draw_rect(Rect2(-8.0, y - 4.0, 3.0, 3.0), gold)
+	draw_rect(Rect2(-1.0, y - 6.0, 3.0, 5.0), gold)
+	draw_rect(Rect2(6.0, y - 4.0, 3.0, 3.0), gold)
+	draw_rect(Rect2(-1.0, y, 3.0, 2.0), red)
+
+
 func _draw() -> void:
 	_px_shadow()
 	draw_set_transform(Vector2(hit_off, 0), 0.0, Vector2.ONE)
@@ -315,6 +348,8 @@ func _draw() -> void:
 	if elite:
 		var blink: bool = fmod(t, 0.5) < 0.25
 		_px_brackets(Color(1.0, 0.82, 0.35, 0.95 if blink else 0.55), radius + 5.0)
+	if miniboss:
+		_px_crown()
 	# 深度检索标记：头顶蓝色像素箭头，快消失时闪烁
 	if mark_t > 0.0:
 		var a: float = 1.0
