@@ -177,7 +177,7 @@ func release_spark(node: Node2D) -> void:
 
 
 func afterimage(texture: Texture2D, pos: Vector2, flip: bool, tint: Color,
-		duration: float = 0.15) -> void:
+		duration: float = 0.15, rot: float = 0.0, offset: Vector2 = Vector2.ZERO) -> void:
 	if texture == null:
 		return
 	var layer := _fx_root()
@@ -187,6 +187,8 @@ func afterimage(texture: Texture2D, pos: Vector2, flip: bool, tint: Color,
 	ghost.texture = texture
 	ghost.flip_h = flip
 	ghost.modulate = tint
+	ghost.rotation = rot
+	ghost.offset = offset
 	ghost.global_position = pos
 	layer.add_child(ghost)
 	var tw := ghost.create_tween()

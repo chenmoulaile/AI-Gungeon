@@ -1,10 +1,10 @@
 extends EnemyBase
-## 狙击手：保持 250~350px，每 2.5s 打一发 400px/s 高速弹，发射前 0.5s 红色细线预警
+## 狙击手：保持 250~350px，每 1.9s 双发点射（470px/s），发射前 0.45s 红色细线预警
 
 const MIN_D := 250.0
 const MAX_D := 350.0
-const CYCLE := 2.5
-const WARN := 0.5
+const CYCLE := 1.9
+const WARN := 0.45
 
 var timer: float = 0.0
 var warning: float = 0.0
@@ -20,7 +20,7 @@ func _setup() -> void:
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
 	accent = Color("#3E6350")
-	timer = SeedManager.randf_range(1.0, 2.0)
+	timer = SeedManager.randf_range(0.7, 1.4)
 
 
 func _ai(delta: float) -> void:
@@ -33,7 +33,9 @@ func _ai(delta: float) -> void:
 	if warning > 0.0:
 		warning -= delta
 		if warning <= 0.0:
-			shoot_at(aim_dir, 400.0, 3.4)
+			# 双发点射：一发预判直击 + 一发小角度封走位
+			shoot_at(aim_dir, 470.0, 3.2)
+			shoot_at(aim_dir.rotated(deg_to_rad(5.0)), 445.0, 3.2)
 			Sfx.play_at("shoot", global_position, -2.0, 0.65)
 			GameFeel.screen_shake(0.06)
 		return

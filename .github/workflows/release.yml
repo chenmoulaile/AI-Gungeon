@@ -92,11 +92,12 @@ jobs:
           {
             echo "## AI Gungeon ${{ inputs.tag || github.ref_name }}"
             echo ""
-            echo "- v0.10 分支地图：每层 7 节点菱形网，门后二选一，事件房三选一"
-            echo "- 藏品稀有度分档（白/蓝/紫）+ 商店刷新与治疗服务"
-            echo "- 层末存款利息、敌人数量与缩放封顶、精英战利品"
-            echo "- HUD 分支小地图与已访问路径"
-            echo "- 手感：翻滚无敌 0.25s、击杀顿帧 0.1s、受击不再吞翻滚"
+            echo "- GPT / Claude 模型套餐与额度系统：Luna/Sol/Astra、Sonnet/Opus，Free/Plus/Pro、Free/Pro/Max"
+            echo "- 额度耗尽全面降级，额度重置卡（T）可跳过重置倒计时"
+            echo "- 开局全屏登场，首次点击/空格不会误触攻击或翻滚"
+            echo "- 角色选择与开局立绘换成成人版非像素图；翻滚改为 360° 空翻"
+            echo "- 难度 / 门后二选一 / 事件房三选一全部支持鼠标 + 键盘"
+            echo "- 小怪与三层 Boss 全面强化，弹幕密度参考《元气骑士》"
             echo ""
             echo "Windows zip / Linux tar.gz / Web zip（解压后用本地 HTTP 服务器打开 index.html）"
           } > release_notes.md

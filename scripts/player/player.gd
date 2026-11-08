@@ -29,6 +29,8 @@ var pivot: Node2D
 var bob: Node2D
 var recoil: Node2D
 var breath: Node2D
+## 翻滚旋转节点：挂在 breath 下、位于身体中心，360° 旋转不影响武器与配饰
+var roll_pivot: Node2D
 var accent: Node2D
 var gun: Node2D
 var key_light: PointLight2D
@@ -49,6 +51,7 @@ var invuln: float = 0.0
 var roll_t: float = 0.0
 var roll_cd: float = 0.0
 var roll_dir: Vector2 = Vector2.ZERO
+var _roll_spin: float = 1.0
 var move_mult: float = 1.0
 var hurt_stun: float = 0.0
 
@@ -143,14 +146,20 @@ func _build_nodes() -> void:
 	breath.name = "Breath"
 	recoil.add_child(breath)
 
+	roll_pivot = Node2D.new()
+	roll_pivot.name = "RollPivot"
+	# 像素帧原本用 offset(0,-29) 抬高，这里改由父节点抬升，旋转轴正好落在身体中心
+	roll_pivot.position = Vector2(0, -29)
+	breath.add_child(roll_pivot)
+
 	anim = AnimatedSprite2D.new()
 	anim.sprite_frames = GameConfig.build_sprite_frames(char_id)
-	anim.offset = Vector2(0, -29)
+	anim.offset = Vector2.ZERO
 	# 像素帧自带 1px 描边后不要再提亮，否则描边被冲淡、整体发白
 	anim.self_modulate = Color(1, 1, 1)
 	anim.light_mask = 0   # 角色不参与 2D 光照，避免被自己的点光源打爆成白色
 	anim.play("idle")
-	breath.add_child(anim)
+	roll_pivot.add_child(anim)
 
 	# 配饰：鲸尾 / 龙翼 / 向日葵（程序化绘制，Tween 驱动）
 	accent = Node2D.new()
@@ -297,7 +306,7 @@ func _physics_process(delta: float) -> void:
 	gun.position = pos
 
 	if roll_t > 0.0:
-		velocity = roll_dir * GameConfig.ROLL_SPEED
+		velocity = roll_dir * GameConfig.ROLL_SPEED * GameState.model_move_mult()
 		_spawn_ghost(delta)
 	else:
 		var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
@@ -305,7 +314,8 @@ func _physics_process(delta: float) -> void:
 		var cs2: CharacterStats = Stats.char(char_id)
 		if cs2 != null:
 			base_spd = cs2.move_speed
-		var spd: float = base_spd * GameState.stat("move_speed", 1.0) * move_mult * sub_move_mult
+		var spd: float = base_spd * GameState.stat("move_speed", 1.0) * move_mult \
+			* sub_move_mult * GameState.model_move_mult()
 		if roll_speed_t > 0.0:
 			spd *= 1.0 + float(GameState.mods.get("roll_speed", 0.0))
 		var target := input * spd
@@ -375,6 +385,25 @@ func _tick_timers(delta: float) -> void:
 		anim.modulate.a = 0.35
 	else:
 		anim.modulate.a = 1.0
+	_update_roll_visual()
+
+
+## 翻滚视觉：绕身体中心 360° 空翻 + 小弧线抬升 + 球状缩放
+func _update_roll_visual() -> void:
+	if roll_pivot == null or not is_instance_valid(roll_pivot):
+		return
+	if roll_t > 0.0:
+		var k := clampf(1.0 - roll_t / maxf(0.01, GameConfig.ROLL_TIME), 0.0, 1.0)
+		roll_pivot.rotation = TAU * _roll_spin * k
+		var lift := sin(k * PI)
+		roll_pivot.position = Vector2(0, -29.0 - lift * 7.0)
+		var s := 0.94 + 0.10 * lift
+		anim.scale = Vector2(s, s)
+	else:
+		roll_pivot.rotation = 0.0
+		roll_pivot.position = Vector2(0, -29.0)
+		if _anim_state != "roll":
+			anim.scale = Vector2.ONE
 
 
 func _update_anim(input: Vector2) -> void:
@@ -455,6 +484,8 @@ func _update_facing() -> void:
 		accent.scale.x = -1.0 if anim.flip_h else 1.0
 	if _turn_tw != null and _turn_tw.is_valid():
 		_turn_tw.kill()
+	if roll_t > 0.0:
+		return
 	_turn_tw = create_tween()
 	_turn_tw.tween_property(anim, "scale", Vector2(0.88, 1.06), 0.04)\
 		.set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
@@ -547,9 +578,20 @@ func _handle_actions() -> void:
 		elif hurt_stun > 0.0:
 			InputBuffer.clear("roll")
 
-	if Input.is_action_just_pressed("switch_mode") and weapon != null:
-		weapon.on_switch_mode()
+	if Input.is_action_just_pressed("switch_mode"):
+		if GameState.has_quota_system():
+			notify(GameState.cycle_model_mode(), 1.6)
+		elif weapon != null:
+			weapon.on_switch_mode()
 		Sfx.play("ui", -6.0)
+	# 额度重置卡：跳过较长的重置等待，立即回满额度
+	if Input.is_action_just_pressed("quota_reset") and GameState.has_quota_system():
+		if GameState.use_quota_reset_card():
+			notify("额度重置卡：额度已回满", 1.6)
+		elif GameState.ai_reset_cards <= 0:
+			notify("没有额度重置卡（商店可购买）", 1.6)
+		else:
+			notify("额度已满，无需重置", 1.4)
 	if Input.is_action_just_pressed("skill"):
 		_try_skill()
 	if sub != null and is_instance_valid(sub):
@@ -607,6 +649,10 @@ func _try_roll() -> void:
 		return
 	var input := Input.get_vector("move_left", "move_right", "move_up", "move_down")
 	roll_dir = input.normalized() if input.length() > 0.1 else aim
+	# 朝横向翻滚时向前空翻；纯上下翻滚按当前朝向决定旋转方向
+	_roll_spin = signf(roll_dir.x) if absf(roll_dir.x) > 0.01 else float(facing)
+	if is_zero_approx(_roll_spin):
+		_roll_spin = 1.0
 	roll_t = GameConfig.ROLL_TIME
 	var rcd: float = GameConfig.ROLL_CD
 	var cs3: CharacterStats = Stats.char(char_id)
@@ -624,15 +670,13 @@ func _try_roll() -> void:
 	if float(GameState.mods.get("roll_speed", 0.0)) > 0.0:
 		roll_speed_t = 1.2
 	Sfx.play("roll")
+	# 起滚尘环：向四周爆开一圈浅灰烟点
+	GameFeel.burst(global_position + Vector2(0, -6), Color(0.78, 0.82, 0.9, 0.65),
+		10, 105.0, 0.28)
 	# 弹簧骨骼受冲击
 	_jiggle_v += 3.4 * float(facing)
-	# 前摇 0.05s 压扁 -> 后摇 0.1s 拉伸 -> 回弹
+	# 前摇 0.05s 压扁 -> 后摇 0.1s 拉伸 -> 回弹（翻滚期间由 _update_roll_visual 接管缩放）
 	anim.scale = Vector2(1.2, 0.8)
-	var tw := anim.create_tween()
-	tw.tween_property(anim, "scale", Vector2(0.9, 1.1), 0.05)\
-		.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
-	tw.tween_property(anim, "scale", Vector2.ONE, 0.1)\
-		.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
 
 
 func _spawn_ghost(delta: float) -> void:
@@ -644,7 +688,8 @@ func _spawn_ghost(delta: float) -> void:
 		return
 	var tex: Texture2D = anim.sprite_frames.get_frame_texture(anim.animation, anim.frame)
 	GameFeel.afterimage(tex, global_position, anim.flip_h,
-		Color(0.62, 0.78, 1.0, 0.5), 0.15)
+		Color(0.62, 0.78, 1.0, 0.5), 0.15,
+		roll_pivot.rotation if roll_pivot != null else 0.0, Vector2(0, -29))
 
 
 func _try_skill() -> void:

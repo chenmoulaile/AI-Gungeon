@@ -37,6 +37,7 @@ func _ready() -> void:
 	GameState.upgrades_changed.connect(_on_upgrades_changed)
 	GameState.synergy_activated.connect(_on_synergy)
 	GameState.low_health_triggered.connect(_on_low_health)
+	GameState.ai_depleted_changed.connect(_on_ai_depleted)
 	ChallengeManager.challenge_changed.connect(_on_challenge)
 	ChallengeManager.completed.connect(_on_challenge_done)
 	_coins_shown = float(GameState.coins)
@@ -98,6 +99,13 @@ func _on_low_health() -> void:
 	_low_flash = 0.7
 
 
+func _on_ai_depleted(depleted: bool) -> void:
+	if depleted:
+		show_toast("额度耗尽：%s 全面降级，等重置或用 T 使用额度卡" % GameState.mode_name(), 3.0)
+	else:
+		show_toast("额度已恢复：%s 属性回到正常" % GameState.mode_name(), 2.0)
+
+
 func _on_synergy(synergy_name: String) -> void:
 	combo_text = "协同激活 · %s" % synergy_name
 	combo_time = 3.2
@@ -123,6 +131,7 @@ func _draw() -> void:
 	var p = GameState.player
 	if p != null and is_instance_valid(p):
 		_draw_talent(p)
+		_draw_quota()
 		_draw_weapon(p)
 		_draw_mode(p)
 	_draw_upgrades()
@@ -191,6 +200,38 @@ func _draw_talent(p) -> void:
 	UiKit.text(self, r.position + Vector2(6, 13), title, 12, col)
 	UiKit.bar(self, Rect2(r.position.x + 60, r.position.y + 6, 76, 7), ratio, col)
 	UiKit.text_right(self, r.end.x - 6, r.position.y + 13, value, 12, col)
+
+
+# ---------------- 左上：模型套餐额度（GPT / Claude） ----------------
+func _draw_quota() -> void:
+	if not GameState.has_quota_system():
+		return
+	var danger := GameState.ai_depleted
+	var accent := GameConfig.char_color(GameState.char_id)
+	var r := Rect2(8, 78, 196, 44)
+	var border := UiKit.DANGER if danger and fmod(_t, 0.5) < 0.25 else UiKit.BORDER
+	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.90), border, Color(0, 0, 0, 0), false)
+	UiKit.text(self, r.position + Vector2(6, 13), GameState.model_label(), 12,
+		UiKit.DANGER if danger else accent)
+	var cards := "卡x%d [T]" % GameState.ai_reset_cards
+	UiKit.text_right(self, r.end.x - 6, r.position.y + 13, cards, 12,
+		UiKit.GOLD if GameState.ai_reset_cards > 0 else UiKit.TEXT_DIM)
+
+	var cap := maxf(1.0, GameState.quota_cap())
+	var ratio := clampf(GameState.ai_quota / cap, 0.0, 1.0)
+	var bar := Rect2(r.position.x + 6, r.position.y + 18, r.size.x - 12, 7)
+	UiKit.bar(self, bar, ratio, UiKit.DANGER if danger else accent)
+	if danger and fmod(_t, 0.4) < 0.2:
+		UiKit.corner_brackets(self, bar.grow(2), UiKit.DANGER, 3)
+
+	var secs := int(ceil(GameState.reset_left()))
+	var time_txt := "%d:%02d" % [secs / 60, secs % 60]
+	var foot := "耗尽 -55%% · %s" % time_txt if danger \
+		else "%d/%d · 重置 %s" % [int(ceil(GameState.ai_quota)), int(cap), time_txt]
+	UiKit.text(self, r.position + Vector2(6, 38), foot, 12,
+		UiKit.DANGER if danger else UiKit.TEXT_DIM)
+	UiKit.text_right(self, r.end.x - 6, r.position.y + 38, "R 模型", 12,
+		Color(0.42, 0.48, 0.58))
 
 
 # ---------------- 左下：金币 ----------------
@@ -386,17 +427,17 @@ func _draw_gun_placeholder(rect: Rect2, accent: Color) -> void:
 
 
 func _draw_mode(p) -> void:
-	if p.char_id != "gpt" or p.weapon == null:
+	if p.weapon == null:
 		return
 	var w = p.weapon
-	var txt := String(w.mode_text())
 	var b: String = w.buff_text() if w.has_method("buff_text") else ""
-	if b != "":
-		txt += "  ·  " + b
-	var wd := UiKit.measure(txt, 12) + 16.0
+	if b == "":
+		return
+	var wd := UiKit.measure(b, 12) + 16.0
 	var r := Rect2(GameConfig.BASE_W * 0.5 - wd * 0.5, 294, wd, 18)
-	UiKit.frame(self, r, Color(0.16, 0.12, 0.26, 0.86), UiKit.PURPLE, Color(0, 0, 0, 0), false)
-	UiKit.text_center(self, r.get_center().x, r.get_center().y + 4.0, txt, 12, UiKit.WHITE)
+	UiKit.frame(self, r, Color(0.16, 0.12, 0.26, 0.86),
+		GameConfig.char_color(GameState.char_id), Color(0, 0, 0, 0), false)
+	UiKit.text_center(self, r.get_center().x, r.get_center().y + 4.0, b, 12, UiKit.WHITE)
 
 
 # ---------------- 右侧：藏品 ----------------

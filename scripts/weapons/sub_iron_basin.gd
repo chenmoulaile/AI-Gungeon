@@ -209,49 +209,64 @@ func _draw() -> void:
 		_draw_head_basin()
 
 
-## 平时：铁盆缩小戴在头顶（呼应原作被动）
+## 平时：普通银灰铁盆缩小戴在头顶（呼应原作被动）
 func _draw_head_basin() -> void:
-	var edge := Color("#15224A")
-	var blue := Color("#2E5BD0")
-	var hi := Color("#86E3FF")
+	var edge := Color("#2A2F36")
+	var steel := Color("#B8C0C8")
+	var light := Color("#E8EDF2")
+	var shade := Color("#8A939E")
 	var bob := -1.0 if fmod(Time.get_ticks_msec() / 1000.0, 1.6) < 0.8 else 0.0
 	var y := -58.0 + bob
-	draw_rect(Rect2(-8, y, 16, 2), edge)
-	draw_rect(Rect2(-7, y + 2, 14, 3), edge)
-	draw_rect(Rect2(-6, y, 12, 2), blue)
-	draw_rect(Rect2(-6, y + 1, 12, 1), hi)
-	draw_rect(Rect2(-5, y + 2, 10, 1), Color("#1B3A8F"))
-	draw_rect(Rect2(-2, y - 1, 4, 1), Color("#F4F6FF"))
+	# 倒扣的浅口盆：卷边 + 收窄的盆身
+	draw_rect(Rect2(-10, y, 20, 2), edge)
+	draw_rect(Rect2(-9, y + 2, 18, 3), edge)
+	draw_rect(Rect2(-7, y + 5, 14, 2), edge)
+	draw_rect(Rect2(-9, y, 18, 2), steel)
+	draw_rect(Rect2(-9, y, 18, 1), light)
+	draw_rect(Rect2(-7, y + 2, 14, 2), shade)
+	draw_rect(Rect2(-5, y + 4, 10, 2), steel.darkened(0.18))
+	# 两侧小把手
+	draw_rect(Rect2(-12, y + 1, 2, 2), edge)
+	draw_rect(Rect2(10, y + 1, 2, 2), edge)
+	draw_rect(Rect2(-3, y - 1, 6, 1), light)
 
 
-## 蓄力：铁盆出现在手前，越满越亮
+## 蓄力：银灰铁盆出现在手前，越满越亮
 func _draw_held_basin() -> void:
-	var edge := Color("#15224A")
-	var blue := Color("#2E5BD0")
-	var hi := Color("#86E3FF")
-	var rice := Color("#F4F6FF")
+	var edge := Color("#2A2F36")
+	var steel := Color("#B8C0C8")
+	var light := Color("#EEF3F7")
+	var shade := Color("#8A939E")
+	var dark := Color("#6F7883")
 	var ratio := clampf(_charge / CHARGE_MAX, 0.0, 1.0)
 	var aim: Vector2 = player.aim
 	var local: Vector2 = aim * (20.0 + 6.0 * ratio) + Vector2(0, -12)
 	draw_set_transform(local.round(), aim.angle(), Vector2.ONE)
-	# 盆体外框（宽口浅盆）
-	draw_rect(Rect2(-10, -6, 30, 3), edge)
-	draw_rect(Rect2(-12, -3, 34, 12), edge)
-	draw_rect(Rect2(-9, 9, 28, 2), edge)
-	draw_rect(Rect2(-11, -4, 32, 10), blue)
-	draw_rect(Rect2(-9, 6, 28, 2), Color("#1B3A8F"))
-	draw_rect(Rect2(-11, -4, 32, 1), hi if ratio < 0.7 else Color("#FFD166"))
-	draw_rect(Rect2(-10, -6, 30, 2), rice)
-	draw_rect(Rect2(-6, -7, 20, 2), rice)
-	draw_rect(Rect2(-3, -7, 3, 1), Color("#FFFFFF"))
-	# 手柄
-	draw_rect(Rect2(-14, -1, 4, 7), edge)
-	draw_rect(Rect2(-13, 0, 2, 5), Color("#5A4630"))
-	# 蓄力环
+	# 盆口：宽椭圆卷边
+	draw_rect(Rect2(-13, -5, 36, 2), edge)
+	draw_rect(Rect2(-15, -3, 40, 2), edge)
+	draw_rect(Rect2(-12, -5, 34, 1), light)
+	draw_rect(Rect2(-14, -3, 38, 1), steel)
+	# 盆身：上宽下窄，逐层收口
+	draw_rect(Rect2(-13, -1, 36, 5), steel)
+	draw_rect(Rect2(-11, 4, 32, 3), shade)
+	draw_rect(Rect2(-8, 7, 26, 2), dark)
+	draw_rect(Rect2(-4, 9, 18, 1), edge)
+	draw_rect(Rect2(-13, 6, 36, 1), edge)
+	# 左侧高光 / 右下阴影，让银灰有金属感
+	draw_rect(Rect2(-12, 0, 5, 3), light)
+	draw_rect(Rect2(8, 1, 6, 2), shade)
+	draw_rect(Rect2(-10, 3, 3, 2), Color("#D3DAE1"))
+	# 两侧把手（铁盆耳朵）
+	draw_rect(Rect2(-16, -1, 3, 4), edge)
+	draw_rect(Rect2(-16, 0, 2, 2), light)
+	draw_rect(Rect2(23, -1, 3, 4), edge)
+	draw_rect(Rect2(23, 0, 2, 2), shade)
+	# 蓄力环（金色）
 	if ratio > 0.05:
 		var glow := Color(1.0, 0.82, 0.4, 0.35 + 0.45 * ratio)
 		for i in 8:
 			var a := TAU * float(i) / 8.0 + _charge * 3.0
-			var p := Vector2(roundf(cos(a) * 20.0 / 2.0) * 2.0, roundf(sin(a) * 14.0 / 2.0) * 2.0)
+			var p := Vector2(roundf(cos(a) * 22.0 / 2.0) * 2.0, roundf(sin(a) * 15.0 / 2.0) * 2.0)
 			draw_rect(Rect2(p - Vector2(1, 1), Vector2(2, 2)), glow)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)

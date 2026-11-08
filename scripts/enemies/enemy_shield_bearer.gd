@@ -1,9 +1,9 @@
 extends EnemyBase
 ## 盾卫：正面 180° 免疫子弹（叮 + 火花 + light 硬直），背面吃 1.5 倍伤害
-## 移动缓慢，靠近后 0.4s 前摇挥击
+## 移动缓慢，靠近后 0.35s 前摇挥击
 
-const MELEE_RANGE := 34.0
-const WINDUP := 0.4
+const MELEE_RANGE := 40.0
+const WINDUP := 0.35
 
 var shield_normal: Vector2 = Vector2.RIGHT
 var melee_cd: float = 0.0
@@ -19,7 +19,7 @@ func _setup() -> void:
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
 	accent = Color("#7FA0BC")
-	melee_cd = SeedManager.randf_range(0.6, 1.2)
+	melee_cd = SeedManager.randf_range(0.4, 0.8)
 
 
 func _ai(delta: float) -> void:
@@ -31,14 +31,14 @@ func _ai(delta: float) -> void:
 	if swing > 0.0:
 		swing -= delta
 		if swing <= 0.0 and global_position.distance_to(player.global_position) < MELEE_RANGE:
-			player.take_damage(1)
+			player.take_damage(contact_damage)
 			Sfx.play_at("hit", global_position, -2.0, 0.7)
 			GameFeel.screen_shake(0.15)
 		return
 	if to_player.length() > MELEE_RANGE * 0.8:
 		position += shield_normal * speed * slow_mult * delta
 	elif melee_cd <= 0.0:
-		melee_cd = 1.6
+		melee_cd = 1.1
 		swing = WINDUP
 
 

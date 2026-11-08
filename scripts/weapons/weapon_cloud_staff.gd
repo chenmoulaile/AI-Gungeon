@@ -19,6 +19,7 @@ func fire(dir: Vector2) -> void:
 	if player == null or not is_instance_valid(player):
 		return
 	cooldown = 1.0 / maxf(0.4, RATE * fire_rate_mult())
+	GameState.spend_quota(GameState.model_quota_cost())
 	var origin: Vector2 = player.global_position + Vector2(0, -16) + dir * 12.0
 	if player.gun != null and is_instance_valid(player.gun):
 		origin = player.gun.to_global(player.gun.muzzle_local())

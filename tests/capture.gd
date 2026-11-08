@@ -65,6 +65,33 @@ func _run() -> void:
 	GameState.player.invuln = 999.0
 	Input.action_release("shoot")
 
+	# 额度 HUD 版式验证：临时切到 GPT（角色贴图仍是 DeepSeek，只看左上角面板）
+	var cid0 := GameState.char_id
+	GameState.char_id = "gpt"
+	GameState.ai_plan = 0
+	GameState.ai_mode = 0
+	GameState.ai_quota = 87.0
+	GameState.ai_reset_t = 154.0
+	GameState.ai_depleted = false
+	await _frames(2)
+	await _shot("battle_gpt")
+	GameState.ai_quota = 0.0
+	GameState.ai_depleted = true
+	await _frames(2)
+	await _shot("battle_depleted")
+	GameState.char_id = cid0
+	GameState.ai_depleted = false
+	await _frames(2)
+
+	# 翻滚：抓空中翻的中间帧
+	Input.action_press("move_right")
+	Input.action_press("roll")
+	await _frames(3)
+	Input.action_release("roll")
+	await _frames(3)
+	await _shot("roll")
+	Input.action_release("move_right")
+
 	# 副武器：滚轮切到铁盆，左键蓄力
 	Input.action_press("switch_weapon")
 	await _frames(4)
@@ -172,12 +199,21 @@ func _run() -> void:
 	get_tree().paused = false
 	pm.queue_free()
 
-	# 商店
+	# 商店（临时切 Claude，验证套餐/额度卡按钮版式）
 	GameState.add_coins(300)
+	var cid1 := GameState.char_id
+	GameState.char_id = "claude"
+	GameState.ai_plan = 1
+	GameState.ai_mode = 1
+	GameState.ai_reset_cards = 2
 	g._open_shop()
 	await _wait(0.6)
 	await _shot("shop")
 	get_tree().paused = false
+	GameState.char_id = cid1
+	GameState.ai_plan = 0
+	GameState.ai_mode = 0
+	GameState.ai_reset_cards = 1
 
 	# 结算
 	GameState.kills = 37

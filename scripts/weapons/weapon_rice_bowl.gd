@@ -15,7 +15,9 @@ const SUMMON_CAP := 8
 func setup(p: Node) -> void:
 	super.setup(p)
 	mode_name = "大白饭"
-	p.set_held("", 0.0, Color.WHITE, "rice_bowl", Color("#8EE6FF"), 32.0)
+	# 使用用户参考制作的像素饭碗三帧贴图，不再程序化绘制
+	p.set_held("res://assets/weapons/deepseek_starter.png", 0.0, Color.WHITE,
+		"", Color("#8EE6FF"), 32.0)
 
 
 func fire(dir: Vector2) -> void:

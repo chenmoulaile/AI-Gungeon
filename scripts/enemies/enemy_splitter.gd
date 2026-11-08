@@ -38,7 +38,7 @@ func _split() -> void:
 	for i in 2:
 		var e = ChaserScene.instantiate()
 		e.mini = true
-		e.mini_speed_scale = 1.4
+		e.mini_speed_scale = 1.5
 		var ang := TAU * float(i) / 2.0 + SeedManager.randf() * 0.5
 		e.position = global_position + Vector2(cos(ang), sin(ang)) * 16.0
 		GameState.bullets_root.add_child(e)

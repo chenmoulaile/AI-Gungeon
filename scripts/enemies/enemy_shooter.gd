@@ -20,7 +20,7 @@ func _setup() -> void:
 	contact_damage = st.contact_damage
 	coin_value = st.coin_value
 	accent = Color("#FF5A63")
-	fire_cd = SeedManager.randf_range(1.0, 1.8)
+	fire_cd = SeedManager.randf_range(0.6, 1.2)
 	if GameState.floor_index >= 2:
 		pattern = "spiral"
 		spin = SeedManager.randf() * TAU
@@ -43,15 +43,15 @@ func _ai(delta: float) -> void:
 		if telegraph <= 0.0:
 			if pattern == "spiral":
 				spin += 0.7
-				for i in 2:
-					var a := spin + PI * i
-					shoot_at(Vector2(cos(a), sin(a)), 165.0, 3.8)
+				for i in 4:
+					var a := spin + PI * 0.5 * i
+					shoot_at(Vector2(cos(a), sin(a)), 188.0, 3.8)
 			else:
-				shoot_at(dir, 190.0, 3.8)
+				shoot_at(dir, 225.0, 3.8)
 			Sfx.play_at("shoot", global_position, -6.0, 0.9)
 	if fire_cd <= 0.0:
-		fire_cd = SeedManager.randf_range(1.5, 2.2) if pattern == "aim" else SeedManager.randf_range(1.1, 1.6)
-		telegraph = 0.5
+		fire_cd = SeedManager.randf_range(1.0, 1.5) if pattern == "aim" else SeedManager.randf_range(0.8, 1.2)
+		telegraph = 0.42
 
 
 func _draw_body() -> void:
@@ -86,7 +86,7 @@ func _draw_body() -> void:
 	draw_rect(Rect2(roundf(mz.x) - 1.0, roundf(mz.y) - 1.0, 2.0, 2.0), red.darkened(0.25))
 	# 蓄力：1px 瞄准线 + 炮口 2 帧闪
 	if telegraph > 0.0:
-		var k := 1.0 - telegraph / 0.5
+		var k := 1.0 - telegraph / 0.42
 		var line_col := Color(1.0, 0.30, 0.34, 0.16 + 0.40 * k)
 		draw_line(Vector2.ZERO, dir * (60.0 + 300.0 * k), line_col, 1.0)
 		if fmod(t, 0.1) < 0.05:

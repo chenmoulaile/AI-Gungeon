@@ -60,6 +60,7 @@ func _setup_input() -> void:
 	_add_keys("skill", [KEY_E])
 	_add_keys("sub_weapon", [KEY_Q])
 	_add_keys("switch_mode", [KEY_R])
+	_add_keys("quota_reset", [KEY_T])
 	# 武器切换：鼠标滚轮（上/下都切到另一把）
 	_add_wheel("switch_weapon", [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN])
 	_add_keys("restart", [KEY_F5])

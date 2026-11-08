@@ -5,9 +5,9 @@
 [resource]
 script = ExtResource("1_s")
 enemy_id = "splitter"
-max_hp = 30.0
-speed = 24.0
-contact_damage = 1
-coin_value = 4
+max_hp = 54.0
+speed = 30.0
+contact_damage = 2
+coin_value = 5
 attack_interval = 0.00
 warn_time = 0.00
