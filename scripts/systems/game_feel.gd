@@ -9,6 +9,7 @@ const DamageNumberScript = preload("res://scripts/fx/damage_number.gd")
 const SparkScript = preload("res://scripts/fx/spark.gd")
 const AfterimageScript = preload("res://scripts/fx/afterimage.gd")
 const BulletScript = preload("res://scripts/weapons/bullet.gd")
+const CoinScript = preload("res://scripts/systems/coin.gd")
 
 const PRESETS := {
 	"light": {"hitstop": 0.04, "shake": 0.05, "flash": 0.07, "spark": 4, "number": true},
@@ -32,15 +33,27 @@ var shake_scale: float = 0.7
 var camera: Camera2D = null
 ## 方向性震动：受击方向的反方向偏移，避免全向乱抖
 var shake_dir: Vector2 = Vector2.ZERO
+## M3 相机 lookahead：player 每帧上报真实速度，这里换算成前瞻偏移。
+## 震屏与 lookahead 都写 camera.offset，必须在 _process 里合成
+## （震屏分量 + lookahead 分量），直接写 offset 会被震屏系统每帧覆写。
+var player_vel: Vector2 = Vector2.ZERO
+var lookahead: Vector2 = Vector2.ZERO
+
+const LOOKAHEAD_FACTOR := 0.16
+const LOOKAHEAD_MAX := 48.0
 
 const PARTICLE_CAP := 200
 
 var _hitstop_token: int = 0
 var _hitstop_lock: float = 0.0
 var _bullet_pool: Array = []
+var _coin_pool: Array = []
 var _spark_pool: Array = []
 var _number_pool: Array = []
-var _particle_live: int = 0
+## 在场火花节点：旧实现用计数器累计粒子数，但场景销毁会带走火花节点而不走
+## release_spark，计数器只增不减，攒满 PARTICLE_CAP 后所有 burst/shards 静默失效。
+## 改为逐节点追踪并在计数时剔除失效节点，天然自愈。
+var _spark_nodes: Array = []
 
 
 func _ready() -> void:
@@ -49,19 +62,41 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_hitstop_lock = maxf(0.0, _hitstop_lock - delta)
+	_update_lookahead(delta)
+	var look := _lookahead_px()
 	if trauma > 0.0:
 		trauma = maxf(0.0, trauma - trauma_decay * delta)
 		if camera != null and is_instance_valid(camera):
 			var s: float = shake_strength * shake_scale * trauma * trauma
 			if shake_dir == Vector2.ZERO:
-				camera.offset = Vector2(randf_range(-s, s), randf_range(-s, s))
+				camera.offset = Vector2(randf_range(-s, s), randf_range(-s, s)) + look
 			else:
 				# 沿受击反方向回弹 + 轻微垂直抖动
 				var back: float = s * randf_range(0.75, 1.0)
 				var side: float = s * 0.28 * randf_range(-1.0, 1.0)
-				camera.offset = shake_dir * back + Vector2(-shake_dir.y, shake_dir.x) * side
-	elif camera != null and is_instance_valid(camera) and camera.offset != Vector2.ZERO:
-		camera.offset = Vector2.ZERO
+				camera.offset = shake_dir * back + Vector2(-shake_dir.y, shake_dir.x) * side + look
+	elif camera != null and is_instance_valid(camera):
+		# 震屏结束只清震屏分量，保留 lookahead（速度≈0 时取整后自然回到 ZERO）
+		camera.offset = look
+
+
+## M3：玩家速度 -> 镜头前瞻。速度×系数、上限 48px；停止/减速时 lerp 回零
+func report_player_velocity(vel: Vector2) -> void:
+	player_vel = vel
+
+
+func _update_lookahead(delta: float) -> void:
+	var target := player_vel * LOOKAHEAD_FACTOR
+	if target.length() > LOOKAHEAD_MAX:
+		target = target.normalized() * LOOKAHEAD_MAX
+	# 跟上速度用快档，停步回中用慢档，避免镜头突然弹回
+	var rate := 9.0 if target.length() >= lookahead.length() else 5.0
+	lookahead = lookahead.lerp(target, clampf(delta * rate, 0.0, 1.0))
+
+
+## 像素风镜头：应用到 offset 前整数取整（内部值不取整，避免 lerp 卡死在小数）
+func _lookahead_px() -> Vector2:
+	return Vector2(roundf(lookahead.x), roundf(lookahead.y))
 
 
 func register_camera(cam: Camera2D) -> void:
@@ -134,10 +169,11 @@ func damage_number(pos: Vector2, amount: float, crit: bool = false) -> void:
 		node.show_number(pos, amount, crit)
 
 
-func text_popup(pos: Vector2, s: String, color: Color = Color(1, 1, 1, 0.9)) -> void:
+## color 透传到 damage_number.show_text；默认透明 = 不覆盖（暴击金/普通白）
+func text_popup(pos: Vector2, s: String, color: Color = Color(0, 0, 0, 0)) -> void:
 	var node := _take_number()
 	if node != null:
-		node.show_text(pos, s)
+		node.show_text(pos, s, color)
 
 
 func release_number(node: Node2D) -> void:
@@ -147,11 +183,11 @@ func release_number(node: Node2D) -> void:
 
 func burst(pos: Vector2, color: Color, count: int = 6, speed: float = 90.0,
 		life: float = 0.32) -> void:
-	if _particle_live >= PARTICLE_CAP:
+	if _live_particles() >= PARTICLE_CAP:
 		return
-	_particle_live += count
 	var node := _take_spark()
 	if node != null:
+		_spark_nodes.append(node)
 		node.mode = "spark"
 		node.gravity = 0.0
 		node.burst(pos, color, count, speed, life)
@@ -160,11 +196,11 @@ func burst(pos: Vector2, color: Color, count: int = 6, speed: float = 90.0,
 ## 碎块：死亡碎裂，重力下坠 + 自旋 + 0.4s 淡出
 func shards(pos: Vector2, color: Color, count: int = 8, speed: float = 150.0,
 		life: float = 0.4) -> void:
-	if _particle_live >= PARTICLE_CAP:
+	if _live_particles() >= PARTICLE_CAP:
 		return
-	_particle_live += count
 	var node := _take_spark()
 	if node != null:
+		_spark_nodes.append(node)
 		node.mode = "shard"
 		node.gravity = 520.0
 		node.burst(pos, color, count, speed, life)
@@ -172,8 +208,17 @@ func shards(pos: Vector2, color: Color, count: int = 8, speed: float = 150.0,
 
 func release_spark(node: Node2D) -> void:
 	if node != null and is_instance_valid(node):
-		_particle_live = maxi(0, _particle_live - int(node.particle_count()))
+		_spark_nodes.erase(node)
 		PoolManager.recycle(node)
+
+
+## 当前在场粒子总数：先剔除已失效节点（场景销毁漏掉的），再逐节点求和
+func _live_particles() -> int:
+	_spark_nodes = _spark_nodes.filter(func(n): return is_instance_valid(n))
+	var total := 0
+	for n in _spark_nodes:
+		total += int(n.particle_count())
+	return total
 
 
 func afterimage(texture: Texture2D, pos: Vector2, flip: bool, tint: Color,
@@ -253,6 +298,38 @@ func release_bullet(b: Node) -> void:
 	_bullet_pool.append(b)
 
 
+## 金币池：与子弹池同款写法。出弹侧用 get_coin 取币，入池侧由 coin._collect
+## 调 release_coin，两侧必须成对，否则池只进不出。
+func get_coin(value: int = 1) -> Node:
+	var c: Node = null
+	while _coin_pool.size() > 0:
+		var cand = _coin_pool.pop_back()
+		if is_instance_valid(cand):
+			c = cand
+			break
+	var layer := _fx_root()
+	if layer == null:
+		return null
+	if c == null:
+		c = CoinScript.new()
+		layer.add_child(c)
+	elif c.get_parent() != layer:
+		if c.get_parent() != null:
+			c.get_parent().remove_child(c)
+		layer.add_child(c)
+	PoolManager.revive(c)
+	c.visible = true
+	c.prepare(value)
+	return c
+
+
+func release_coin(c: Node) -> void:
+	if c == null or not is_instance_valid(c):
+		return
+	PoolManager.recycle(c)
+	_coin_pool.append(c)
+
+
 func _take_number() -> Node2D:
 	for i in range(_number_pool.size() - 1, -1, -1):
 		var n = _number_pool[i]
@@ -304,7 +381,9 @@ func reset() -> void:
 	_hitstop_token += 1
 	_hitstop_lock = 0.0
 	_bullet_pool.clear()
+	_coin_pool.clear()
 	_spark_pool.clear()
 	_number_pool.clear()
+	_spark_nodes.clear()
 	if camera != null and is_instance_valid(camera):
 		camera.offset = Vector2.ZERO

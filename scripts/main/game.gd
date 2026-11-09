@@ -62,6 +62,10 @@ var room_kind: int = Kind.SMALL
 var _dense_tick: int = 0
 ## 标记：允许主控在这里触发暂停菜单
 var is_gameplay: bool = true
+## M3 调试：>0 时到点定格世界（真实时间 ms），供网页验收连拍精英击杀帧
+var _debug_freeze_at_ms: int = -1
+## 网页验收末波页（?lastwave）专用：末波加密度、前 3 槽精英、聚怪给连锁割草演示
+var _debug_last_wave_mode: bool = false
 
 
 func _ready() -> void:
@@ -109,8 +113,15 @@ func _check_debug_query(q: String = "") -> void:
 			var fi := int(part.trim_prefix("floor="))
 			if fi >= 1 and fi <= 3:
 				call_deferred("_debug_set_floor", fi)
-	if q.contains("enemies"):
+	# M2 验收钩子：末波精英 / 金币雨自带战斗画面，命中时 ?enemies 的静态摆怪让位
+	if q.contains("lastwave"):
+		call_deferred("_debug_last_wave")
+	if q.contains("coinrain"):
+		call_deferred("_debug_coin_rain")
+	if q.contains("enemies") and not q.contains("lastwave") and not q.contains("coinrain"):
 		call_deferred("_debug_spawn_enemies")
+	if q.contains("shop"):
+		call_deferred("_debug_go_shop")
 	if q.contains("bullets"):
 		call_deferred("_debug_spawn_bullets")
 	if q.contains("boss"):
@@ -164,18 +175,27 @@ func _debug_spawn_enemies() -> void:
 	if player == null or not is_instance_valid(player):
 		return
 	busy = true
+	player.grant_invuln(999.0)
 	if tutorial != null and is_instance_valid(tutorial):
 		tutorial.visible = false
 	for e in GameState.enemies.duplicate():
 		if is_instance_valid(e):
 			e.queue_free()
 	GameState.enemies.clear()
-	var keys := ["chaser", "shooter", "spreader", "charger", "ring",
-		"summoner", "shield", "splitter", "sniper"]
-	var i := 0
-	for k in keys:
-		var e = _scene_for(String(k)).instantiate()
-		e.position = Vector2(300 + (i % 3) * 120, 130 + int(i / 3) * 105)
+	# 9 种敌人各一只 + 5 只补充杂兵 = 14 只，三排铺满可视区（相机初始视野 x 0~640 / y 90~450）
+	var slots: Array = []
+	var row1 := ["chaser", "shooter", "spreader", "charger", "ring"]
+	var row2 := ["summoner", "shield", "splitter", "sniper"]
+	var row3 := ["chaser", "charger", "shooter", "splitter", "chaser"]
+	for i in row1.size():
+		slots.append([String(row1[i]), Vector2(180.0 + 82.5 * float(i), 150.0)])
+	for i in row2.size():
+		slots.append([String(row2[i]), Vector2(220.0 + 80.0 * float(i), 250.0)])
+	for i in row3.size():
+		slots.append([String(row3[i]), Vector2(180.0 + 82.5 * float(i), 360.0)])
+	for s in slots:
+		var e = _scene_for(String(s[0])).instantiate()
+		e.position = s[1]
 		e.died.connect(_on_enemy_died)
 		enemy_layer.add_child(e)
 		# 验收时放在箱子上方，避免被场景装饰挡住
@@ -183,7 +203,189 @@ func _debug_spawn_enemies() -> void:
 		# 冻结：验收只看得清外形与配色，不让 AI 挤到玩家身上
 		e.set_physics_process(false)
 		e.set_process(false)
-		i += 1
+	_debug_bullet_showcase()
+
+
+## ?enemies 验收页静态弹幕样例阵（仅调试）：围玩家一圈 + 右侧三臂螺旋 + 顶部扇弧，
+## 全部 speed 0 / 不处理物理，专供截图看「弹幕压迫感」的图案与密度
+func _debug_bullet_showcase() -> void:
+	if bullet_layer == null or player == null or not is_instance_valid(player):
+		return
+	var samples: Array = []
+	# 环 1：围玩家 20 发（r=105，中心 (150,270)，红）
+	var c1 := Vector2(150.0, 270.0)
+	for i in 20:
+		var a := TAU * float(i) / 20.0
+		samples.append([c1 + Vector2(cos(a), sin(a)) * 105.0, Color("#FF5A63"), 3.4])
+	# 环 2：右中 28 发双圈补密度（中心 (390,255)，深红）
+	var c2 := Vector2(390.0, 255.0)
+	for i in 28:
+		var a2 := TAU * float(i) / 28.0 + 0.11
+		samples.append([c2 + Vector2(cos(a2), sin(a2)) * 150.0, Color("#E4485F"), 2.8])
+	# 三臂螺旋：从 (565,250) 向外旋开 27 点（品红/红相间）
+	var c3 := Vector2(565.0, 250.0)
+	for arm in 3:
+		for k in 9:
+			var a3 := TAU * float(arm) / 3.0 + float(k) * 0.55
+			var rr := 22.0 + 10.0 * float(k)
+			samples.append([c3 + Vector2(cos(a3), sin(a3)) * rr,
+				Color("#F055B8") if k % 2 == 0 else Color("#ff5d7a"), 3.0])
+	# 顶部扇弧：9 发向下张开（中心 (350,120)）
+	for i in 9:
+		var a4 := deg_to_rad(90.0 - 50.0 + 12.5 * float(i))
+		samples.append([Vector2(350.0, 120.0) + Vector2(cos(a4), sin(a4)) * 70.0,
+			Color("#ff5d7a"), 3.0])
+	for s in samples:
+		var b = BulletScript.new()
+		b.position = s[0]
+		bullet_layer.add_child(b)
+		b.friendly = false
+		b.color = s[1]
+		b.radius = float(s[2])
+		b.dir = Vector2.RIGHT
+		b.speed = 0.0
+		b.life = 9999.0
+		b.prepare()
+		b.set_physics_process(false)
+
+
+## ?lastwave=1：网页验收直接看末波（保底精英括号标记）——清掉首波后把波次推进到最后一波（仅调试）
+func _debug_last_wave() -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	player.grant_invuln(999.0)
+	if tutorial != null and is_instance_valid(tutorial):
+		tutorial.visible = false
+	for e in GameState.enemies.duplicate():
+		if is_instance_valid(e):
+			e.queue_free()
+	GameState.enemies.clear()
+	alive_count = 0
+	_debug_last_wave_mode = true
+	wave_index = maxi(wave_total - 1, 1)
+	_spawn_wave()
+	var elite_n := 0
+	for e2 in GameState.enemies:
+		if is_instance_valid(e2) and (e2 as EnemyBase).elite:
+			elite_n += 1
+	print("[lastwave] wave=%d/%d count=%d elites=%d" % [wave_index, wave_total,
+		GameState.enemies.size(), elite_n])
+	hud.show_toast("末波 %d/%d · 精英 %d 只" % [wave_index, wave_total, elite_n], 8.0)
+	# 注意：busy 必须在 _spawn_wave 之后置位（它开头会因 busy 直接 return），
+	# 用来压掉 intro 回调与死亡驱动的后续自动刷波
+	busy = true
+	# 定格末波画面便于截图：精英括号标记保持可见（与 ?enemies 静态摆怪同款处理）
+	# 注意玩家也挂在 enemy_layer 下，必须跳过，否则玩家被冻结无法开火
+	var elite_slot2 := 0
+	var elite_pos := Vector2.ZERO
+	for e in enemy_layer.get_children():
+		if not is_instance_valid(e) or e == player:
+			continue
+		e.set_physics_process(false)
+		e.set_process(false)
+		e.z_index = 8
+		# 保底精英挪到玩家近旁，括号标记在截图里一目了然（挪位仅为验收，仿 _debug_view_actor）
+		if e is EnemyBase and (e as EnemyBase).elite:
+			var rr := GameConfig.room_rect().grow(-44.0)
+			e.global_position = (player.global_position
+				+ Vector2(150.0 + 46.0 * elite_slot2, 56.0)).clamp(rr.position, rr.end)
+			elite_pos = e.global_position
+			elite_slot2 += 1
+			# M3 击杀帧验收：精英死亡后 1.6s 再定格整棵树，爆散/连锁/入账都拍得到
+			(e as EnemyBase).died.connect(_debug_freeze_on_elite_death)
+	# 把精英世界坐标暴露给网页脚本（web_verify 读取后瞄准连拍击杀帧）
+	if elite_slot2 > 0:
+		var js = Engine.get_singleton("JavaScriptBridge")
+		if js != null:
+			js.eval("window.__elite_pos = \"%d,%d\"" % [int(elite_pos.x), int(elite_pos.y)], true)
+	# 连锁割草演示：非精英全部聚到精英锚点周围 62~104px 的两圈上，
+	# 精英一死触发爆散冲击（64px）+ 持续火力，画面上成一串连锁击杀。
+	# 只挪 EnemyBase：enemy_layer 下还挂着房间的障碍物视觉节点（Obstacle），不能动
+	var anchor: Vector2 = player.global_position + Vector2(180.0, 10.0)
+	var rr2 := GameConfig.room_rect().grow(-44.0)
+	var fi := 0
+	for e in enemy_layer.get_children():
+		if not is_instance_valid(e) or e == player:
+			continue
+		if not (e is EnemyBase):
+			continue
+		if (e as EnemyBase).elite:
+			continue
+		var ang := TAU * float(fi) / 11.0 + 0.4
+		var rad := 62.0 + 21.0 * float(fi % 3)
+		e.global_position = (anchor + Vector2(cos(ang), sin(ang)) * rad)\
+			.clamp(rr2.position, rr2.end)
+		fi += 1
+
+
+## M3 击杀帧截图辅助（仅 ?lastwave 调试路径）：精英死亡后 1.6s 真实时间定格世界。
+## 原来 0.30s 就定格，网页脚本 150ms/帧的连拍窗口里第 2 帧起全是静止画面，
+## 死亡爆散/连锁击杀/计数器变化全被掐掉；放宽到 1.6s 让整个连拍窗口（约 1.4s）
+## 都是活画面，之后才定格收尾。
+## 不用 await：死亡敌人 fade 后 queue_free，挂在其信号回调里的协程会被一起丢弃；
+## 这里只登记真实时间截止点，由 _process 每帧到点执行（Time.get_ticks_msec 不受
+## time_scale 影响，顿帧期间也走真实时钟）。
+func _debug_freeze_on_elite_death(_e: Node = null) -> void:
+	print("[freeze] elite died, pause in 1.60s (real time)")
+	_debug_freeze_at_ms = Time.get_ticks_msec() + 1600
+
+
+## ?coinrain=1：网页验收直接演示清场金币雨与 "+1" 拾取飘字（走 _on_room_cleared 同一函数，仅调试）
+## 流程：撒币后等网页脚本置 window.__coinrain_go=1，再自动走位穿过币堆，
+## 停步点旁补 3 枚近距金币，磁吸飞入 -> "+1" 飘字 -> 回池，全程走真实拾取链路
+func _debug_coin_rain() -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	player.grant_invuln(999.0)
+	if tutorial != null and is_instance_valid(tutorial):
+		tutorial.visible = false
+	for e in GameState.enemies.duplicate():
+		if is_instance_valid(e):
+			e.queue_free()
+	GameState.enemies.clear()
+	alive_count = 0
+	busy = true
+	_coin_rain(52, 64)
+	# 等网页脚本发令（headless 下键盘注入持续走位不稳，改由钩子演示走位）
+	var js = Engine.get_singleton("JavaScriptBridge")
+	if js != null:
+		var waited := 0.0
+		var flag := str(js.eval("String(window.__coinrain_go)", true))
+		while flag != "1" and waited < 60.0:
+			await get_tree().create_timer(0.1).timeout
+			waited += 0.1
+			flag = str(js.eval("String(window.__coinrain_go)", true))
+		print("[coinrain] go flag=", flag, " waited=", waited)
+	var p0: Vector2 = player.global_position
+	print("[coinrain] walk from ", p0)
+	var tw := create_tween()
+	tw.tween_property(player, "global_position", p0 + Vector2(110, 40), 1.0)
+	tw.tween_property(player, "global_position", p0 + Vector2(70, 130), 0.9)
+	tw.tween_property(player, "global_position", p0 + Vector2(-20, 60), 0.9)
+	tw.tween_callback(_drop_pickup_demo_coins)
+
+
+## 演示收尾：停步点旁补 3 枚近距金币，下一帧即被磁吸飞入拾取
+func _drop_pickup_demo_coins() -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	print("[coinrain] sprinkle at ", player.global_position)
+	for i in 3:
+		var c: Node2D = GameFeel.get_coin(1)
+		if c == null:
+			continue
+		c.global_position = player.global_position + Vector2(18.0 + 10.0 * i, -4.0 + 6.0 * i)
+
+
+## ?shop=1：网页验收直达商店看学园白卡与共鸣脉冲（仅调试）
+func _debug_go_shop() -> void:
+	if player == null or not is_instance_valid(player):
+		return
+	player.grant_invuln(999.0)
+	if tutorial != null and is_instance_valid(tutorial):
+		tutorial.visible = false
+	GameState.add_coins(300)   # 摆拍：可购买状态展示白卡与价签
+	debug_start(FloorMap.KIND_SHOP)
 
 
 ## 网页验收用：?bullets 时在玩家附近摆一排静态弹幕样例（仅调试）
@@ -281,32 +483,34 @@ func _kind_for_node(kind: String) -> int:
 
 
 func _wave_total_for(kind: int) -> int:
+	# M2：战斗房拉长到 3~4 波（精英/高潮房固定 4 波，小型/混合房 3~4 随机）；
+	# 事件房保持 1 波（无战斗）
 	match kind:
 		Kind.BREATHER:
 			return 1
-		Kind.CLIMAX:
-			return 3
-		Kind.ELITE:
-			return 2
+		Kind.ELITE, Kind.CLIMAX:
+			return 4
 		_:
-			return 2
+			return 3 if SeedManager.randf() < 0.5 else 4
 
 
 func _count_for(kind: int) -> int:
+	# 爽快度调整：波内同屏数量整体上抬（1 层小房 8 只起，高潮房 11 只起），
+	# 配合精英爆散冲击形成「满屏割草」的密度感
 	var f: int = GameState.floor_index
 	match kind:
 		Kind.SMALL:
-			return 3 + f
+			return 6 + 2 * f
 		Kind.MIXED:
-			return 4 + f
+			return 8 + 2 * f
 		Kind.ELITE:
-			return 3 + f
+			return 6 + 2 * f
 		Kind.BREATHER:
 			return 1 + int(f / 2.0)
 		Kind.CLIMAX:
-			return 5 + f
+			return 9 + 2 * f
 		_:
-			return 3
+			return 6
 
 
 func _start_node(node_id: int, defer_wave: bool = false) -> void:
@@ -401,12 +605,18 @@ func _spawn_wave() -> void:
 	if busy or room == null or not is_instance_valid(room):
 		return
 	wave_index += 1
-	# 同屏数量封顶 10：超出部分转成精英化，而不是继续堆数量
+	# 同屏数量封顶 18（原 10 拧到 18 配合密度验收）；超出部分转成精英化，而不是继续堆数量
 	var want: int = _count_for(room_kind)
-	var count: int = mini(want, 10)
+	# 网页验收末波页：末波保底 14 只、前 3 槽全精英，保证「满屏 + 多精英」的割草画面
+	if _debug_last_wave_mode:
+		want = maxi(want, 14)
+	var count: int = mini(want, 18)
 	var overflow: int = maxi(0, want - count)
 	var types := _wave_types()
 	var miniboss_spawned := false
+	# M2：末波保底至少 1 只精英（复用 e.elite 机制与精英掉落）
+	var force_elite := wave_index >= wave_total
+	var elite_slot := SeedManager.randi_range(0, count - 1)
 	for i in count:
 		var scene: PackedScene = _scene_for(String(types[i % types.size()]))
 		var e = scene.instantiate()
@@ -420,8 +630,13 @@ func _spawn_wave() -> void:
 			e.elite = true
 		if overflow > 0 and i < overflow:
 			e.elite = true
+		if force_elite and (i == elite_slot or (_debug_last_wave_mode and i < 3)):
+			e.elite = true
 		if room_kind == Kind.CLIMAX:
 			e.hp_scale = 0.85
+		# 末波验收页：血量 ×0.6，保证连拍窗口（约 1.4s）内打得出一串连锁击杀
+		if _debug_last_wave_mode:
+			e.hp_scale = 0.6
 		var pos: Vector2 = room.random_point(80.0)
 		var guard := 0
 		while pos.distance_to(player.global_position) < 130.0 and guard < 12:
@@ -553,8 +768,8 @@ func _on_enemy_died(e: Node) -> void:
 	if alive_count > 0 or busy:
 		return
 	if wave_index < wave_total:
-		# 波间隔 1.5~2s，给玩家走位空间
-		await get_tree().create_timer(SeedManager.randf_range(1.5, 2.0)).timeout
+		# 波间隔 2~3s：波数变多后给玩家更完整的喘息与走位空间
+		await get_tree().create_timer(SeedManager.randf_range(2.0, 3.0)).timeout
 		if not is_inside_tree() or busy:
 			return
 		_spawn_wave()
@@ -574,6 +789,8 @@ func _on_room_cleared() -> void:
 	if room_kind == Kind.BREATHER:
 		bonus = 12
 	GameState.add_coins(bonus)
+	# M2：清场金币雨——末波清场额外撒 12~20 枚池化金币
+	_coin_rain()
 	var heal: int = int(GameState.mods.get("room_clear_heal", 0))
 	if heal > 0:
 		GameState.heal(heal)
@@ -587,6 +804,25 @@ func _on_room_cleared() -> void:
 		tutorial.on_room_cleared()
 
 
+## M2：清场金币雨——以玩家为中心撒 24~32 枚池化金币，带初速度散开再磁吸；
+## ?coinrain 验收页传 (52, 64) 铺出「金币雨」应有的密度
+func _coin_rain(n_lo: int = 24, n_hi: int = 32) -> void:
+	if GameState.bullets_root == null:
+		return
+	if player == null or not is_instance_valid(player):
+		return
+	var n := SeedManager.randi_range(n_lo, n_hi)
+	for i in n:
+		# 走 M1 的金币池：get_coin 取币，拾取侧 coin._collect 里 release_coin 回池
+		var c: Node2D = GameFeel.get_coin(1)
+		if c == null:
+			continue
+		var ang := SeedManager.randf() * TAU
+		var dist := SeedManager.randf_range(30.0, 170.0)
+		c.global_position = player.global_position + Vector2(cos(ang), sin(ang)) * dist
+		c.launch(Vector2(cos(ang), sin(ang)) * SeedManager.randf_range(140.0, 280.0))
+
+
 ## 精英房必掉：至少蓝档藏品；藏品集齐时改发金币
 func _grant_elite_reward() -> void:
 	var up := UpgradeDB.roll_rare(GameState.upgrades, 1)
@@ -598,6 +834,8 @@ func _grant_elite_reward() -> void:
 	hud.show_toast("精英战利品 · %s（%s档）" % [up.title,
 		String(UpgradeDB.RARITY_NAMES[UpgradeDB.rarity_of(up)])], 3.0)
 	Sfx.play("relic", -2.0, 1.1)
+	# M3：强力藏品入包的 medium 档顿帧（新增触发点，此前无 hit-stop）
+	GameFeel.hit_stop(0.08)
 
 
 func _on_boss_dead() -> void:
@@ -621,6 +859,12 @@ func _on_boss_dead() -> void:
 
 # ---------------- 房间推进 ----------------
 func _process(_delta: float) -> void:
+	# M3 调试：精英击杀帧定格。main 根节点是 PROCESS_MODE_ALWAYS（其子树全部继承），
+	# get_tree().paused 对本游戏无效；直接 DISABLED 整棵 game 子树
+	if _debug_freeze_at_ms > 0 and Time.get_ticks_msec() >= _debug_freeze_at_ms:
+		_debug_freeze_at_ms = -1
+		print("[freeze] disabled game subtree now")
+		process_mode = Node.PROCESS_MODE_DISABLED
 	_update_dense_warning()
 	if busy or not room_cleared or player == null or not is_instance_valid(player):
 		return

@@ -313,7 +313,7 @@ func _draw() -> void:
 
 func _draw_tip() -> void:
 	var r := _tip_rect()
-	UiKit.frame(self, r, Color("#2A2418"), UiKit.GOLD, Color(0, 0, 0, 0), false)
+	UiKit.frame(self, r, UiKit.PANEL, UiKit.GOLD, Color(0, 0, 0, 0), false)
 	UiKit.text(self, r.position + Vector2(8, 13), "第一次玩？先试试训练场（T）", 12, UiKit.GOLD)
 	var c := _tip_close_rect()
 	UiKit.text_center(self, c.get_center().x, c.get_center().y + 4, "×", 12, UiKit.TEXT_DIM)
@@ -366,7 +366,7 @@ func _draw_detail() -> void:
 		12, UiKit.TEXT_DIM)
 	UiKit.text(self, Vector2(36, 287),
 		UiKit.fit("天赋「%s」：%s" % [d.passive_name, d.passive_desc], 552, 12),
-		12, Color(0.72, 0.78, 0.92))
+		12, UiKit.TEXT_DIM)
 
 	# 属性：HP / SPD / CD 三列，数值与条留 6px 间隙
 	var bx := 388.0

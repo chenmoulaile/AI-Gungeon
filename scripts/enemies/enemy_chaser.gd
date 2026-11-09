@@ -1,5 +1,8 @@
 extends EnemyBase
 ## 追踪敌人：直线扑向玩家，靠接触造成伤害
+## 群聚：40px 邻域分离力 + 同类聚拢偏置，弱化"排队"观感
+
+const NEIGHBOR_RADIUS := 40.0
 
 var _wobble: float = 0.0
 
@@ -24,7 +27,28 @@ func _ai(delta: float) -> void:
 	var dir := to_player.normalized()
 	# 轻微左右摆动，避免完全直线导致的"排队"观感
 	var side := dir.orthogonal() * sin(_wobble) * 0.28
-	position += (dir + side).normalized() * speed * slow_mult * delta
+	# 群聚修正：40px 邻域内被同类/异类推开（分离力，越近推得越狠），
+	# 再向同类质心轻微聚拢抱团冲锋；只参与转向合成，不改速度档，
+	# 无邻居时与原直线追击完全一致
+	var sep := Vector2.ZERO
+	var coh := Vector2.ZERO
+	var coh_n := 0
+	for e in GameState.enemies:
+		if e == self or not is_instance_valid(e):
+			continue
+		var other := e as Node2D
+		var off := global_position - other.global_position
+		var d := off.length()
+		if d < NEIGHBOR_RADIUS and d > 0.01:
+			sep += off / d * (1.0 - d / NEIGHBOR_RADIUS)
+		if e.get_script() == get_script():
+			coh += other.global_position
+			coh_n += 1
+	var coh_dir := Vector2.ZERO
+	if coh_n > 0:
+		coh_dir = (coh / float(coh_n) - global_position).normalized()
+	position += (dir + side + sep * 1.1 + coh_dir * 0.18).normalized() \
+		* speed * slow_mult * delta
 
 
 func _draw_body() -> void:

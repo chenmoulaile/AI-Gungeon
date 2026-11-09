@@ -76,6 +76,14 @@ func show_toast(text: String, dur: float = 2.4) -> void:
 	toast_time = dur
 
 
+## 数据终端面板（验收口径：半透明 + 发光边框 + 青/品红高亮）：
+## 半透明白底（alpha 越低战场越透）+ 主色 1px 描边 + 外扩 3 层 1px 渐淡辉光。
+## pulse=true 时辉光呼吸（sin 波），静态场合传 false。
+func _panel(r: Rect2, glow: Color, alpha: float = 0.72, pulse: bool = true) -> void:
+	UiKit.frame(self, r, UiKit.panel_soft(alpha), glow, glow.lightened(0.3), true)
+	UiKit.glow_frame(self, r, glow, 3, (0.82 + 0.18 * sin(_t * 2.6)) if pulse else 1.0)
+
+
 func _on_combo_activated(combo_name: String) -> void:
 	combo_text = "组合效果激活 · %s" % combo_name
 	combo_time = 3.0
@@ -145,7 +153,7 @@ func _draw() -> void:
 func _draw_hearts() -> void:
 	var ratio: float = clampf(float(GameState.hp) / maxf(1.0, float(GameState.max_hp)), 0.0, 1.0)
 	var panel := Rect2(8, 6, 196, 48)
-	UiKit.frame(self, panel, Color(0.06, 0.09, 0.15, 0.90), UiKit.BORDER, UiKit.BORDER_HI, true)
+	_panel(panel, UiKit.CYAN)
 
 	var av := UiKit.icon("res://assets/portraits/%s_pixel_avatar.png" % GameState.char_id)
 	var ar := Rect2(14, 12, 32, 32)
@@ -196,7 +204,7 @@ func _draw_talent(p) -> void:
 			ratio = 1.0
 			value = "细致阅读"
 			col = UiKit.GOLD
-	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.90), UiKit.BORDER, Color(0, 0, 0, 0), false)
+	_panel(r, col, 0.70, false)
 	UiKit.text(self, r.position + Vector2(6, 13), title, 12, col)
 	UiKit.bar(self, Rect2(r.position.x + 60, r.position.y + 6, 76, 7), ratio, col)
 	UiKit.text_right(self, r.end.x - 6, r.position.y + 13, value, 12, col)
@@ -209,8 +217,8 @@ func _draw_quota() -> void:
 	var danger := GameState.ai_depleted
 	var accent := GameConfig.char_color(GameState.char_id)
 	var r := Rect2(8, 78, 196, 44)
-	var border := UiKit.DANGER if danger and fmod(_t, 0.5) < 0.25 else UiKit.BORDER
-	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.90), border, Color(0, 0, 0, 0), false)
+	var border := UiKit.DANGER if danger and fmod(_t, 0.5) < 0.25 else accent
+	_panel(r, border, 0.70, false)
 	UiKit.text(self, r.position + Vector2(6, 13), GameState.model_label(), 12,
 		UiKit.DANGER if danger else accent)
 	var cards := "卡x%d [T]" % GameState.ai_reset_cards
@@ -231,13 +239,13 @@ func _draw_quota() -> void:
 	UiKit.text(self, r.position + Vector2(6, 38), foot, 12,
 		UiKit.DANGER if danger else UiKit.TEXT_DIM)
 	UiKit.text_right(self, r.end.x - 6, r.position.y + 38, "R 模型", 12,
-		Color(0.42, 0.48, 0.58))
+		UiKit.TEXT_DIM)
 
 
 # ---------------- 左下：金币 ----------------
 func _draw_coins() -> void:
 	var r := Rect2(8, 328, 96, 22)
-	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.90), UiKit.BORDER, UiKit.BORDER_HI, true)
+	_panel(r, UiKit.GOLD, 0.72)
 	# 金币图标 12×12：外圈 + 高光，硬边像素
 	var c := Vector2(r.position.x + 10, r.position.y + 5)
 	draw_rect(Rect2(c, Vector2(12, 12)), UiKit.GOLD)
@@ -247,19 +255,19 @@ func _draw_coins() -> void:
 	UiKit.text(self, Vector2(r.position.x + 28, r.position.y + 15), num, 12,
 		UiKit.GOLD if _coin_pop > 0.0 else UiKit.TEXT)
 	UiKit.text(self, Vector2(r.position.x + 57, r.position.y + 15), "COIN", 12,
-		Color(0.45, 0.5, 0.6))
+		UiKit.TEXT_DIM)
 
 
 # ---------------- 右上：楼层 + 分支小地图 ----------------
 func _draw_room_info() -> void:
 	var map := GameState.ensure_map()
 	var panel := Rect2(452, 2, 180, 54)
-	UiKit.frame(self, panel, Color(0.06, 0.09, 0.15, 0.90), UiKit.BORDER, UiKit.BORDER_HI, true)
+	_panel(panel, UiKit.MAGENTA)
 	UiKit.text(self, Vector2(panel.position.x + 6, panel.position.y + 13),
 		"B%d · %02d/%02d" % [GameState.floor_index, GameState.node_id + 1,
 			FloorMap.NODE_COUNT], 12, UiKit.CYAN)
 	UiKit.text_right(self, panel.end.x - 6, panel.position.y + 13, "MAP", 12,
-		Color(0.42, 0.48, 0.58))
+		UiKit.MAGENTA)
 	var origin := Vector2(panel.position.x + 22.0, 0.0)
 	# 连线先画，节点盖住端点
 	for id in FloorMap.NODE_COUNT:
@@ -271,7 +279,7 @@ func _draw_room_info() -> void:
 			var nn := map.node_at(int(nid))
 			if nn.is_empty():
 				continue
-			draw_line(a, _node_pos(nn, origin), Color(0.35, 0.45, 0.60, 0.55), 1.0)
+			draw_line(a, _node_pos(nn, origin), Color(UiKit.BORDER.r, UiKit.BORDER.g, UiKit.BORDER.b, 0.55), 1.0)
 	for id in FloorMap.NODE_COUNT:
 		var n := map.node_at(id)
 		if n.is_empty():
@@ -287,7 +295,7 @@ func _draw_room_info() -> void:
 		elif GameState.visited_nodes.has(id):
 			draw_rect(cell, Color(col.r, col.g, col.b, 0.5))
 		else:
-			draw_rect(cell, Color("#161C2C"))
+			draw_rect(cell, Color("#EDF0F8"))
 			draw_rect(cell, Color(col.r, col.g, col.b, 0.55), false, 1.0)
 
 
@@ -304,7 +312,7 @@ func _draw_exclusive() -> void:
 		return
 	var ready: bool = GameState.exclusive_ready()
 	var r := Rect2(8, 300, 156, 24)
-	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.86), UiKit.BORDER, Color(0, 0, 0, 0), false)
+	_panel(r, UiKit.GOLD if ready or _excl_flash > 0.0 else UiKit.CYAN, 0.68, false)
 	var pv: int = int(round(GameState.exclusive_ratio() * 100.0))
 	if pv != _excl_last:
 		_excl_last = pv
@@ -327,9 +335,11 @@ func _draw_exclusive() -> void:
 # ---------------- 右下：武器 + 键帽冷却 ----------------
 func _draw_weapon(p) -> void:
 	var r := Rect2(396, 312, 236, 42)
-	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.88), UiKit.BORDER, UiKit.BORDER_HI, true)
 	var w = p.weapon
 	var active_sub: bool = int(p.active_slot) == 1
+	var sub_ready: bool = p.sub != null and is_instance_valid(p.sub) and p.sub.ready()
+	# 副武器就绪时面板转品红辉光（HUD 内的品红高亮位），平时随角色主色
+	_panel(r, UiKit.MAGENTA if sub_ready else GameConfig.char_color(GameState.char_id))
 	var icon_rect := Rect2(r.position + Vector2(6, 9), Vector2(24, 24))
 	var icon_path := "res://assets/icons/weapons/%s.png" % GameState.char_id
 	if active_sub:
@@ -342,7 +352,7 @@ func _draw_weapon(p) -> void:
 	UiKit.text(self, Vector2(r.position.x + 36, r.position.y + 15), UiKit.fit(nm, 118, 12),
 		12, UiKit.TEXT)
 	var hint := "滚轮切换武器 · 左键使用"
-	var hint_col := Color(0.42, 0.48, 0.58)
+	var hint_col := UiKit.TEXT_DIM
 	match String(p.char_id):
 		"deepseek":
 			hint = "铁盆（副）" if active_sub else "大白饭 -7 Token"
@@ -375,14 +385,14 @@ func _draw_weapon(p) -> void:
 		_sub_icon(q_c, sub.ratio(), sub.color, active_sub, sready, _sub_pulse,
 			String(sub.icon_path))
 	else:
-		_key(q_c, 0.0, Color(0.4, 0.45, 0.55), "-", false, 0.0)
+		_key(q_c, 0.0, UiKit.TEXT_DIM, "-", false, 0.0)
 
 
 ## 副武器槽图标：专属立绘 + 冷却条；当前手持时描边高亮
 func _sub_icon(c: Vector2, ratio: float, col: Color, active: bool, ready: bool,
 		pulse: float, path: String = "") -> void:
 	var cap := Rect2((c - Vector2(10, 10)).round(), Vector2(20, 20))
-	UiKit.frame(self, cap, Color(0.09, 0.13, 0.21) if ready else Color(0.07, 0.09, 0.14),
+	UiKit.frame(self, cap, UiKit.RAISED if ready else Color("#C9D1E4"),
 		col if (ready or active) else UiKit.BORDER, Color(0, 0, 0, 0), false)
 	if path == "":
 		path = "res://assets/icons/weapons/%s.png" % GameState.char_id
@@ -404,7 +414,7 @@ func _sub_icon(c: Vector2, ratio: float, col: Color, active: bool, ready: bool,
 func _key(c: Vector2, ratio: float, col: Color, key: String, ready: bool,
 		pulse: float) -> void:
 	var cap := Rect2((c - Vector2(10, 10)).round(), Vector2(20, 20))
-	UiKit.frame(self, cap, Color(0.09, 0.13, 0.21) if ready else Color(0.07, 0.09, 0.14),
+	UiKit.frame(self, cap, UiKit.RAISED if ready else Color("#C9D1E4"),
 		col if ready else UiKit.BORDER, Color(0, 0, 0, 0), false)
 	UiKit.text_center(self, c.x, c.y + 4.0, key, 12,
 		UiKit.WHITE if ready else UiKit.TEXT_DIM)
@@ -435,8 +445,7 @@ func _draw_mode(p) -> void:
 		return
 	var wd := UiKit.measure(b, 12) + 16.0
 	var r := Rect2(GameConfig.BASE_W * 0.5 - wd * 0.5, 294, wd, 18)
-	UiKit.frame(self, r, Color(0.16, 0.12, 0.26, 0.86),
-		GameConfig.char_color(GameState.char_id), Color(0, 0, 0, 0), false)
+	_panel(r, GameConfig.char_color(GameState.char_id), 0.74, false)
 	UiKit.text_center(self, r.get_center().x, r.get_center().y + 4.0, b, 12, UiKit.WHITE)
 
 
@@ -450,8 +459,10 @@ func _draw_upgrades() -> void:
 			continue
 		var pop: float = float(_pop.get(uid, 0.0))
 		var r := Rect2(x, y, 18, 18)
-		UiKit.frame(self, r, UiKit.PANEL, UiKit.GOLD if pop > 0.0 else UiKit.BORDER,
+		UiKit.frame(self, r, UiKit.panel_soft(0.78), UiKit.GOLD if pop > 0.0 else UiKit.BORDER,
 			Color(0, 0, 0, 0), false)
+		if pop > 0.0:
+			UiKit.glow_frame(self, r, UiKit.GOLD, 3, 1.0)
 		UiKit.draw_icon(self, up.icon_path, r.grow(-1))
 		y += 21.0
 		if y > GameConfig.BASE_H - 74.0:
@@ -468,7 +479,8 @@ func _draw_relic_desc() -> void:
 	var w := 164.0
 	var r := Rect2(GameConfig.BASE_W - w - 8.0,
 		64.0 + minf(GameState.upgrades.size(), 8) * 21.0 + 4.0, w, 44)
-	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.94 * a), UiKit.GOLD, UiKit.BORDER, true)
+	UiKit.frame(self, r, UiKit.panel_soft(0.94 * a), UiKit.GOLD, UiKit.BORDER, true)
+	UiKit.glow_frame(self, r, UiKit.GOLD, 3, 1.0)
 	UiKit.text(self, r.position + Vector2(7, 13), up.title, 12, Color(1, 0.82, 0.4, a))
 	UiKit.text_block(self, r.position + Vector2(7, 27), up.desc, w - 14, 12,
 		Color(UiKit.TEXT.r, UiKit.TEXT.g, UiKit.TEXT.b, a), 2)
@@ -517,8 +529,8 @@ func _draw_challenge() -> void:
 	var col := UiKit.GOLD if _challenge_done else UiKit.TEXT_DIM
 	var w := UiKit.measure(txt, 12) + 18.0
 	var r := Rect2(GameConfig.BASE_W * 0.5 - w * 0.5, 66, w, 18)
-	UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.86),
-		UiKit.GOLD if _challenge_done else UiKit.BORDER, Color(0, 0, 0, 0), false)
+	# 进行中品红辉光、完成转金（挑战条是 HUD 顶部的品红高亮位）
+	_panel(r, UiKit.GOLD if _challenge_done else UiKit.MAGENTA, 0.70, false)
 	UiKit.text_center(self, r.get_center().x, r.get_center().y + 4.0, txt, 12, col)
 	if _challenge_done and _challenge_pop > 0.0:
 		UiKit.corner_brackets(self, r.grow(1), Color(1, 1, 1, _challenge_pop), 4)
@@ -530,7 +542,7 @@ func _draw_toasts() -> void:
 		var a: float = clampf(toast_time, 0.0, 1.0)
 		var w := UiKit.measure(toast_text, 12) + 24.0
 		var r := Rect2(GameConfig.BASE_W * 0.5 - w * 0.5, 96, w, 22)
-		UiKit.frame(self, r, Color(0.06, 0.09, 0.15, 0.94 * a), UiKit.CYAN, UiKit.BORDER, true)
+		_panel(r, UiKit.CYAN, 0.88 * a)
 		UiKit.text_center(self, r.get_center().x, r.get_center().y + 4.0, toast_text, 12,
 			Color(1, 1, 1, a))
 	if combo_time > 0.0:

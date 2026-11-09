@@ -421,8 +421,11 @@ func _draw_card(i: int, r: Rect2, up: Upgrade) -> void:
 	var can := GameState.coins >= up.price
 	var lift := -1.0 if hk > 0.5 else 0.0
 	var rr := Rect2(Vector2(r.position.x, r.position.y + lift).round(), r.size)
-	var bg := UiKit.PANEL if can else Color("#161C2C")
+	var bg := UiKit.PANEL if can else Color("#E7EAF2")
 	UiKit.frame(self, rr, bg, UiKit.BORDER, UiKit.BORDER_HI, true)
+	# M4：共鸣选项 sin 脉冲发光描边（多层 1px 渐淡，像素风辉光）
+	if _forms_combo(up.id):
+		UiKit.glow_frame(self, rr, UiKit.CYAN, 3, 0.55 + 0.45 * sin(_t * 5.0))
 	if can:
 		draw_line(rr.position + Vector2(1, 1),
 			Vector2(rr.end.x - 2, rr.position.y + 1), UiKit.BORDER_HI)
@@ -458,14 +461,14 @@ func _draw_card(i: int, r: Rect2, up: Upgrade) -> void:
 	UiKit.text(self, Vector2(tag.position.x + 20, tag.position.y + 12),
 		str(up.price), UiKit.F_BODY, UiKit.GOLD if can else UiKit.DANGER, false)
 
-	# 石台（硬边三层）
+	# 展台（硬边三层，学园浅色）
 	var ped := Rect2(rr.position.x, rr.position.y + rr.size.y - 16, rr.size.x, 16)
-	draw_rect(Rect2(ped.position + Vector2(0, 4), Vector2(ped.size.x, 12)), Color("#151A29"))
-	draw_rect(Rect2(ped.position + Vector2(0, 2), Vector2(ped.size.x, 4)), Color("#2B3350"))
+	draw_rect(Rect2(ped.position + Vector2(0, 4), Vector2(ped.size.x, 12)), Color("#D9DFF0"))
+	draw_rect(Rect2(ped.position + Vector2(0, 2), Vector2(ped.size.x, 4)), Color("#C3CCE8"))
 	draw_rect(Rect2(ped.position + Vector2(0, 2), Vector2(ped.size.x, 1)), UiKit.BORDER_HI)
 	for k in 4:
 		var bx := ped.position.x + 6 + k * 18
-		draw_rect(Rect2(bx, ped.position.y + 8, 1, 6), Color("#10141F"))
+		draw_rect(Rect2(bx, ped.position.y + 8, 1, 6), Color("#B4BDD8"))
 
 	if hk > 0.5:
 		UiKit.corner_brackets(self, rr.grow(1), UiKit.GOLD, 5)

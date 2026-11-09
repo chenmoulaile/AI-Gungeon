@@ -20,7 +20,7 @@ AUDIO_DIR = os.path.join(ROOT, "assets", "audio")
 
 # id -> (主色, 形状)
 ICONS = {
-    "sharp_round": ((236, 108, 108), "arrow"),
+    "sharp_round": ((232, 92, 176), "arrow"),
     "rapid_cycle": ((120, 208, 232), "ring"),
     "feather_boots": ((150, 226, 160), "wing"),
     "extra_heart": ((240, 96, 128), "heart"),

@@ -111,17 +111,19 @@ func _ai(delta: float) -> void:
 		charge_t -= delta
 		position += charge_dir * 360.0 * delta
 		if charge_t <= 0.0:
-			GameFeel.screen_shake(0.2)
+			# M3：冲锋落地震屏沿冲撞方向回弹
+			GameFeel.screen_shake(0.2, charge_dir)
 		return
 
-	# 螺旋弹持续发射
+	# 螺旋弹持续发射：跨帧状态（spiral_left/spiral_t/spiral_angle）在本地推进，
+	# 单帧出弹交给 BulletPattern.spiral_step（经 shoot_at 虚分派）
 	if spiral_left > 0:
 		spiral_t -= delta
 		if spiral_t <= 0.0:
 			spiral_t = 0.085
 			spiral_left -= 1
 			spiral_angle += deg_to_rad(17.0)
-			shoot_at(Vector2(cos(spiral_angle), sin(spiral_angle)), 170.0, 4.0)
+			BulletPattern.spiral_step(self, spiral_angle, 170.0, 4.0)
 		if spiral_left <= 0:
 			atk_cd = 0.7
 		return
@@ -227,11 +229,8 @@ func _do_move(dir: Vector2) -> void:
 
 
 func _attack_ring() -> void:
-	var count := 18
 	ring_angle += 0.22
-	for i in count:
-		var a := TAU * i / count + ring_angle
-		shoot_at(Vector2(cos(a), sin(a)), 165.0, 4.2)
+	BulletPattern.ring(self, 18, 165.0, 4.2, ring_angle)
 	Sfx.play("hit", -8.0, 0.7)
 
 
@@ -244,9 +243,7 @@ func _attack_homing(dir: Vector2) -> void:
 
 
 func _attack_fan(dir: Vector2) -> void:
-	for i in 9:
-		var t2 := float(i) / 8.0 - 0.5
-		shoot_at(dir.rotated(deg_to_rad(62.0 * t2)), 195.0, 4.0)
+	BulletPattern.fan(self, dir, 9, 62.0, 195.0, 4.0)
 	Sfx.play("hit", -8.0, 0.85)
 
 

@@ -33,9 +33,10 @@ func _ai(delta: float) -> void:
 	if warning > 0.0:
 		warning -= delta
 		if warning <= 0.0:
-			# 双发点射：一发预判直击 + 一发小角度封走位
-			shoot_at(aim_dir, 470.0, 3.2)
-			shoot_at(aim_dir.rotated(deg_to_rad(5.0)), 445.0, 3.2)
+			# 三发点射：一发预判直击 + 两发小角度封走位
+			BulletPattern.aimed(self, aim_dir, 470.0, 3.2)
+			BulletPattern.aimed(self, aim_dir, 445.0, 3.2, 5.0)
+			BulletPattern.aimed(self, aim_dir, 420.0, 3.2, -5.0)
 			Sfx.play_at("shoot", global_position, -2.0, 0.65)
 			GameFeel.screen_shake(0.06)
 		return

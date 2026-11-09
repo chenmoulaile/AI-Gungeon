@@ -33,12 +33,12 @@ func _break() -> void:
 	if SeedManager.randf() < 0.5:
 		GameState.heal(1)
 	else:
-		var coin_scene = load("res://scripts/systems/coin.gd")
+		# 金币池化：get_coin / coin._collect 里的 release_coin 成对
 		for i in SeedManager.randi_range(3, 5):
-			var c: Node2D = coin_scene.new()
-			c.value = 1
+			var c: Node2D = GameFeel.get_coin(1)
+			if c == null:
+				continue
 			c.global_position = global_position + Vector2(SeedManager.randf_range(-8, 8), SeedManager.randf_range(-8, 8))
-			GameState.bullets_root.add_child(c)
 	queue_free()
 
 

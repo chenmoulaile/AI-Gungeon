@@ -83,34 +83,34 @@ func _draw() -> void:
 	var border := UiKit.BORDER
 	match variant:
 		"primary":
-			bg = Color("#1D3A4A")
+			bg = Color("#D8F3FA")
 			fg = UiKit.CYAN
 			border = UiKit.CYAN
 		"ghost":
-			bg = Color(0.10, 0.14, 0.24, 0.72)
+			bg = UiKit.panel_soft(0.78)
 			fg = UiKit.TEXT
 			border = UiKit.BORDER
 		"danger":
-			bg = Color("#3A1B26")
+			bg = Color("#FBE1EA")
 			fg = UiKit.DANGER
 			border = UiKit.DANGER
 	if disabled:
 		bg = UiKit.BTN_OFF
-		fg = Color("#4A5468")
-		border = Color("#242B3C")
+		fg = Color("#8A93AC")
+		border = Color("#B9C2D8")
 	elif _hover:
 		bg = UiKit.BTN_HOVER
-		fg = UiKit.GOLD if variant != "danger" else UiKit.DANGER
-		border = UiKit.GOLD if variant != "danger" else UiKit.DANGER
+		fg = UiKit.MAGENTA if variant != "danger" else UiKit.DANGER
+		border = UiKit.MAGENTA if variant != "danger" else UiKit.DANGER
 	var off := Vector2(0, 1) if (_down and not disabled) else Vector2.ZERO
 	var rr := Rect2(off, size - off)
 	draw_rect(Rect2(rr.position + Vector2(2, 2), rr.size), UiKit.SHADOW)
 	draw_rect(rr, bg)
 	draw_rect(rr, border, false, 1.0)
 	draw_line(rr.position + Vector2(1, 1), Vector2(rr.end.x - 2, rr.position.y + 1),
-		Color(1, 1, 1, 0.10 if not disabled else 0.03))
+		Color(1, 1, 1, 0.55 if not disabled else 0.25))
 	if _hover and not disabled:
-		UiKit.corner_brackets(self, rr.grow(-1), UiKit.GOLD, 4)
+		UiKit.corner_brackets(self, rr.grow(-1), UiKit.MAGENTA, 4)
 
 	var tx := rr.size.x * 0.5
 	var has_icon := icon_path != "" and UiKit.icon(icon_path) != null

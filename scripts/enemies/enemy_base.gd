@@ -4,12 +4,9 @@ class_name EnemyBase
 ## 精英怪：血量 ×1.55、体积略大，用外圈标出
 
 const BulletScript = preload("res://scripts/weapons/bullet.gd")
-const CoinScript = preload("res://scripts/systems/coin.gd")
 const TelegraphScript = preload("res://scripts/fx/telegraph.gd")
 
 signal died(enemy: Node)
-
-static var _pixel_mat: ShaderMaterial = null
 
 var max_hp: float = 12.0
 var hp: float = 12.0
@@ -70,17 +67,6 @@ func _ready() -> void:
 	hp = max_hp
 	GameState.register_enemy(self)
 	queue_redraw()
-
-
-func _apply_pixel_light() -> void:
-	if _pixel_mat == null:
-		var path := "res://shaders/pixel_light.gdshader"
-		if ResourceLoader.exists(path):
-			_pixel_mat = ShaderMaterial.new()
-			_pixel_mat.shader = load(path)
-			_pixel_mat.set_shader_parameter("pixel_size", 2.0)
-	if _pixel_mat != null:
-		material = _pixel_mat
 
 
 ## 子类初始化数值
@@ -211,9 +197,18 @@ func _die() -> void:
 	# 碎成 8~12 个小方块，重力下坠 + 0.4s 淡出
 	var shard_n: int = 12 if miniboss else 10 if elite else 8
 	GameFeel.shards(global_position + Vector2(0, -radius * 0.5), accent, shard_n, 160.0, 0.4)
-	GameFeel.screen_shake(0.18 if elite else 0.12)
-	# 击杀顿帧：0.10s，不受轻击冷却限制
-	GameFeel.hit_stop(0.1, 0.06)
+	# M3：精英/Boss 死亡震屏沿击杀方向回弹（替代原全向震屏，普通怪幅度不变）
+	var kill_dir := Vector2.ZERO
+	if elite or is_boss:
+		if player != null and is_instance_valid(player):
+			kill_dir = (global_position - player.global_position).normalized()
+	GameFeel.screen_shake(0.18 if elite else 0.12, kill_dir)
+	# 击杀顿帧：普通怪 0.10s；M3 精英升级到 heavy 档 0.12s（修改现有调用，非叠加；
+	# token 机制后调覆盖先调，叠加会放大覆盖语义）。均不受轻击冷却限制
+	GameFeel.hit_stop(0.12 if elite else 0.1, 0.06)
+	# 精英死亡爆散冲击：重创邻近小怪，割草连锁的引信（被炸死者走各自 _die，可继续连锁）
+	if elite:
+		_elite_blast()
 	_drop_coins()
 	died.emit(self)
 	# 0.1s 闪白后淡出，避免"瞬间消失"
@@ -224,15 +219,40 @@ func _die() -> void:
 	tw.tween_callback(queue_free)
 
 
+## 精英死亡爆散冲击：64px 内的其他敌人吃一次范围伤害（中型受击反馈），可连锁引爆。
+## 伤害随层数走（24 + 8/层）：1 层 32 点足以清掉 20~30 血的小怪，盾卫（48 血）留一丝，
+## 高层缩放后仍能清杂但不秒坦克——精英击杀因此有「炸开一片」的割草反馈。
+func _elite_blast() -> void:
+	var dmg := 24.0 + 8.0 * float(GameState.floor_index)
+	for e in GameState.enemies.duplicate():
+		if e == self or not is_instance_valid(e):
+			continue
+		var eb := e as EnemyBase
+		if eb == null or eb.dead or eb.is_queued_for_deletion():
+			continue
+		var d := eb.global_position - global_position
+		if d.length() <= 64.0 + eb.radius:
+			eb.take_damage(dmg, d.normalized() if d.length() > 0.01 else Vector2.ZERO, "medium")
+	GameFeel.burst(global_position, Color(1.0, 0.85, 0.5), 12, 190.0, 0.3)
+	GameFeel.screen_shake(0.1)
+
+
 func _drop_coins() -> void:
 	if GameState.bullets_root == null:
 		return
 	var n: int = maxi(1, int(round(float(coin_value) * SeedManager.diff("coin"))))
 	for i in n:
-		var c: Node2D = CoinScript.new()
-		c.value = 1
+		# 金币池化：get_coin 取币，拾取侧 coin._collect 里 release_coin 回池
+		var c: Node2D = GameFeel.get_coin(1)
+		if c == null:
+			continue
 		c.global_position = global_position + Vector2(SeedManager.randf_range(-6, 6), SeedManager.randf_range(-6, 6))
-		GameState.bullets_root.add_child(c)
+		# 精英掉落战利品真空：先散开再磁吸飞向玩家，COIN 计数与 "+1" 飘字跟着涨
+		if elite and c.has_method("launch"):
+			c.set("force_magnet", true)
+			c.launch(Vector2(SeedManager.randf_range(-1.0, 1.0),
+				SeedManager.randf_range(-1.0, 1.0)).normalized()
+				* SeedManager.randf_range(120.0, 200.0))
 
 
 # ---------------- 敌方子弹 ----------------

@@ -39,7 +39,7 @@ PORTRAIT_DIR = os.path.join(ROOT, "assets", "portraits")
 FRAME = 64          # 单帧画布尺寸
 BODY_H = 52         # 角色在画布内的高度（保证 64x64 画布里有留白，便于特效）
 FEET_Y = 61         # 脚底基准线
-PALETTE_SIZE = 20   # 每角色独立 24 色
+PALETTE_SIZE = 20   # 每角色独立 20 色
 PORTRAIT_W = 96     # 像素立绘画布（UI 里按最近邻放大）
 PORTRAIT_H = 128
 AVATAR_SIZE = 32    # HUD 头像
@@ -72,7 +72,7 @@ CHARACTERS = {
             "eye_xy": (0.344, 0.383),
             "eye_xy2": (0.566, 0.383),
             "eye_frac": (0.078, 0.033),
-            "eye_color": (96, 78, 152),
+            "eye_color": (224, 84, 180),
         },
     },
     "claude": {
@@ -82,7 +82,7 @@ CHARACTERS = {
         "eye_xy": (0.37, 0.44),
         "eye_xy2": (0.57, 0.44),
         "eye_frac": (0.07, 0.05),
-        "eye_color": (198, 92, 36),
+        "eye_color": (224, 138, 42),
         "hair_region": (0.0, 0.0, 1.0, 0.55),
         "cloth_region": (0.0, 0.5, 1.0, 1.0),
         "outline": (74, 38, 24),
@@ -91,10 +91,63 @@ CHARACTERS = {
             "eye_xy": (0.37, 0.44),
             "eye_xy2": (0.57, 0.44),
             "eye_frac": (0.07, 0.035),
-            "eye_color": (198, 92, 36),
+            "eye_color": (224, 138, 42),
         },
     },
 }
+
+
+# M5 学园重定向：发/服/瞳锚定到学园色板（高饱和发色 + 学院制服色）。
+# 用法：主体先生过 academy_recolor()（亮度层次保留的色块重映射），
+# 瞳色由 main() 覆盖采样值；量化/描边/FEET_Y 等骨架参数全部不动。
+ACADEMY = {
+    "deepseek": {"hair": (52, 108, 245), "cloth": (36, 54, 120), "eye": (30, 188, 220)},
+    "gpt":      {"hair": (206, 212, 252), "cloth": (138, 91, 214), "eye": (240, 85, 184)},
+    # claude 长发垂到 85% 身高，发/服分界下移，避免长发被误映射成制服色出现色带
+    "claude":   {"hair": (242, 128, 38), "cloth": (118, 82, 54), "eye": (224, 138, 42),
+                 "hair_split": 0.85},
+}
+
+
+def academy_recolor(img, char_id):
+    """把发/服主色块整体拉向学园色板：按亮度比缩放目标色，保留明暗层次。
+
+    - hair = 上 45% 区域主色，cloth = 下 55% 区域主色（对当前图自采样，来源色不硬编码）。
+    - 匹配规则：色相接近来源色，或双方都是低纯度近白/灰家族（GPT 银发、白围裙这类）。
+    - 只动 RGB，不动 alpha/几何/描边，validate_sprites 的全部约束不受影响。
+    """
+    cfg = ACADEMY.get(char_id)
+    if cfg is None:
+        return img
+    w, h = img.size
+    y_split_rate = float(cfg.get("hair_split", 0.55))
+    hair_src = sample_color(img, (0, 0, w, int(h * y_split_rate * 0.82)))
+    cloth_src = sample_color(img, (0, int(h * y_split_rate), w, h))
+    arr = np.array(img.convert("RGBA")).astype(np.int32)
+    rgb = arr[:, :, :3]
+    alpha = arr[:, :, 3]
+    y_split = int(h * y_split_rate)
+    changed = 0
+    for y in range(h):
+        src = hair_src if y < y_split else cloth_src
+        tgt = cfg["hair"] if y < y_split else cfg["cloth"]
+        c_src = max(src) - min(src)
+        gray_src = c_src <= 40
+        for x in range(w):
+            if alpha[y, x] == 0:
+                continue
+            cur = tuple(int(v) for v in rgb[y, x])
+            c_cur = max(cur) - min(cur)
+            if _hue_diff(cur, src) > 0.16 and not (gray_src and c_cur <= 40):
+                continue
+            lc = 0.299 * cur[0] + 0.587 * cur[1] + 0.114 * cur[2]
+            ls = 0.299 * src[0] + 0.587 * src[1] + 0.114 * src[2]
+            k = lc / max(ls, 1.0)
+            rgb[y, x] = [min(255, max(0, int(c * k))) for c in tgt]
+            changed += 1
+    print("  academy_recolor(%s): %d px  hair %s->%s  cloth %s->%s"
+          % (char_id, changed, hair_src, cfg["hair"], cloth_src, cfg["cloth"]))
+    return Image.fromarray(np.dstack([np.clip(rgb, 0, 255), alpha]).astype(np.uint8), "RGBA")
 
 
 # ---------------------------------------------------------------- 参考图处理
@@ -605,11 +658,15 @@ def main():
 
     for name, cfg in CHARACTERS.items():
         subject = load_subject(name, cfg)
+        # M5 学园重定向：先把发/服色块拉向学园色板，再采样锚定色
+        subject = academy_recolor(subject, name)
         # 采样参考图的三处标志性颜色（用于手动修正）
         bw, bh = subject.size
         hair_rgb = sample_color(subject, (0, 0, bw, int(bh * 0.45)))
         cloth_rgb = sample_color(subject, (0, int(bh * 0.55), bw, bh))
         eye_rgb = sample_eye_color(subject)
+        if name in ACADEMY:
+            eye_rgb = ACADEMY[name]["eye"]
 
         small = to_pixel(subject, BODY_H, float(cfg.get("contrast", 1.18)))
         quant = quantize24(small)

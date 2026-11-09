@@ -360,6 +360,9 @@ func try_buy(up: Upgrade) -> bool:
 func add_coins(n: int) -> void:
 	coins += n
 	coins_earned += n
+	# 专武进度：GPT 持币峰值（此前只有读取无更新，HUD「金币 0/50」永远不动）
+	if char_id == "gpt":
+		excl_max_coins = maxi(excl_max_coins, coins)
 	coins_changed.emit(coins)
 
 
@@ -389,6 +392,9 @@ func unregister_enemy(e: Node) -> void:
 
 func on_enemy_killed(tag: String = "") -> void:
 	kills += 1
+	# 专武进度：DeepSeek 击杀计数（此前只有读取无自增，HUD「击杀 0/30」永远不动）
+	if char_id == "deepseek":
+		excl_kills += 1
 	MetaProgress.note_kill()
 	# GPT 协同：语音击杀后短时间射速提升
 	if tag == "voice" and upgrades.has("gpt_voice_haste"):

@@ -1,43 +1,44 @@
 class_name UiKit
 extends RefCounted
-## Pixel Dungeon Terminal UI 工具层（v0.7 P2）
-## 硬边 / 1px 边框 / 2px 硬阴影 / 分段条 / 键帽 / 抖动装饰。
+## Data Academy UI 工具层（v0.7 P2 → M4 学园重定向）
+## 硬边 / 1px 边框 / 多层 1px 渐淡发光描边 / 分段条 / 键帽 / 抖动装饰。
 ## 保留旧函数名与签名，屏幕脚本不需要大改 import。
 ## 设计画布 640x360（窗口 1280x720 整数 2x 缩放），字号只用 12 / 24 / 36。
 
-# ---------------- 调色板（docs §3.3） ----------------
-const VOID := Color("#080B14")
-const DEEP := Color("#101628")
-const PANEL := Color("#1A2238")
-const RAISED := Color("#26304D")
-const BORDER := Color("#3A4A70")
-const BORDER_HI := Color("#5A6E9E")
-const TEXT_DIM := Color("#8A9BB8")
-const TEXT := Color("#DCE7FF")
-const CYAN := Color("#7FE3FF")
-const GOLD := Color("#FFD166")
-const DANGER := Color("#FF5D7A")
-const SUCCESS := Color("#6EE7A8")
-const ORANGE := Color("#FF8A4D")
-const PURPLE := Color("#B06BFF")
-const WHITE := Color("#F2F2F2")
-const SHADOW := Color("#05070D")
+# ---------------- 调色板（M4 学园重定向：浅底 + 青/品红主色） ----------------
+const VOID := Color("#F2F4FA")        # 页面底：冷白
+const DEEP := Color("#E9EDF7")        # 面板底：浅蓝白
+const PANEL := Color("#FFFFFF")       # 卡片：纯白
+const RAISED := Color("#DCE2F0")      # 键帽 / 凸起
+const BORDER := Color("#A9B3CE")      # 常规边：冷灰蓝
+const BORDER_HI := Color("#7C8AC0")   # 高亮边
+const TEXT_DIM := Color("#6A7594")    # 次级文字
+const TEXT := Color("#2A3350")        # 主文字：藏青（浅底上可读）
+const CYAN := Color("#12AECF")        # 主色：学园青
+const GOLD := Color("#D89A1E")        # 强调金（浅底加深一档）
+const DANGER := Color("#E4486B")
+const SUCCESS := Color("#2FA972")
+const ORANGE := Color("#E07A2E")
+const PURPLE := Color("#8A5BD6")
+const MAGENTA := Color("#F055B8")     # 主色：学园品红
+const WHITE := Color("#FFFFFF")
+const SHADOW := Color("#3A4468")      # 文字 / 面板硬阴影（浅底加深藏青）
 
 # 兼容旧名
 const BG := VOID
 const BG_DEEP := DEEP
 const PANEL_SOLID := PANEL
-const PANEL_SOFT := Color(0.10, 0.14, 0.24, 0.86)
+const PANEL_SOFT := Color(1, 1, 1, 0.82)
 const ACCENT := CYAN
-const ACCENT_HOVER := Color("#A8EDFF")
-const ACCENT_DEEP := Color("#3E8FA8")
-const TEXT_LIGHT := WHITE
+const ACCENT_HOVER := MAGENTA
+const ACCENT_DEEP := Color("#0C7A93")
+const TEXT_LIGHT := TEXT
 const LINE := BORDER
 const OK := SUCCESS
-const BTN_NORMAL := Color("#222C46")
-const BTN_HOVER := Color("#2E3A5C")
-const BTN_PRESS := Color("#1A2238")
-const BTN_OFF := Color("#161B28")
+const BTN_NORMAL := Color("#FFFFFF")
+const BTN_HOVER := Color("#EFF4FF")
+const BTN_PRESS := Color("#DCE6F8")
+const BTN_OFF := Color("#E7EAF2")
 
 # ---------------- 字体层级：只有 12 / 24 / 36 ----------------
 const F_H1 := 36     # 大标题
@@ -98,6 +99,24 @@ static func inset(ci: CanvasItem, r: Rect2, bg: Color = VOID, border: Color = BO
 	ci.draw_line(rr.position + Vector2(1, 1), Vector2(rr.end.x - 2, rr.position.y + 1), SHADOW)
 
 
+## M4 学园发光边框：由内向外多层 1px 渐淡描边模拟辉光（不做高斯模糊，保持整数像素）。
+## pulse 0~1：共鸣脉冲等场景传入 sin 波，静态传 1。
+static func glow_frame(ci: CanvasItem, r: Rect2, col: Color = CYAN, layers: int = 3,
+		pulse: float = 1.0) -> void:
+	var rr := Rect2(r.position.round(), r.size.round())
+	var k := clampf(pulse, 0.0, 1.0)
+	for i in layers:
+		var a := col.a * (1.0 - float(i) / float(layers)) * k
+		if a <= 0.01:
+			continue
+		ci.draw_rect(rr.grow(float(i + 1)), Color(col.r, col.g, col.b, a), false, 1.0)
+
+
+## 半透明白面板底色（浅色学园 HUD/卡片通用），alpha 可调
+static func panel_soft(alpha: float = 0.86) -> Color:
+	return Color(WHITE.r, WHITE.g, WHITE.b, alpha)
+
+
 static func panel(ci: CanvasItem, r: Rect2, bg: Color = DEEP, _radius: int = 0) -> void:
 	frame(ci, r, bg, BORDER, BORDER_HI, true)
 
@@ -106,45 +125,46 @@ static func card(ci: CanvasItem, r: Rect2, bg: Color = PANEL, _radius: int = 0) 
 	frame(ci, r, bg, BORDER, BORDER_HI, true)
 
 
-## 地牢背景：深色墙 + 16px 砖 + 扫描线 + 火把 2 帧；t 用于闪烁与尘埃
+## 学园背景：冷白大厅 + 32px 地砖网格 + 青/品红数据信标 + 扫描线；t 用于闪烁
 static func gradient_backdrop(ci: CanvasItem, r: Rect2, t: float = 0.0) -> void:
 	ci.draw_rect(r, VOID)
 	# 两条横向色带（无渐变）
-	ci.draw_rect(Rect2(r.position.x, r.position.y, r.size.x, r.size.y * 0.46), Color("#0C1020"))
-	# 16px 砖缝（错行）
+	ci.draw_rect(Rect2(r.position.x, r.position.y, r.size.x, r.size.y * 0.46), Color("#E9EDF7"))
+	# 16px 地砖缝（错行）
 	var y := r.position.y
 	var row := 0
 	while y < r.end.y:
 		var off := 0.0 if row % 2 == 0 else 16.0
 		var x := r.position.x - off
 		while x < r.end.x:
-			ci.draw_line(Vector2(x, y), Vector2(x, y + 16), Color("#151C31"), 1.0)
+			ci.draw_line(Vector2(x, y), Vector2(x, y + 16), Color("#DCE2F0"), 1.0)
 			x += 32.0
-		ci.draw_line(Vector2(r.position.x, y), Vector2(r.end.x, y), Color("#151C31"), 1.0)
+		ci.draw_line(Vector2(r.position.x, y), Vector2(r.end.x, y), Color("#DCE2F0"), 1.0)
 		y += 16.0
 		row += 1
-	# 火把：左右各一支，2 帧闪
-	_torch(ci, Vector2(r.position.x + 46, r.position.y + 96), t, 0.0)
-	_torch(ci, Vector2(r.end.x - 46, r.position.y + 128), t, 0.4)
+	# 数据信标：左右各一支，2 帧闪（青 / 品红）
+	_beacon(ci, Vector2(r.position.x + 46, r.position.y + 96), t, 0.0, CYAN)
+	_beacon(ci, Vector2(r.end.x - 46, r.position.y + 128), t, 0.4, MAGENTA)
 	# 扫描线：每 3px 一条 1px 线，透明度 ≤ 6%
 	var yy := r.position.y
 	while yy < r.end.y:
-		ci.draw_line(Vector2(r.position.x, yy), Vector2(r.end.x, yy), Color(0, 0, 0, 0.06), 1.0)
+		ci.draw_line(Vector2(r.position.x, yy), Vector2(r.end.x, yy), Color(0, 0, 0, 0.05), 1.0)
 		yy += 3.0
 
 
-static func _torch(ci: CanvasItem, c: Vector2, t: float, phase: float) -> void:
+static func _beacon(ci: CanvasItem, c: Vector2, t: float, phase: float, col: Color) -> void:
 	var flick := int(fmod(t * 8.0 + phase * 10.0, 2.0))
-	var base := Color("#2A2033")
+	var base := Color("#C8D0E6")
 	ci.draw_rect(Rect2(c + Vector2(-1, 6), Vector2(3, 14)), base)
-	ci.draw_rect(Rect2(c + Vector2(-3, 4), Vector2(7, 3)), Color("#3A3A46"))
+	ci.draw_rect(Rect2(c + Vector2(-3, 4), Vector2(7, 3)), Color("#A9B3CE"))
 	var h := 6 + flick
-	ci.draw_rect(Rect2(c + Vector2(-2, -h + 4), Vector2(5, h)), Color("#FF8A4D"))
-	ci.draw_rect(Rect2(c + Vector2(-1, -h + 2), Vector2(3, h - 3)), GOLD)
-	ci.draw_rect(Rect2(c + Vector2(-1, -3), Vector2(2, 2)), Color("#FFF3C4"))
+	ci.draw_rect(Rect2(c + Vector2(-2, -h + 4), Vector2(5, h)), col)
+	ci.draw_rect(Rect2(c + Vector2(-1, -h + 2), Vector2(3, h - 3)),
+		Color(1, 1, 1, 0.85) if flick == 0 else col.lightened(0.4))
+	ci.draw_rect(Rect2(c + Vector2(-1, -3), Vector2(2, 2)), WHITE)
 
 
-## 装饰：斜向像素虚线（低频，避免抢视线）
+## 装饰：斜向像素虚线（低频，避免抢视线；浅底用深色虚线）
 static func stripes(ci: CanvasItem, r: Rect2, t: float = 0.0) -> void:
 	var step := 32
 	var off := int(fmod(t * 6.0, float(step)))
@@ -153,7 +173,7 @@ static func stripes(ci: CanvasItem, r: Rect2, t: float = 0.0) -> void:
 		var y := r.position.y
 		while y < r.end.y:
 			if int((y - r.position.y) / 4.0) % 4 == 0:
-				ci.draw_rect(Rect2(x, y, 1, 2), Color(1, 1, 1, 0.035))
+				ci.draw_rect(Rect2(x, y, 1, 2), Color(0.2, 0.25, 0.4, 0.05))
 			y += 16.0
 		x += step
 
@@ -392,30 +412,30 @@ static func _btn_style(bg: Color, border: Color) -> StyleBoxFlat:
 	return sb
 
 
-## 容器按钮：像素硬边；hover 亮底 + 金色角，press 下沉 1px（改边框而不是缩放）
+## 容器按钮：像素硬边；hover 亮底 + 品红角，press 下沉 1px（改边框而不是缩放）
 static func style_button(b: Button, kind: String = "ghost") -> void:
 	var base := BTN_NORMAL
 	var hover := BTN_HOVER
 	var border := BORDER
 	if kind == "primary":
-		base = Color("#1D3A4A")
-		hover = Color("#265064")
+		base = Color("#D8F3FA")
+		hover = Color("#BEEAF6")
 		border = CYAN
 	elif kind == "danger":
-		base = Color("#3A1B26")
-		hover = Color("#4E2331")
+		base = Color("#FBE1EA")
+		hover = Color("#F6C9D9")
 		border = DANGER
 	b.add_theme_stylebox_override("normal", _btn_style(base, border))
-	b.add_theme_stylebox_override("hover", _btn_style(hover, GOLD))
+	b.add_theme_stylebox_override("hover", _btn_style(hover, MAGENTA))
 	b.add_theme_stylebox_override("pressed", _btn_style(BTN_PRESS, CYAN))
-	b.add_theme_stylebox_override("focus", _btn_style(hover, GOLD))
-	b.add_theme_stylebox_override("disabled", _btn_style(BTN_OFF, Color("#242B3C")))
+	b.add_theme_stylebox_override("focus", _btn_style(hover, MAGENTA))
+	b.add_theme_stylebox_override("disabled", _btn_style(BTN_OFF, Color("#B9C2D8")))
 	b.add_theme_font_size_override("font_size", 12)
 	b.add_theme_color_override("font_color", TEXT)
-	b.add_theme_color_override("font_hover_color", GOLD)
+	b.add_theme_color_override("font_hover_color", MAGENTA)
 	b.add_theme_color_override("font_pressed_color", CYAN)
-	b.add_theme_color_override("font_focus_color", GOLD)
-	b.add_theme_color_override("font_disabled_color", Color("#4A5468"))
+	b.add_theme_color_override("font_focus_color", MAGENTA)
+	b.add_theme_color_override("font_disabled_color", Color("#8A93AC"))
 
 
 static func hud_panel(_radius: int = 0, alpha: float = 0.88) -> StyleBoxFlat:

@@ -43,11 +43,12 @@ func _ai(delta: float) -> void:
 		if telegraph <= 0.0:
 			if pattern == "spiral":
 				spin += 0.7
+				# 4 向旋转弹：spin 状态留在本地，单帧 4 齿各隔 90°
 				for i in 4:
-					var a := spin + PI * 0.5 * i
-					shoot_at(Vector2(cos(a), sin(a)), 188.0, 3.8)
+					BulletPattern.spiral_step(self, spin + PI * 0.5 * float(i), 188.0, 3.8)
 			else:
-				shoot_at(dir, 225.0, 3.8)
+				# 1 层改成 3 连小扇（原单发直弹，弹幕密度不足）
+				BulletPattern.fan(self, dir, 3, 24.0, 225.0, 3.8)
 			Sfx.play_at("shoot", global_position, -6.0, 0.9)
 	if fire_cd <= 0.0:
 		fire_cd = SeedManager.randf_range(1.0, 1.5) if pattern == "aim" else SeedManager.randf_range(0.8, 1.2)

@@ -1,6 +1,6 @@
 extends EnemyBase
-## 远程敌人（扇形弹）：靠近后打 5 发扇形
-## 第 3 层起每第 3 轮改为 10 发环形弹（新弹幕，不新增敌种）
+## 远程敌人（扇形弹）：靠近后打 9 发扇形
+## 第 2 层起每第 3 轮改为 14 发环形弹（新弹幕，不新增敌种）
 
 const KEEP := 165.0
 
@@ -20,7 +20,7 @@ func _setup() -> void:
 	coin_value = st.coin_value
 	accent = Color("#E07A2E")
 	fire_cd = SeedManager.randf_range(0.8, 1.4)
-	ring_mode = GameState.floor_index >= 3
+	ring_mode = GameState.floor_index >= 2
 
 
 func _ai(delta: float) -> void:
@@ -41,13 +41,9 @@ func _ai(delta: float) -> void:
 		if telegraph <= 0.0:
 			volley += 1
 			if ring_mode and volley % 3 == 0:
-				for i in 12:
-					var a := TAU * i / 12.0 + t
-					shoot_at(Vector2(cos(a), sin(a)), 170.0, 3.6)
+				BulletPattern.ring(self, 14, 170.0, 3.6, t)
 			else:
-				for i in 7:
-					var t2 := float(i) / 6.0 - 0.5
-					shoot_at(dir.rotated(deg_to_rad(46.0 * t2)), 185.0, 4.0)
+				BulletPattern.fan(self, dir, 9, 46.0, 185.0, 4.0)
 			Sfx.play_at("hit", global_position, -8.0, 0.9)
 	if fire_cd <= 0.0:
 		fire_cd = SeedManager.randf_range(1.55, 2.1)

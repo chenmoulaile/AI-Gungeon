@@ -40,6 +40,10 @@ ws.addEventListener("message", (ev) => {
   if (m.method === "Runtime.exceptionThrown") {
     console.log("[error]", JSON.stringify(m.params.exceptionDetails).slice(0, 260));
   }
+  if (m.method === "Runtime.consoleAPICalled") {
+    const txt = (m.params.args || []).map((a) => a.value ?? a.description ?? "").join(" ");
+    if (txt.trim()) console.log("[godot]", txt.slice(0, 200));
+  }
 });
 await new Promise((r) => ws.addEventListener("open", r));
 const send = (method, params = {}) => new Promise((res) => {
@@ -94,12 +98,15 @@ async function boot(url) {
   rect = JSON.parse(rr.result.value);
 }
 
-// 1) 主菜单 + 角色选择
-await boot(`${BASE}?enemies=1`);
+// 1) 主菜单 + 角色选择（无参数导航才会停在菜单：?enemies=1 会自动开局跳过菜单）
+await boot(`${BASE}`);
 await shot("01_menu");
-await click(320, 144);
+await click(120, 115);   // 「开始游戏」按钮本体（菜单列 x32~208）
 await sleep(1600);
 await shot("02_select");
+await boot(`${BASE}?enemies=1`);
+await click(320, 144);
+await sleep(1500);
 
 // 2) 三个角色各打一次
 const cards = [[204, "deepseek"], [320, "gpt"], [436, "claude"]];
@@ -128,6 +135,56 @@ for (const [cx, name] of cards) {
   await click(320, 144);
   await sleep(1500);
 }
+
+// 2.5) M4：HUD 全要素（左上状态/技能/地图/挑战条，战斗页即得）
+await shot("13_hud");
+
+// 3) M2+M3：末波保底精英页（?enemies=1&lastwave=1，main.gd 通道直接开局）
+//    先拍精英定格，再读钩子暴露的 window.__elite_pos 瞄准精英连拍击杀帧——
+//    精英死亡走 M3 升级路径（hit_stop 0.12 + 方向震屏）。
+//    注意 pt() 的鼠标落点 = world(gx, gy+100)：相机被房间下限钳住产生 +100 偏移。
+await boot(`${BASE}?enemies=1&lastwave=1`);
+await shot("06_final_wave_elite");
+{
+  const ep = await send("Runtime.evaluate", { expression: "window.__elite_pos || ''", returnByValue: true });
+  const parts = String((ep.result && ep.result.value) || "").split(",");
+  if (parts.length === 2 && Number(parts[0]) > 0) {
+    await click(450, 150);   // 空地先点一下：canvas 抓焦点，后续按住开火才生效
+    await sleep(250);
+    const p = pt(Number(parts[0]), Number(parts[1]) - 100);
+    await send("Input.dispatchMouseEvent", { type: "mouseMoved", x: p.x, y: p.y });
+    await sleep(150);
+    await send("Input.dispatchMouseEvent", { type: "mousePressed", x: p.x, y: p.y, button: "left", clickCount: 1 });
+    await sleep(600);
+    await shot("11_kill_before");
+    for (let i = 0; i < 10; i++) {
+      await sleep(150);
+      await shot(`12_kill_frame_${i + 1}`);
+    }
+    await send("Input.dispatchMouseEvent", { type: "mouseReleased", x: p.x, y: p.y, button: "left", clickCount: 1 });
+    await sleep(300);
+  } else {
+    console.log("[warn] no __elite_pos, skip kill frames");
+  }
+}
+
+// 3b) M2：清场金币雨 / "+1" 拾取飘字（?enemies=1&coinrain=1，钩子演示走位）
+
+// 3b) 金币雨：清场金币雨散落一地；置 window.__coinrain_go=1 后由钩子自动走位
+//     穿过币堆（磁吸飞入），停步点旁补近距金币触发 "+1" 飘字，三张连拍
+await boot(`${BASE}?enemies=1&coinrain=1`);
+await shot("07_coin_rain");
+await send("Runtime.evaluate", { expression: "window.__coinrain_go = 1" });
+await sleep(1300);
+await shot("08_coin_pickup_1");
+await sleep(900);
+await shot("09_coin_pickup_2");
+await sleep(1000);
+await shot("10_coin_pickup_3");
+
+// 5) M4：数据学园商店（?enemies=1&shop=1 直达：白卡 + 展台 + 共鸣脉冲辉光）
+await boot(`${BASE}?enemies=1&shop=1`);
+await shot("14_shop");
 
 ws.close();
 chrome.kill();

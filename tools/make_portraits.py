@@ -86,6 +86,8 @@ def make_portrait(name, cfg):
     nw = max(1, int(subject.width * scale))
     art = subject.resize((nw, target_h), Image.LANCZOS)
     art = art.filter(ImageFilter.UnsharpMask(radius=2, percent=90, threshold=2))
+    # M5 学园重定向：发/服色块拉向学园色板（与战斗帧同一套重映射）
+    art = M.academy_recolor(art, name)
 
     canvas = Image.new("RGBA", (SIZE, SIZE), (0, 0, 0, 0))
     x = (SIZE - nw) // 2

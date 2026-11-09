@@ -1,6 +1,6 @@
 shader_type canvas_item;
 
-// 战斗层全屏后处理：暗角 / 色差 / 全屏闪色 / 弹幕密集警示
+// 战斗层全屏后处理：暗角 / 色差 / 全屏闪色 / 弹幕密集警示 / 学园青品红扫描线
 uniform sampler2D screen_texture : hint_screen_texture, repeat_disable, filter_linear;
 uniform float vignette : hint_range(0.0, 1.0) = 0.0;
 uniform float aberration : hint_range(0.0, 8.0) = 0.0;
@@ -8,6 +8,8 @@ uniform float flash : hint_range(0.0, 1.0) = 0.0;
 uniform float dense : hint_range(0.0, 1.0) = 0.0;
 uniform vec4 flash_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
 uniform vec2 screen_size = vec2(640.0, 360.0);
+// M4 学园扫描线：青/品红交替 1px（每 3px 一组），数据屏质感；0 可关
+uniform float scanline : hint_range(0.0, 1.0) = 0.5;
 
 void fragment() {
 	vec2 uv = SCREEN_UV;
@@ -24,6 +26,15 @@ void fragment() {
 	// 弹幕密集：四角红色光晕
 	float corner = smoothstep(0.34, 0.78, d);
 	col = mix(col, vec3(0.95, 0.22, 0.28), corner * dense * 0.18);
+	// M4 学园扫描线：640x360 下每 3px 一组，青/品红/空交替，各 1px，加法混色 ≤5%
+	float band = fract(FRAGCOORD.y / 3.0);
+	vec3 tint = vec3(0.0);
+	if (band < 0.34) {
+		tint = vec3(0.02, 0.09, 0.11);   // 青
+	} else if (band < 0.67) {
+		tint = vec3(0.10, 0.03, 0.08);   // 品红
+	}
+	col += tint * scanline;
 	col = mix(col, flash_color.rgb, clamp(flash, 0.0, 1.0));
 	COLOR = vec4(col, 1.0);
 }

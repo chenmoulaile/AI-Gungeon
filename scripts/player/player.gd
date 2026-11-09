@@ -158,6 +158,14 @@ func _build_nodes() -> void:
 	# 像素帧自带 1px 描边后不要再提亮，否则描边被冲淡、整体发白
 	anim.self_modulate = Color(1, 1, 1)
 	anim.light_mask = 0   # 角色不参与 2D 光照，避免被自己的点光源打爆成白色
+	# M4 学园重定向：启用孤儿 shader sprite_outline 补一圈深藏青描边，
+	# 在浅色学园地面上把角色从背景里分离（截图对比后保留；自带描边仍在内圈）
+	if ResourceLoader.exists("res://shaders/sprite_outline.gdshader"):
+		var om := ShaderMaterial.new()
+		om.shader = load("res://shaders/sprite_outline.gdshader")
+		om.set_shader_parameter("outline_color", Color(0.16, 0.20, 0.38, 0.85))
+		om.set_shader_parameter("outline_size", 1.0)
+		anim.material = om
 	anim.play("idle")
 	roll_pivot.add_child(anim)
 
@@ -278,6 +286,7 @@ func _build_subweapon() -> void:
 func _physics_process(delta: float) -> void:
 	if not alive:
 		velocity = Vector2.ZERO
+		GameFeel.report_player_velocity(Vector2.ZERO)
 		return
 
 	_tick_timers(delta)
@@ -324,6 +333,9 @@ func _physics_process(delta: float) -> void:
 		_update_anim(input)
 
 	move_and_slide()
+	# M3：向 GameFeel 上报本帧真实速度（撞墙/滑动后的实际值），
+	# 相机 lookahead 在 GameFeel._process 里与震屏分量合成，这里不碰 cam.offset
+	GameFeel.report_player_velocity(velocity)
 	_update_jiggle(delta)
 	# 移动扬尘
 	_dust_t -= delta
